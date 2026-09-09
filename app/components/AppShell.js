@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { MessageSquare, Send, CheckCircle2 } from 'lucide-react';
-import Sidebar from './Sidebar';
+import Sidebar, { USER_ALLOWED } from './Sidebar';
 import MobileNav from './MobileNav';
 import useIsMobile from './useIsMobile';
 import { useAuth, homeFor } from './AuthContext';
@@ -23,9 +23,9 @@ export default function AppShell({ children }) {
 
   // Marketing hanya boleh di Leads Hub — rute lain dilempar balik ke /leads
   const marketingBlocked = role === 'marketing' && !pathname.startsWith('/leads');
-  // Role user (viewer) tidak punya Analytics & Insights (Ads Hub /reports & Leads Hub /leads/insights,
-  // per 19 Agu 2026) — dilempar ke dashboard
-  const userBlocked = role === 'user' && (pathname === '/reports' || pathname === '/leads/insights');
+  // Role user (viewer) — per 9 Sep 2026 — hanya boleh Dashboard + Campaigns (whitelist USER_ALLOWED
+  // di Sidebar.js); rute lain (Calendar, Reports, seluruh Leads Hub) dilempar ke dashboard
+  const userBlocked = role === 'user' && !USER_ALLOWED.includes(pathname);
   // Maps Hub admin-only fase 1 (MAPS-HUB-PLAN.md) — role lain dilempar ke home-nya
   const mapsBlocked = role !== 'admin' && pathname.startsWith('/maps');
 

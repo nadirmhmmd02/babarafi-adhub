@@ -48,13 +48,16 @@ export const MAPS_SECTION = {
   ],
 };
 
-// Menu per role: marketing hanya Leads Hub; user (viewer) tanpa Analytics & Insights
-// di KEDUA hub (Ads Hub /reports & Leads Hub /leads/insights — per 19 Agu 2026, Calendar tetap);
+// Menu per role: marketing hanya Leads Hub; user (viewer) — per 9 Sep 2026 — HANYA Ads Hub
+// dan cuma Dashboard + Campaigns (whitelist USER_ALLOWED; Calendar, Analytics & Insights,
+// dan seluruh Leads Hub disembunyikan sementara). Dipakai juga AppShell sebagai route guard;
 // admin lihat semua + Maps Hub.
-export const USER_HIDDEN = ['/reports', '/leads/insights'];
+export const USER_ALLOWED = ['/', '/campaigns'];
 export function navSectionsFor(role) {
   if (role === 'marketing') return NAV_SECTIONS.filter(s => s.label === 'Leads Hub');
-  if (role === 'user') return NAV_SECTIONS.map(s => ({ ...s, items: s.items.filter(i => !USER_HIDDEN.includes(i.href)) }));
+  if (role === 'user') return NAV_SECTIONS
+    .map(s => ({ ...s, items: s.items.filter(i => USER_ALLOWED.includes(i.href)) }))
+    .filter(s => s.items.length > 0);
   if (role === 'admin') return [...NAV_SECTIONS, MAPS_SECTION];
   return NAV_SECTIONS;
 }

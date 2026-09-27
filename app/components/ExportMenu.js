@@ -242,7 +242,7 @@ const ReportBody = forwardRef(function ReportBody({ summary, chartData = {}, cha
   ] : [];
 
   return (
-    <div ref={ref} style={{
+    <div ref={ref} data-export-report style={{
       position: 'fixed', left: '-10000px', top: 0, width: '1280px', height: '720px',
       background: BG, color: TXT, padding: '36px 46px', overflow: 'hidden',
       display: 'flex', flexDirection: 'column', fontFamily: 'inherit',
@@ -316,7 +316,8 @@ const ReportBody = forwardRef(function ReportBody({ summary, chartData = {}, cha
 
 // compact: tombol icon-only (mobile 36px default; desktop kirim size/radius 40/10
 // biar seragam dengan tombol Refresh/theme di header)
-export default function ExportMenu({ summary, chartData = {}, chartDates = [], donut = {}, rangeLabel = '', activeCount = 0, since = '', until = '', compact = false, size = 36, radius = 9 }) {
+// pill: tombol pil berlabel gaya Dashboard redesain (.rg-pill, dashboard-ridgeline.css)
+export default function ExportMenu({ summary, chartData = {}, chartDates = [], donut = {}, rangeLabel = '', activeCount = 0, since = '', until = '', compact = false, size = 36, radius = 9, pill = false, labelClassName }) {
   // Laporan hasil export ikut tema dashboard yang sedang aktif (terang/gelap)
   const { theme } = useAuth();
   const P = paletteFor(theme);
@@ -441,6 +442,16 @@ export default function ExportMenu({ summary, chartData = {}, chartDates = [], d
   return (
     <div style={{ position: 'relative' }} data-export>
       {/* ── Tombol Export ── */}
+      {pill ? (
+        <button type="button" className="rg-pill" aria-expanded={open} aria-haspopup="menu"
+          disabled={busy} title="Export report" onClick={() => !busy && setOpen(o => !o)}>
+          {busy
+            ? <Loader2 size={15} style={{ animation: 'wdSpin 0.8s linear infinite' }} />
+            : <Download size={15} />}
+          <span className={labelClassName}>{busy ? 'Exporting…' : 'Export'}</span>
+          {!busy && <ChevronDown size={14} className="rg-caret" />}
+        </button>
+      ) : (
       <button
         onClick={() => !busy && setOpen(o => !o)}
         title="Export"
@@ -462,6 +473,7 @@ export default function ExportMenu({ summary, chartData = {}, chartDates = [], d
         {!compact && (busy ? 'Exporting…' : 'Export')}
         {!compact && !busy && <ChevronDown size={13} color={UI_SUB} />}
       </button>
+      )}
 
       {/* ── Dropdown format (+ pilihan pisah per bulan kalau filter beberapa bulan) ── */}
       {open && !busy && (

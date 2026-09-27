@@ -9,13 +9,15 @@ import {
   CalendarDays,
   Sparkles,
   Users,
-  ChevronsLeft,
   LogOut,
   NotebookPen,
   MapPinned,
+  Menu,
 } from 'lucide-react';
 import Logo from './Logo';
 import { useAuth } from './AuthContext';
+import { dashboardFontVars } from './dashboardFonts';
+import '../sidebar-ridgeline.css';
 
 // Dipakai juga oleh MobileNav.js (drawer mobile) — satu sumber menu.
 // Dua section: Ads Hub (fitur live) + Leads Hub (placeholder, v3.0).
@@ -62,56 +64,71 @@ export function navSectionsFor(role) {
   return NAV_SECTIONS;
 }
 
-const MIN_WIDTH       = 180;
-const MAX_WIDTH       = 360;
-const DEFAULT_WIDTH   = 240;
-const COLLAPSED_WIDTH = 64;
-const EASE            = 'cubic-bezier(0.4,0,0.2,1)';
+/* ─────────────────────────────────────────────────────────────
+   SIDEBAR — redesain "Ridgeline" (Sep 2026). Styling: app/sidebar-ridgeline.css
+   REL IKON (menu · ikon per hub · logout) + PANEL MENU teks. Diciutkan (default saat
+   web pertama dibuka) = hanya rel; hover/fokus ikon hub → flyout daftar halaman hub
+   itu, jadi Campaigns/Calendar/dll tetap satu gerakan. Lebar panel bisa digeser.
+   ───────────────────────────────────────────────────────────── */
+const HUB_ICON   = { 'Ads Hub': Megaphone, 'Leads Hub': Users, 'Maps Hub': MapPinned };
+const ROLE_LABEL = { admin: 'Admin', user: 'Viewer', marketing: 'Marketing' };
 
-const ACTIVE_BG = 'var(--nav-accent-soft)';   // hijau (dark) / amber (light)
-const ACTIVE_HV = 'var(--nav-accent-hover)';
-const ACTIVE_FG = 'var(--nav-accent-fg)';
+const RAIL_WIDTH    = 64;
+const PANEL_MIN     = 184;
+const PANEL_MAX     = 300;
+const PANEL_DEFAULT = 212;
 
 export default function Sidebar() {
-  const pathname  = usePathname();
+  const pathname = usePathname();
   const { user, role, logout } = useAuth();
-  // Redesain 2026: brand tunggal untuk semua role
-  const brand = 'Baba Rafi Ad Hub';
   // Default: tertutup (collapsed) saat web pertama dibuka
   const [collapsed, setCollapsed] = useState(true);
-  const [width, setWidth]         = useState(COLLAPSED_WIDTH);
-  const [hovered, setHovered]     = useState(null);
-  const [dragHover, setDragHover] = useState(false);
+  const [panelWidth, setPanelWidth] = useState(PANEL_DEFAULT);
   const [animate, setAnimate]     = useState(true);
-  const lastWidth  = useRef(DEFAULT_WIDTH);
-  const dragging   = useRef(false);
-  const sidebarRef = useRef(null);
+  const [fly, setFly]             = useState(null); // { key, top } — flyout saat collapsed
+  const dragging  = useRef(false);
+  const asideRef  = useRef(null);
+  const flyTimer  = useRef(null);
+
+  /* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ (aksen pilihan di panel Preview Dashboard
+     tetap berlaku saat pindah halaman / refresh; aksen final nanti ditanam di CSS) */
+  useEffect(() => {
+    try {
+      const a = localStorage.getItem('wd-preview-accent');
+      if (a) document.documentElement.dataset.accent = a;
+    } catch {}
+  }, []);
+  /* ═══ END PREVIEW-ONLY ═══ */
+
+  // Hub = section menu; Notes (admin) jadi "hub" sendiri di rel
+  const hubs = navSectionsFor(role).map(s => ({
+    key: s.label, label: s.label, icon: HUB_ICON[s.label] || LayoutDashboard, items: s.items,
+  }));
+  if (role === 'admin') {
+    hubs.push({ key: 'Workspace', label: 'Workspace', icon: NotebookPen, items: [{ href: '/notes', label: 'Notes' }] });
+  }
 
   function isActive(href) {
     // Exact match — '/leads' tidak boleh ikut aktif saat di '/leads/list'
     return pathname === href;
   }
+  const activeHub = hubs.find(h => h.items.some(i => isActive(i.href)))?.key;
 
   function toggleCollapse() {
     setAnimate(true);
-    if (!collapsed) {
-      lastWidth.current = width;
-      setCollapsed(true);
-      setWidth(COLLAPSED_WIDTH);
-    } else {
-      setCollapsed(false);
-      setWidth(lastWidth.current);
-    }
+    setFly(null);
+    setCollapsed(c => !c);
   }
 
+  // ── Geser lebar panel (hanya saat terbuka) ──
   useEffect(() => {
     function onMove(e) {
-      if (!dragging.current || !sidebarRef.current) return;
-      const left = sidebarRef.current.getBoundingClientRect().left;
-      let w = e.clientX - left;
-      if (w < MIN_WIDTH) w = MIN_WIDTH;
-      if (w > MAX_WIDTH) w = MAX_WIDTH;
-      setWidth(w);
+      if (!dragging.current || !asideRef.current) return;
+      const left = asideRef.current.getBoundingClientRect().left;
+      let w = e.clientX - left - RAIL_WIDTH;
+      if (w < PANEL_MIN) w = PANEL_MIN;
+      if (w > PANEL_MAX) w = PANEL_MAX;
+      setPanelWidth(w);
     }
     function onUp() {
       if (dragging.current) {
@@ -136,289 +153,117 @@ export default function Sidebar() {
     e.preventDefault();
   }
 
-  const textVisible = !collapsed;
+  // ── Flyout (collapsed) ──
+  function openFly(hub, el) {
+    if (!collapsed) return;
+    clearTimeout(flyTimer.current);
+    setFly({ key: hub.key, top: el.getBoundingClientRect().top });
+  }
+  function closeFlySoon() {
+    clearTimeout(flyTimer.current);
+    flyTimer.current = setTimeout(() => setFly(null), 140);
+  }
+  function keepFly() { clearTimeout(flyTimer.current); }
+  useEffect(() => () => clearTimeout(flyTimer.current), []);
+  useEffect(() => { setFly(null); }, [pathname]);
+
+  const flyHub = collapsed && fly ? hubs.find(h => h.key === fly.key) : null;
+
+  function renderItems(items, focusable = true) {
+    return items.map(item => {
+      const active = isActive(item.href);
+      return (
+        <Link key={item.href} href={item.href} className={`sb-item${active ? ' is-active' : ''}`}
+          aria-current={active ? 'page' : undefined} tabIndex={focusable ? undefined : -1}>
+          {item.label}
+        </Link>
+      );
+    });
+  }
 
   return (
     <aside
-      ref={sidebarRef}
+      ref={asideRef}
+      className={`sb ${dashboardFontVars}${collapsed ? ' is-collapsed' : ''}`}
       style={{
-        width: width + 'px',
-        background: 'var(--nav)',
-        borderRight: '1px solid var(--divider)',
-        display: 'flex',
-        flexDirection: 'column',
-        position: 'sticky',
-        top: 0,
-        transition: animate ? `width 0.28s ${EASE}` : 'none',
-        flexShrink: 0,
-        height: '100vh',
+        width: (RAIL_WIDTH + (collapsed ? 0 : panelWidth)) + 'px',
+        transition: animate ? 'width .3s cubic-bezier(.22,1,.36,1)' : 'none',
       }}
     >
-      {/* ── Logo ──
-          Anti patah-patah: layout TIDAK lompat saat collapse. justifyContent tetap flex-start,
-          padding tetap 18px (logo 28px otomatis center di lebar 64px), teks menyusut via
-          max-width (animatable) + opacity — bukan width auto→0 yang nge-snap. */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'flex-start',
-        gap: collapsed ? '0px' : '10px',
-        padding: '20px 18px',
-        borderBottom: '1px solid var(--divider)',
-        overflow: 'hidden',
-        whiteSpace: 'nowrap',
-        transition: `gap 0.28s ${EASE}`,
-      }}>
-        <div className="wd-logo" style={{
-          width: '28px', height: '28px',
-          borderRadius: '7px',
-          background: 'var(--nav-logo-bg)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          flexShrink: 0,
-        }}>
-          <Logo size={18} color="var(--nav-logo-fg)" style={{ flexShrink: 0, minWidth: 18 }} />
-        </div>
-        <span style={{
-          fontSize: '13px', fontWeight: '700',
-          letterSpacing: '0.8px', color: 'var(--logo-text)',
-          opacity: textVisible ? 1 : 0,
-          maxWidth: collapsed ? '0px' : '180px',
-          overflow: 'hidden',
-          transition: `opacity 0.22s ease, max-width 0.28s ${EASE}`,
-          textTransform: 'uppercase',
-        }}>
-          {brand}
-        </span>
-      </div>
-
-      {/* ── Nav (per section: Ads Hub / Leads Hub) ── */}
-      <nav style={{ flex: 1, padding: '10px 8px', display: 'flex', flexDirection: 'column', gap: '2px', overflowY: 'auto' }}>
-        {navSectionsFor(role).map((section, si) => (
-        <div key={section.label} style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: si > 0 ? '14px' : 0 }}>
-
-        {/* Section label (expanded) / divider (collapsed, antar section).
-            Tinggi slot KONSTAN di dua state supaya item nav tidak lompat vertikal saat collapse. */}
-        <div style={{ height: '24px', display: 'flex', alignItems: 'center', padding: '0 10px', overflow: 'hidden' }}>
-          {!collapsed ? (
-            <span style={{
-              fontSize: '9px', fontWeight: '700', letterSpacing: '1.4px',
-              color: 'var(--menu-label)', textTransform: 'uppercase',
-              opacity: textVisible ? 1 : 0, transition: 'opacity 0.22s ease',
-              whiteSpace: 'nowrap',
-            }}>
-              {section.label}
-            </span>
-          ) : si > 0 ? (
-            <div style={{ height: '1px', background: 'var(--divider)', flex: 1, margin: '0 2px' }} />
-          ) : null}
+      {/* ══ REL IKON ══ */}
+      <div className="sb-rail">
+        <div className="sb-rail-top">
+          <button type="button" className="sb-circle sb-menu" onClick={toggleCollapse}
+            aria-expanded={!collapsed} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
+            <Menu size={18} />
+          </button>
         </div>
 
-        {section.items.map((item) => {
-          const active  = isActive(item.href);
-          const isHover = hovered === item.href && !active;
-          const Icon    = item.icon;
+        <nav className="sb-rail-nav" aria-label="Hubs">
+          {hubs.map(h => {
+            const Icon = h.icon;
+            const on = h.key === activeHub;
+            return (
+              <Link key={h.key} href={h.items[0].href}
+                className={`sb-circle sb-hub${on ? ' is-active' : ''}`}
+                aria-label={h.key === 'Workspace' ? 'Notes' : h.label}
+                aria-current={on ? 'true' : undefined}
+                title={collapsed ? undefined : (h.key === 'Workspace' ? 'Notes' : h.label)}
+                onMouseEnter={e => openFly(h, e.currentTarget)} onMouseLeave={closeFlySoon}
+                onFocus={e => openFly(h, e.currentTarget)} onBlur={closeFlySoon}>
+                <Icon size={18} />
+              </Link>
+            );
+          })}
+        </nav>
 
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              onMouseEnter={() => setHovered(item.href)}
-              onMouseLeave={() => setHovered(null)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'flex-start',
-                gap: collapsed ? '0px' : '10px',
-                // Collapsed: paddingLeft 15px → icon 18px persis center di lebar 64px (8+15+9=32)
-                padding: collapsed ? '11px 0 11px 15px' : '9px 10px',
-                borderRadius: '9px',
-                background: active ? ACTIVE_BG : isHover ? ACTIVE_HV : 'transparent',
-                color: active ? ACTIVE_FG : isHover ? 'var(--nav-hover-tx)' : 'var(--nav-tx)',
-                fontSize: '13px',
-                fontWeight: active ? '600' : '400',
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                transition: `background 0.18s ${EASE}, color 0.18s, padding 0.28s ${EASE}, gap 0.28s ${EASE}`,
-                position: 'relative',
-              }}
-            >
-              {/* Active indicator line */}
-              {active && !collapsed && (
-                <span style={{
-                  position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)',
-                  width: '3px', height: '60%', borderRadius: '0 2px 2px 0',
-                  background: ACTIVE_FG,
-                }} />
-              )}
-              <Icon
-                size={18}
-                color={active ? ACTIVE_FG : isHover ? 'var(--nav-hover-tx)' : 'var(--nav-icon)'}
-                style={{ flexShrink: 0, minWidth: 18, transition: 'color 0.18s' }}
-              />
-              <span style={{
-                opacity: textVisible ? 1 : 0,
-                maxWidth: collapsed ? '0px' : '200px',
-                overflow: 'hidden',
-                transition: `opacity 0.22s ease, max-width 0.28s ${EASE}`,
-                letterSpacing: '-0.1px',
-              }}>
-                {item.label}
-              </span>
-            </Link>
-          );
-        })}
-        </div>
-        ))}
-      </nav>
-
-      {/* ── User + logout (per 19 Agu 2026 DI ATAS Notes, permintaan Nadir) ── */}
-      {user && (
-        <div style={{ padding: '0 8px 6px' }}>
-          {!collapsed ? (
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: '10px',
-              padding: '8px 10px', borderRadius: '10px',
-              background: 'var(--data-bg)', border: '1px solid var(--data-br)',
-              animation: 'wdFadeIn 0.3s ease',
-            }}>
-              <div style={{
-                width: '30px', height: '30px', borderRadius: '9px', flexShrink: 0,
-                background: ACTIVE_BG, color: ACTIVE_FG,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '13px', fontWeight: 700, textTransform: 'uppercase',
-              }}>{user.username?.[0] || '?'}</div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--t1)', textTransform: 'capitalize',
-                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.username}</div>
-                <div style={{ fontSize: '10px', color: ACTIVE_FG, fontWeight: 600, textTransform: 'capitalize' }}>{role}</div>
-              </div>
-              <button onClick={logout} title="Logout" style={{
-                background: 'none', border: 'none', display: 'flex', cursor: 'pointer', padding: '5px',
-                borderRadius: '7px', color: 'var(--nav-tx)', flexShrink: 0, transition: 'color 0.15s, background 0.15s',
-              }}
-                onMouseEnter={e => { e.currentTarget.style.color = '#EF4444'; e.currentTarget.style.background = 'rgba(239,68,68,0.10)'; }}
-                onMouseLeave={e => { e.currentTarget.style.color = 'var(--nav-tx)'; e.currentTarget.style.background = 'none'; }}
-              ><LogOut size={16} /></button>
-            </div>
-          ) : (
-            <button onClick={logout} title="Logout" style={{
-              width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              padding: '11px 0', borderRadius: '9px', background: 'transparent', border: 'none',
-              color: 'var(--nav-tx)', cursor: 'pointer', transition: 'color 0.15s, background 0.15s',
-              animation: 'wdFadeIn 0.3s ease',
-            }}
-              onMouseEnter={e => { e.currentTarget.style.color = '#EF4444'; e.currentTarget.style.background = 'rgba(239,68,68,0.10)'; }}
-              onMouseLeave={e => { e.currentTarget.style.color = 'var(--nav-tx)'; e.currentTarget.style.background = 'transparent'; }}
-            ><LogOut size={18} /></button>
+        <div className="sb-rail-foot">
+          {user && (
+            <button type="button" className="sb-circle sb-logout" onClick={logout} aria-label="Log out" title="Log out">
+              <LogOut size={17} />
+            </button>
           )}
         </div>
-      )}
-
-      {/* ── Notes (admin) — halaman /notes, di BAWAH blok user + logout (tukar posisi 19 Agu 2026) ── */}
-      {role === 'admin' && (() => {
-        const active = isActive('/notes');
-        const isHover = hovered === '/notes' && !active;
-        return (
-          <div style={{ padding: '0 8px 8px' }}>
-            <Link
-              href="/notes"
-              onMouseEnter={() => setHovered('/notes')}
-              onMouseLeave={() => setHovered(null)}
-              title="Notes"
-              style={{
-                width: '100%', display: 'flex', alignItems: 'center',
-                justifyContent: 'flex-start',
-                gap: collapsed ? '0px' : '10px',
-                padding: collapsed ? '11px 0 11px 15px' : '9px 10px',
-                borderRadius: '9px', position: 'relative',
-                background: active ? ACTIVE_BG : isHover ? ACTIVE_HV : 'transparent',
-                color: active ? ACTIVE_FG : isHover ? 'var(--nav-hover-tx)' : 'var(--nav-tx)',
-                fontSize: '13px', fontWeight: active ? '600' : '400',
-                whiteSpace: 'nowrap', overflow: 'hidden',
-                transition: `background 0.18s ${EASE}, color 0.18s, padding 0.28s ${EASE}, gap 0.28s ${EASE}`,
-              }}
-            >
-              {active && !collapsed && (
-                <span style={{
-                  position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)',
-                  width: '3px', height: '60%', borderRadius: '0 2px 2px 0', background: ACTIVE_FG,
-                }} />
-              )}
-              <NotebookPen
-                size={18}
-                color={active ? ACTIVE_FG : isHover ? 'var(--nav-hover-tx)' : 'var(--nav-icon)'}
-                style={{ flexShrink: 0, minWidth: 18, transition: 'color 0.18s' }}
-              />
-              <span style={{
-                opacity: textVisible ? 1 : 0,
-                maxWidth: collapsed ? '0px' : '200px',
-                overflow: 'hidden',
-                transition: `opacity 0.22s ease, max-width 0.28s ${EASE}`,
-                letterSpacing: '-0.1px',
-              }}>Notes</span>
-            </Link>
-          </div>
-        );
-      })()}
-
-      {/* ── Collapse button ── */}
-      <div style={{ padding: '8px', borderTop: '1px solid var(--divider)' }}>
-        <button
-          onClick={toggleCollapse}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'flex-start',
-            gap: collapsed ? '0px' : '10px',
-            width: '100%',
-            padding: collapsed ? '11px 0 11px 15px' : '9px 10px',
-            borderRadius: '9px',
-            background: 'transparent',
-            border: 'none',
-            color: 'var(--collapse-tx)',
-            fontSize: '13px',
-            cursor: 'pointer',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            transition: `gap 0.28s ${EASE}, padding 0.28s ${EASE}, color 0.18s`,
-          }}
-          onMouseEnter={e => e.currentTarget.style.color = 'var(--data-time)'}
-          onMouseLeave={e => e.currentTarget.style.color = 'var(--collapse-tx)'}
-        >
-          <ChevronsLeft
-            size={18}
-            style={{
-              flexShrink: 0, minWidth: 18,
-              transform: collapsed ? 'rotate(180deg)' : 'rotate(0deg)',
-              transition: `transform 0.28s ${EASE}`,
-            }}
-          />
-          <span style={{
-            opacity: textVisible ? 1 : 0,
-            maxWidth: collapsed ? '0px' : '200px',
-            overflow: 'hidden',
-            transition: `opacity 0.22s ease, max-width 0.28s ${EASE}`,
-          }}>
-            Collapse
-          </span>
-        </button>
       </div>
 
-      {/* ── Drag handle ── */}
-      {!collapsed && (
-        <div
-          onMouseDown={startDrag}
-          onMouseEnter={() => setDragHover(true)}
-          onMouseLeave={() => setDragHover(false)}
-          style={{
-            position: 'absolute', top: 0, right: '-3px',
-            width: '6px', height: '100%',
-            cursor: 'col-resize', zIndex: 10,
-            background: dragHover ? 'var(--nav-drag)' : 'transparent',
-            transition: 'background 0.15s',
-          }}
-        />
+      {/* ══ PANEL MENU ══ */}
+      <div className="sb-panel" style={{ width: panelWidth + 'px' }} aria-hidden={collapsed} inert={collapsed}>
+        <div className="sb-brand">
+          <Logo size={24} color="var(--sb-acc)" />
+          <span className="sb-brand-name">Baba Rafi <span>Ad Hub</span></span>
+        </div>
+
+        <nav className="sb-nav" aria-label="Pages">
+          {hubs.map(h => (
+            <div key={h.key} className="sb-sec">
+              <div className="sb-label">{h.label}</div>
+              {renderItems(h.items)}
+            </div>
+          ))}
+        </nav>
+
+        {user && (
+          <div className="sb-user">
+            <span className="sb-avatar" aria-hidden="true">{user.username?.[0] || '?'}</span>
+            <div style={{ minWidth: 0 }}>
+              <div className="sb-user-name">{user.username}</div>
+              <div className="sb-user-role">{ROLE_LABEL[role] || role}</div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Pegangan geser lebar ── */}
+      {!collapsed && <div className="sb-drag" onMouseDown={startDrag} aria-hidden="true" />}
+
+      {/* ── Flyout halaman saat diciutkan ── */}
+      {flyHub && (
+        <div className="sb-fly" style={{ top: Math.max(8, fly.top - 10) + 'px' }}
+          onMouseEnter={keepFly} onMouseLeave={closeFlySoon} onFocus={keepFly} onBlur={closeFlySoon}>
+          <div className="sb-label">{flyHub.label}</div>
+          {renderItems(flyHub.items)}
+        </div>
       )}
     </aside>
   );

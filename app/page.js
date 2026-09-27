@@ -1,15 +1,30 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+/* ══ DASHBOARD ADS HUB — redesain "Ridgeline" (PREVIEW LOKAL, Sep 2026) ═══════
+   THESIS: laporan iklan dibaca seperti instrumen — kartu cangkang + panel dalam,
+     angka monospace, warna hanya untuk data & arah perubahan (bukan dekorasi).
+   OWN-WORLD: kanvas charcoal #222 (terang: abu hangat #F2F2EF), cangkang #1D1D1D,
+     panel #2A2A2A, kontrol pil netral; ungu/oranye/teal = Awareness/Traffic/Conversion.
+   STORY: 5 detik pertama = 5 KPI + arah perubahannya vs periode pembanding yang
+     tertulis jelas → ke mana uang pergi & seberapa efisien → tren harian + campaign terbaik.
+   FIRST VIEWPORT: top bar (judul + konteks | filter & aksi) → 5 kartu KPI →
+     Spend Breakdown + Cost Efficiency → grafik harian + Top Campaigns. Fit 1 layar.
+   Logika fetch & rumus metrik TIDAK diubah — hanya penyajian. Style: dashboard-ridgeline.css
+   ══════════════════════════════════════════════════════════════════════════ */
+
+import './dashboard-ridgeline.css';
+import { useState, useEffect, useRef, useId } from 'react';
 import { createPortal } from 'react-dom';
+import Link from 'next/link';
 import {
-  Calendar, ChevronDown, ChevronLeft, ChevronRight, RefreshCw,
-  DollarSign, Users, Eye, LayoutGrid, User,
-  ScanLine, MousePointerClick, UserPlus, Target,
+  Calendar, ChevronDown, RefreshCw,
+  Wallet, Users, Eye, MousePointerClick, UserPlus,
   MessageSquare, Trash2, GitCompareArrows,
+  ArrowUp, ArrowDown, ArrowRight, ArrowUpRight, Info,
+  ChartPie, Gauge, Trophy, TriangleAlert,
 } from 'lucide-react';
 import CountUp from './components/CountUp';
-import AreaChart from './components/AreaChart';
+import AreaChart, { monotonePath } from './components/AreaChart';
 import CompareModal from './components/CompareModal';
 import LeadsBreakdownModal from './components/LeadsBreakdownModal';
 import ExportMenu from './components/ExportMenu';
@@ -21,26 +36,32 @@ import PlatformPlaceholder from './components/PlatformPlaceholder';
 import useIsMobile from './components/useIsMobile';
 import DateFilterPopup from './components/DateFilterPopup';
 import { TYPE } from './components/typography';
+import { dashboardFontVars } from './components/dashboardFonts';
 import { supabase, authFetch } from './supabase';
+/* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */
+import { Download } from 'lucide-react';
+import PreviewPanel from './components/PreviewPanel';
+import { buildDemoDashboard } from './components/demoDashboard';
+const DEMO_ALLOWED = process.env.NODE_ENV !== 'production';
+/* ═══ END PREVIEW-ONLY ═══ */
 
-/* ─── Design tokens: netral = CSS var (ikut tema), aksen = literal (sama di 2 tema) ─── */
+/* ─── Token lama (masih dipakai tombol top bar mobile & popup Suggestions) ─── */
 const BG      = 'var(--pg)';
 const CARD    = 'var(--cd)';
 const BORDER  = 'var(--br)';
 const TXT     = 'var(--t1)';
 const SUB     = 'var(--t2)';
 const MUTE    = 'var(--t3)';
-const GREEN   = '#2FB673';   // emerald — ikut palet redesain 2026 (dua tema)
+// Warna literal di bawah dipakai data Export (laporan PDF/JPG) — JANGAN diganti,
+// tampilan dashboard sendiri memakai token skin (--rg-*) lewat OBJ_VAR/TYPE_VAR.
+const GREEN   = '#2FB673';
 const BLUE    = '#3B82F6';
 const PURPLE  = '#8B5CF6';
 const ORANGE  = '#F59E0B';
 
-const CARD_BASE = {
-  background: CARD,
-  border: `1px solid ${BORDER}`,
-  borderRadius: '18px',
-  boxShadow: 'var(--shadow)',
-};
+// Warna objektif di layar (theme-aware, divalidasi skill dataviz)
+const OBJ_VAR  = { Awareness: 'var(--rg-aware)', Traffic: 'var(--rg-traffic)', Conversion: 'var(--rg-conv)', Other: 'var(--rg-other)' };
+const TYPE_VAR = { AWARENESS: 'var(--rg-aware)', TRAFFIC: 'var(--rg-traffic)', CONVERSION: 'var(--rg-conv)' };
 
 
 /* ─── Helpers ─── */
@@ -106,25 +127,6 @@ function getCampaignType(name) {
   return 'AWARENESS';
 }
 
-function fmtBigNum(n) {
-  if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(1).replace('.0','') + 'B';
-  if (n >= 1_000_000)     return (n / 1_000_000).toFixed(1).replace('.0','') + 'M';
-  if (n >= 1_000)         return (n / 1_000).toFixed(1).replace('.0','') + 'K';
-  return Math.round(n).toLocaleString('id-ID');
-}
-
-function fmtSpend(n) {
-  if (n >= 1_000_000) return 'Rp ' + (n / 1_000_000).toFixed(1).replace('.0','') + 'M';
-  if (n >= 1_000)     return 'Rp ' + (n / 1_000).toFixed(0) + 'K';
-  return 'Rp ' + Math.round(n);
-}
-
-// Cost per result — angka penuh (tanpa singkatan K/M), pakai pemisah ribuan
-function fmtCPR(v) {
-  if (v == null) return '—';
-  return 'Rp ' + Math.round(v).toLocaleString('id-ID');
-}
-
 // Spend full format — tanpa abbreviation, dengan pemisah ribuan
 function fmtSpendFull(n) {
   return 'Rp ' + Math.round(n).toLocaleString('id-ID');
@@ -150,10 +152,51 @@ function getCampaignResult(name, ins) {
   if (n.includes('AWR REACH')) return parseFloat(ins.reach || 0);
   return parseFloat(ins.impressions || 0); // AWARENESS default → impressions
 }
+// Label satuan result + nama biaya per result (penyajian saja, ikut getCampaignResult)
+function resultMeta(name) {
+  const type = getCampaignType(name);
+  if (type === 'TRAFFIC')    return { resultLabel: 'clicks', costLabel: 'CPC' };
+  if (type === 'CONVERSION') return { resultLabel: 'leads',  costLabel: 'CPL' };
+  const n = (name || '').toUpperCase();
+  return { resultLabel: n.includes('AWR REACH') ? 'reach' : 'impr.', costLabel: 'CPM' };
+}
 
 function pctChange(cur, prev) {
   if (!prev || prev <= 0) return null;
   return ((cur - prev) / prev) * 100;
+}
+
+/* ─── Format angka gaya Indonesia (titik = ribuan, koma = desimal) ─── */
+const ID = 'id-ID';
+const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function fmtPct1(v) { return Math.abs(v).toLocaleString(ID, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%'; }
+function fmtCtr(v)  { return v.toLocaleString(ID, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%'; }
+// Ruang sempit (baris Top Campaigns): Rp 1,24 jt · Rp 350 rb — satuan Indonesia, bukan K/M
+function fmtRpShort(n) {
+  if (n >= 1e9) return 'Rp ' + (n / 1e9).toLocaleString(ID, { maximumFractionDigits: 2 }) + ' M';
+  if (n >= 1e6) return 'Rp ' + (n / 1e6).toLocaleString(ID, { maximumFractionDigits: 2 }) + ' jt';
+  if (n >= 1e3) return 'Rp ' + Math.round(n / 1e3).toLocaleString(ID) + ' rb';
+  return 'Rp ' + Math.round(n).toLocaleString(ID);
+}
+function fmtNumShort(n) {
+  if (n >= 1e9) return (n / 1e9).toLocaleString(ID, { maximumFractionDigits: 1 }) + ' M';
+  if (n >= 1e6) return (n / 1e6).toLocaleString(ID, { maximumFractionDigits: 1 }) + ' jt';
+  if (n >= 1e4) return (n / 1e3).toLocaleString(ID, { maximumFractionDigits: 1 }) + ' rb';
+  return Math.round(n).toLocaleString(ID);
+}
+// "1–27 Sep", "28 Aug – 3 Sep", "1 Jan – 30 Apr 2026"
+function fmtRangeShort(since, until, withYear = false) {
+  if (!since || !until) return '';
+  const [y1, m1, d1] = since.split('-').map(Number);
+  const [y2, m2, d2] = until.split('-').map(Number);
+  const yr = withYear ? ` ${y2}` : '';
+  if (since === until)             return `${d1} ${MON[m1 - 1]}${yr}`;
+  if (y1 === y2 && m1 === m2)      return `${d1}–${d2} ${MON[m1 - 1]}${yr}`;
+  if (y1 === y2)                   return `${d1} ${MON[m1 - 1]} – ${d2} ${MON[m2 - 1]}${yr}`;
+  return `${d1} ${MON[m1 - 1]} ${y1} – ${d2} ${MON[m2 - 1]} ${y2}`;
+}
+function fmtClock(d) {
+  return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 }
 
 /* ─── Date helpers (untuk sumbu chart sebulan penuh) ─── */
@@ -164,26 +207,6 @@ function addDaysStr(dateStr, n) {
 }
 function daysBetweenStr(a, b) {
   return Math.round((new Date(b + 'T00:00:00Z') - new Date(a + 'T00:00:00Z')) / 86400000) + 1;
-}
-
-/* ─── Calendar UI helpers (murni tampilan — tidak menyentuh logika filter) ─── */
-const CAL_DOW = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
-const CAL_MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-function pad2(n) { return String(n).padStart(2, '0'); }
-function toYMD(y, m, d) { return `${y}-${pad2(m + 1)}-${pad2(d)}`; } // m 0-based
-function monthGrid(y, m) {
-  const start = new Date(y, m, 1).getDay();      // 0=Min
-  const days  = new Date(y, m + 1, 0).getDate();
-  const cells = [];
-  for (let i = 0; i < start; i++) cells.push(null);
-  for (let d = 1; d <= days; d++) cells.push(d);
-  while (cells.length % 7 !== 0) cells.push(null);
-  return cells;
-}
-function fmtNice(s) {
-  if (!s) return '—';
-  const [y, m, d] = s.split('-').map(Number);
-  return `${d} ${CAL_MON[m - 1]} ${y}`;
 }
 
 // Bangun array chart selebar rentang (range); slot tanpa data = null,
@@ -232,105 +255,309 @@ function buildChartData(daily, range) {
   return { data, dates, todayIdx: (todayIdx >= 0 && todayIdx < n) ? todayIdx : -1 };
 }
 
-/* ─── Growth badge (real prev-period comparison) ─── */
-function Badge({ pct }) {
-  if (pct === null || pct === undefined) return null;
-  const up = pct >= 0;
+/* ─── Arah perubahan → nada warna ───
+   good: 'up' (naik = bagus), 'down' (biaya: turun = bagus), 'none' (Spend: naik/turun
+   adalah keputusan budget, bukan baik/buruk → abu-abu netral). */
+function toneOf(pct, good) {
+  if (pct == null || !isFinite(pct)) return 'na';
+  if (good === 'none') return 'neu';
+  return (pct >= 0) === (good === 'up') ? 'pos' : 'neg';
+}
+
+function Delta({ pct, good = 'up' }) {
+  const tone = toneOf(pct, good);
+  if (tone === 'na') return <span className="rg-delta is-na" title="No data in the comparison period">—</span>;
+  const Arrow = pct >= 0 ? ArrowUp : ArrowDown;
   return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center', gap: '3px',
-      padding: '2px 7px', borderRadius: '6px', fontSize: '11px', fontWeight: 600,
-      background: up ? 'var(--pos-soft)' : 'var(--neg-soft)',
-      color: up ? 'var(--accent-fg)' : '#EF4444',
-    }}>
-      <span style={{ fontSize: '8px' }}>{up ? '▲' : '▼'}</span>
-      {Math.abs(pct).toFixed(1)}%
+    <span className={`rg-delta is-${tone}`}>
+      <span className="rg-delta-ico" aria-hidden="true"><Arrow size={10} strokeWidth={3} /></span>
+      <span className="rg-sr">{pct >= 0 ? 'Up' : 'Down'} </span>
+      {fmtPct1(pct)}
     </span>
   );
 }
 
-/* ─── Mini sparkline ─── */
-function Sparkline({ data, color, h = 30 }) {
-  const pts = (data || []).filter(v => v != null && v >= 0);
-  if (pts.length < 2) return <div style={{ height: h }} />;
-  const max = Math.max(...pts) || 1;
-  const min = Math.min(...pts);
-  const range = max - min || 1;
-  const W = 240;
-  const coords = pts.map((v, i) => {
-    const x = (i / (pts.length - 1)) * W;
-    const y = h - 3 - ((v - min) / range) * (h - 6);
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  });
+// Ikon (i) — definisi metrik muncul saat hover/fokus (CSS murni, lihat .rg-info)
+function InfoTip({ text, align }) {
+  if (!text) return null;
   return (
-    <svg viewBox={`0 0 ${W} ${h}`} preserveAspectRatio="none" style={{ display: 'block', width: '100%', height: h }}>
-      <polyline points={coords.join(' ')} fill="none" stroke={color} strokeWidth="1.6"
-        vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" style={{ opacity: 0.85 }} />
-    </svg>
+    <button type="button" className="rg-info" data-tip={text} data-align={align} aria-label={text}>
+      <Info size={13} />
+    </button>
   );
 }
 
-/* ─── KPI Card ─── */
-function KpiCard({ label, display, value, icon: Icon, color, pct, spark, delay, onClick }) {
-  const [hover, setHover] = useState(false);
+/* ─── Sparkline kartu KPI: kurva + titik akhir bercincin + garis jatuh putus-putus ─── */
+function KpiSpark({ data }) {
+  const gid = useId().replace(/:/g, '');
+  const vals = (data || []).filter(v => v != null && v >= 0);
+  if (vals.length < 2) return <div className="rg-spark" />;
+  const max = Math.max(...vals), min = Math.min(...vals), rng = max - min || 1;
+  // Titik terakhir berhenti di 91% lebar supaya titik bercincin + garis jatuhnya
+  // tidak terpotong tepi panel (seperti titik "hari ini" di kartu referensi).
+  const pts = vals.map((v, i) => ({ x: (i / (vals.length - 1)) * 91, y: 88 - ((v - min) / rng) * 74 }));
+  const d = monotonePath(pts);
+  const last = pts[pts.length - 1];
   return (
-    <div
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      onClick={onClick}
-      role={onClick ? 'button' : undefined}
-      tabIndex={onClick ? 0 : undefined}
-      onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } } : undefined}
-      style={{
-        ...CARD_BASE,
-        cursor: onClick ? 'pointer' : 'default',
-        borderColor: hover ? 'var(--br-strong)' : BORDER,
-        height: '100%', overflow: 'hidden',
-        display: 'flex', flexDirection: 'column',
-        padding: '16px 18px 10px',
-        animation: `wdFadeUp 0.4s cubic-bezier(0.4,0,0.2,1) ${delay}ms backwards`,
-        transition: 'border-color 0.2s',
-      }}
-    >
-      {/* icon + label */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
-        <div style={{
-          width: '34px', height: '34px', borderRadius: '10px', flexShrink: 0,
-          background: `${color}22`, display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>
-          <Icon size={17} color={color} />
+    <div className="rg-spark" aria-hidden="true">
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id={`${gid}-g`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" style={{ stopColor: 'var(--rg-tone)', stopOpacity: 0.26 }} />
+            <stop offset="100%" style={{ stopColor: 'var(--rg-tone)', stopOpacity: 0 }} />
+          </linearGradient>
+        </defs>
+        <path d={`${d}L${last.x},100L0,100Z`} fill={`url(#${gid}-g)`} className="rg-area" />
+        <path d={d} fill="none" pathLength="1" strokeDasharray="1" vectorEffect="non-scaling-stroke"
+          className="rg-spark-line"
+          style={{ stroke: 'var(--rg-tone)', strokeWidth: 1.6, strokeLinecap: 'round', strokeLinejoin: 'round' }} />
+      </svg>
+      <span className="rg-spark-drop" style={{ left: `${last.x}%`, top: `${last.y}%` }} />
+      <span className="rg-spark-dot" style={{ left: `${last.x}%`, top: `${last.y}%` }} />
+    </div>
+  );
+}
+
+/* ─── Kartu KPI (anatomi kartu proyek referensi: header · panel bergradasi · footer) ─── */
+function KpiCard({ label, icon: Icon, info, tipAlign, unit, value, display, pct, good, spark, prevLabel, prevDisplay, onOpen, openLabel, delay = 0 }) {
+  const tone = toneOf(pct, good);
+  return (
+    <div className="rg-card rg-rise" style={{ height: '100%', animationDelay: `${delay}ms` }}>
+      <div className="rg-head">
+        <span className="rg-head-ico"><Icon size={15} /></span>
+        <span className="rg-title">{label}</span>
+        <InfoTip text={info} align={tipAlign} />
+      </div>
+      <div className={`rg-well rg-kpi-well rg-tone-${tone === 'na' ? 'neu' : tone}`}>
+        <div className="rg-kpi-value">
+          {unit && <span className="rg-unit">{unit}</span>}
+          <CountUp value={value} display={display} delay={delay + 120} />
         </div>
-        <span style={{ ...TYPE.metricLabel }}>{label}</span>
-        {onClick && (
-          <ChevronRight
-            size={15}
-            style={{
-              marginLeft: 'auto', flexShrink: 0, color: 'var(--t3)',
-              opacity: hover ? 1 : 0, transform: hover ? 'translateX(0)' : 'translateX(-3px)',
-              transition: 'opacity 0.18s, transform 0.18s',
-            }}
-          />
-        )}
+        <div className="rg-kpi-sub">
+          <Delta pct={pct} good={good} />
+          {prevLabel && <span>vs {prevLabel}</span>}
+        </div>
+        <KpiSpark data={spark} />
       </div>
+      {onOpen ? (
+        <button type="button" className="rg-foot" onClick={onOpen}>
+          <span>{openLabel}</span>
+          <ArrowRight size={15} className="rg-foot-arrow" />
+        </button>
+      ) : (
+        <div className="rg-foot">
+          <span>Previous</span>
+          <span className="rg-mono rg-foot-val">{prevDisplay ?? '—'}</span>
+        </div>
+      )}
+    </div>
+  );
+}
 
-      {/* value */}
-      <div style={{ ...TYPE.metricValue, marginTop: '10px' }}>
-        <CountUp value={value} display={display} delay={delay + 100} />
+/* ─── Meter batang mini (tren harian 4C) — ala meter "SEO Overview" referensi ─── */
+function MiniBars({ data, color, count = 9 }) {
+  const vals = (data || []).filter(v => v != null && isFinite(v)).slice(-count);
+  if (vals.length < 2) return null;
+  const max = Math.max(...vals) || 1;
+  return (
+    <div className="rg-bars" aria-hidden="true">
+      {vals.map((v, i) => (
+        <span key={i} className="rg-bar">
+          <i style={{ height: `${Math.max(8, (v / max) * 100)}%`, background: color, animationDelay: `${300 + i * 35}ms` }} />
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function EfficiencyCard({ items, prevLabel, delay = 0, fill = true }) {
+  return (
+    <div className="rg-card rg-rise" style={{ ...(fill ? { height: '100%' } : null), animationDelay: `${delay}ms` }}>
+      <div className="rg-head">
+        <span className="rg-head-ico"><Gauge size={15} /></span>
+        <span className="rg-title">Cost Efficiency</span>
+        {prevLabel && <span className="rg-meta">Change vs {prevLabel}</span>}
       </div>
-
-      {/* badge */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginTop: '8px' }}>
-        <Badge pct={pct} />
-        {pct !== null && pct !== undefined && (
-          <span style={{ ...TYPE.caption }}>vs prev period</span>
-        )}
-      </div>
-
-      {/* sparkline */}
-      <div style={{ marginTop: 'auto' }}>
-        <Sparkline data={spark} color={color} h={28} />
+      <div className="rg-well rg-eff">
+        {items.map((m, i) => (
+          <div key={m.label} className="rg-eff-cell">
+            <div className="rg-eff-label">
+              <span>{m.label}</span>
+              <InfoTip text={m.info} align={i % 2 ? 'end' : undefined} />
+            </div>
+            <div className="rg-eff-value">
+              <span className="rg-mono rg-eff-num">{m.value}</span>
+            </div>
+            <div className="rg-eff-scope">
+              <Delta pct={m.pct} good={m.good} />
+              <span>
+                <span className="rg-scope-long">{m.scope}</span>
+                <span className="rg-scope-short">{m.scopeShort || m.scope}</span>
+              </span>
+            </div>
+            <MiniBars data={m.spark} color={m.color} />
+          </div>
+        ))}
       </div>
     </div>
+  );
+}
+
+/* ─── Donut Spend Breakdown — cincin tebal, celah permukaan antar segmen ─── */
+function Donut({ segs, total, hover, setHover }) {
+  const R = 40, C = 2 * Math.PI * R;
+  const GAP = segs.length > 1 ? 1.6 : 0;
+  let acc = 0;
+  const h = hover != null ? segs[hover] : null;
+  return (
+    <div className="rg-donut">
+      <svg viewBox="0 0 100 100" aria-hidden="true">
+        {segs.map((s, i) => {
+          const len  = s.frac * C;
+          const dash = Math.max(0.01, len - GAP);
+          const el = (
+            <circle key={s.label} cx="50" cy="50" r={R} fill="none" strokeWidth="13"
+              strokeDasharray={`${dash} ${C - dash}`} strokeDashoffset={-(acc + GAP / 2)}
+              style={{ stroke: OBJ_VAR[s.label] || 'var(--rg-other)', opacity: hover != null && hover !== i ? 0.28 : 1, cursor: 'pointer' }}
+              onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)} />
+          );
+          acc += len;
+          return el;
+        })}
+      </svg>
+      <div className="rg-donut-center">
+        <span className="rg-donut-label">{h ? h.label : 'Total Spend'}</span>
+        <span className="rg-donut-value rg-mono">{h ? h.value : total}</span>
+        {h && <span className="rg-donut-chip rg-mono">{h.pct}% of spend</span>}
+      </div>
+    </div>
+  );
+}
+
+function SpendCard({ segs, total, hover, setHover, delay = 0, fill = true }) {
+  return (
+    <div className="rg-card rg-rise" style={{ ...(fill ? { height: '100%' } : null), animationDelay: `${delay}ms` }}>
+      <div className="rg-head">
+        <span className="rg-head-ico"><ChartPie size={15} /></span>
+        <span className="rg-title">Spend Breakdown</span>
+        <span className="rg-meta">By campaign objective</span>
+        <Link href="/campaigns" className="rg-iconbtn" title="Open Campaigns" aria-label="Open Campaigns">
+          <ArrowUpRight size={15} />
+        </Link>
+      </div>
+      <div className="rg-well rg-split">
+        {segs.length === 0 ? (
+          <div className="rg-empty" style={{ gridColumn: '1 / -1' }}>
+            <strong>No spend in this period</strong>
+            <span>Pick a wider date range to see how the budget was split.</span>
+          </div>
+        ) : (<>
+          <Donut segs={segs} total={total} hover={hover} setHover={setHover} />
+          <div className="rg-legend">
+            {segs.map((s, i) => (
+              <div key={s.label} className={`rg-lg${hover != null && hover !== i ? ' is-dim' : ''}`}
+                onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}>
+                <div className="rg-lg-name">
+                  <span className="rg-lg-sw" style={{ background: OBJ_VAR[s.label] || 'var(--rg-other)' }} />
+                  <span>{s.label}</span>
+                  {s.count != null && <span className="rg-lg-count">· {s.count} campaign{s.count === 1 ? '' : 's'}</span>}
+                </div>
+                <div className="rg-lg-vals rg-mono">
+                  <span>{s.value}</span>
+                  <span className="rg-lg-pct">{s.pct}%</span>
+                </div>
+                <div className="rg-meter" aria-hidden="true">
+                  {s.frac >= 0.995 ? (
+                    <span style={{ width: '100%', background: OBJ_VAR[s.label] || 'var(--rg-other)', animationDelay: `${250 + i * 80}ms` }} />
+                  ) : (<>
+                    <span style={{ width: `calc(${(s.frac * 100).toFixed(2)}% - 2px)`, minWidth: '4px', background: OBJ_VAR[s.label] || 'var(--rg-other)', animationDelay: `${250 + i * 80}ms` }} />
+                    <span />
+                  </>)}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>)}
+      </div>
+    </div>
+  );
+}
+
+/* ─── Top Campaigns — urut CTR tertinggi (permintaan Nadir 3 Agu 2026) ─── */
+function TopCampaignsCard({ rows, delay = 0, mobile = false }) {
+  return (
+    <div className="rg-card rg-rise" style={{ ...(mobile ? { maxHeight: '440px' } : { height: '100%' }), animationDelay: `${delay}ms` }}>
+      <div className="rg-head">
+        <span className="rg-head-ico"><Trophy size={15} /></span>
+        <span className="rg-title">Top Campaigns</span>
+        <span className="rg-meta">Sorted by CTR</span>
+        <Link href="/campaigns" className="rg-iconbtn" title="Open Campaigns" aria-label="Open Campaigns">
+          <ArrowUpRight size={15} />
+        </Link>
+      </div>
+      <div className="rg-well rg-list-well">
+        {rows.length === 0 ? (
+          <div className="rg-empty">
+            <strong>No campaigns delivered</strong>
+            <span>Campaigns that spend in this period are ranked here.</span>
+          </div>
+        ) : (<>
+          <div className="rg-list-head"><span>Campaign</span><span>CTR · Spend</span></div>
+          <div className="rg-list">
+            {rows.map((c, i) => (
+              <div key={i} className="rg-camp">
+                <span className="rg-rank rg-mono">{i + 1}</span>
+                <div style={{ minWidth: 0 }}>
+                  <div className="rg-camp-name">
+                    <span className="rg-camp-dot" style={{ background: TYPE_VAR[c.type] }} />
+                    <span title={c.name}>{c.name}</span>
+                  </div>
+                  <div className="rg-camp-meta rg-mono">
+                    {fmtNumShort(c.result)} {c.resultLabel} · {c.costLabel} {c.cpr != null ? fmtSpendFull(c.cpr) : '—'}
+                  </div>
+                </div>
+                <div className="rg-camp-right">
+                  <div className="rg-camp-ctr rg-mono">{fmtCtr(c.ctr)}</div>
+                  <div className="rg-camp-spend rg-mono">{fmtRpShort(c.spend)}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>)}
+      </div>
+    </div>
+  );
+}
+
+/* ─── Skeleton muat pertama (refetch berikutnya: tampilan lama diredupkan, tanpa lompat) ─── */
+function SkelCard({ lines = 2, style }) {
+  return (
+    <div className="rg-card" style={style}>
+      <div className="rg-head"><span className="rg-skel" style={{ width: '38%', height: 11 }} /></div>
+      <div className="rg-well" style={{ flex: 1, padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <span className="rg-skel" style={{ width: '62%', height: 22 }} />
+        {Array.from({ length: lines }).map((_, i) => (
+          <span key={i} className="rg-skel" style={{ width: `${48 - i * 10}%`, height: 10 }} />
+        ))}
+      </div>
+      <div className="rg-foot"><span className="rg-skel" style={{ width: '46%', height: 9 }} /></div>
+    </div>
+  );
+}
+function DashboardSkeleton({ isMobile }) {
+  if (isMobile) return (
+    <>
+      <SkelCard style={{ height: 196, flexShrink: 0 }} />
+      <SkelCard lines={3} style={{ height: 230, flexShrink: 0 }} />
+      <SkelCard lines={4} style={{ height: 300, flexShrink: 0 }} />
+    </>
+  );
+  return (
+    <>
+      <div className="rg-row-kpi">{[0, 1, 2, 3, 4].map(i => <SkelCard key={i} />)}</div>
+      <div className="rg-row-mid"><SkelCard lines={3} /><SkelCard lines={3} /></div>
+      <div className="rg-row-bot"><SkelCard lines={5} /><SkelCard lines={5} /></div>
+    </>
   );
 }
 
@@ -348,6 +575,9 @@ export default function DashboardPage() {
   const [summary, setSummary]           = useState(null);
   const [chartData, setChartData]       = useState({ spend:[], awareness:[], traffic:[], leads:[] });
   const [chartDates, setChartDates]     = useState([]);
+  const [chartSince, setChartSince]     = useState('');
+  const [prevRange, setPrevRange]       = useState(null);
+  const [updatedAt, setUpdatedAt]       = useState(null);
   const [donutSegs, setDonutSegs]       = useState([]);
   const [donutTotal, setDonutTotal]     = useState({ value:'—', label:'Total Spend' });
   const [todayIdx, setTodayIdx]         = useState(0);
@@ -358,6 +588,26 @@ export default function DashboardPage() {
   const [hasUnread, setHasUnread]       = useState(false);
   const [platform, setPlatform]         = useState(DEFAULT_PLATFORM);
   const suggestRef = useRef(null);
+  // Penanda permintaan terakhir: respons lama yang datang belakangan tidak boleh
+  // menimpa hasil yang lebih baru (mis. ganti filter cepat / saklar data preview)
+  const fetchToken = useRef(0);
+
+  /* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */
+  const [demo, setDemo] = useState(false);
+  const demoReady = useRef(false);
+  useEffect(() => {
+    if (!DEMO_ALLOWED) return;
+    try { if (localStorage.getItem('wd-preview-demo') !== '0') setDemo(true); } catch {}
+  }, []);
+  useEffect(() => {
+    if (!demoReady.current) { demoReady.current = true; return; }
+    refresh();
+  }, [demo]);
+  function toggleDemo(v) {
+    setDemo(v);
+    try { localStorage.setItem('wd-preview-demo', v ? '1' : '0'); } catch {}
+  }
+  /* ═══ END PREVIEW-ONLY ═══ */
 
   // Slot aksi di top bar mobile (MobileNav) — diisi via portal.
   // Kiri theme toggle: export + refresh · kanan theme toggle: suggestions (admin)
@@ -412,13 +662,25 @@ export default function DashboardPage() {
   }, [showDropdown]);
 
   async function fetchData(since = '', until = '') {
+    const token = ++fetchToken.current;
     setLoading(true); setError(null);
     try {
       const url = since && until
         ? `/api/meta?mode=dashboard&since=${since}&until=${until}`
         : `/api/meta?mode=dashboard&date_preset=${dateOpt.value}`;
-      const res  = await authFetch(url);
-      const json = await res.json();
+      let json;
+      /* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */
+      if (demo) {
+        const r = since && until ? { since, until } : presetToRange(dateOpt.value);
+        await new Promise(res => setTimeout(res, 350));
+        json = buildDemoDashboard({ ...r, isThisMonth: !(since && until) && dateOpt.value === 'this_month' });
+      } else
+      /* ═══ END PREVIEW-ONLY ═══ */
+      {
+        const res = await authFetch(url);
+        json = await res.json();
+      }
+      if (token !== fetchToken.current) return;
       if (json.error) throw new Error(json.error);
 
       const sum        = json.summary     || {};
@@ -468,7 +730,7 @@ export default function DashboardPage() {
       const calcCTR = convImpressions > 0  ? (convClicks / convImpressions) * 100    : null;
 
       // 4C periode pembanding — dihitung dari prevCampaigns dgn rumus per-tipe yang SAMA,
-      // supaya badge % di laporan export apple-to-apple. (Dipakai export saja untuk sekarang.)
+      // supaya badge % apple-to-apple (dipakai laporan export + kartu Cost Efficiency).
       const prevCampsWithData = prevCampaigns.filter(c => parseFloat(c.insights?.data?.[0]?.spend || 0) > 0);
       const prevTrafficCamps  = prevCampsWithData.filter(c => getCampaignType(c.name) === 'TRAFFIC');
       const prevConvCamps     = prevCampsWithData.filter(c => getCampaignType(c.name) === 'CONVERSION');
@@ -499,12 +761,18 @@ export default function DashboardPage() {
         pctCPC: calcCPC != null ? pctChange(calcCPC, prevCPC) : null,
         pctCPL: calcCPL != null ? pctChange(calcCPL, prevCPL) : null,
         pctCTR: calcCTR != null ? pctChange(calcCTR, prevCTR) : null,
+        // Nilai mentah periode pembanding — ditampilkan di footer kartu KPI ("Previous")
+        prevSpend, prevReach, prevImpressions,
+        prevTraffic: prevTrafficClicks,
+        prevLeads:   prevConvLeads,
       });
 
       const built = buildChartData(daily, chartRange);
       setChartData(built.data);
       setChartDates(built.dates);
       setTodayIdx(built.todayIdx);
+      setChartSince(chartRange?.since || '');
+      setPrevRange(json.prevRange || null);
 
       // Top campaigns — Campaign · Spend · Result · Cost/Result · CTR
       // Urutan: CTR tertinggi di atas (permintaan Nadir 3 Agu 2026). Warna per tipe.
@@ -522,6 +790,7 @@ export default function DashboardPage() {
             type,
             spend: sp,
             result,
+            ...resultMeta(c.name),
             // Awareness → CPM (per 1.000 impressions); Traffic/Conversion → per result
             cpr:   result > 0 ? (type === 'AWARENESS' ? (sp / result) * 1000 : sp / result) : null,
             ctr:   impr > 0 ? (clk / impr) * 100 : 0,
@@ -531,14 +800,14 @@ export default function DashboardPage() {
         .sort((a, b) => (b.ctr - a.ctr) || (b.spend - a.spend));
       setTopCampaigns(tops);
 
-      // Donut spend breakdown
+      // Donut spend breakdown (field dash/offset/color tetap untuk laporan Export)
       const total = totalSpend || 1;
       const segs  = [];
-      if (awareSpend > 0)   segs.push({ color: PURPLE, label:'Awareness',  pct: Math.round(awareSpend/total*100),   value: fmtSpendFull(awareSpend)   });
-      if (trafficSpend > 0) segs.push({ color: ORANGE, label:'Traffic',    pct: Math.round(trafficSpend/total*100), value: fmtSpendFull(trafficSpend) });
-      if (convSpend > 0)    segs.push({ color: GREEN,  label:'Conversion', pct: Math.round(convSpend/total*100),    value: fmtSpendFull(convSpend)    });
+      if (awareSpend > 0)   segs.push({ color: PURPLE, label:'Awareness',  pct: Math.round(awareSpend/total*100),   value: fmtSpendFull(awareSpend),   frac: awareSpend/total,   count: awareCamps.length   });
+      if (trafficSpend > 0) segs.push({ color: ORANGE, label:'Traffic',    pct: Math.round(trafficSpend/total*100), value: fmtSpendFull(trafficSpend), frac: trafficSpend/total, count: trafficCamps.length });
+      if (convSpend > 0)    segs.push({ color: GREEN,  label:'Conversion', pct: Math.round(convSpend/total*100),    value: fmtSpendFull(convSpend),    frac: convSpend/total,    count: convCamps.length    });
       const other = Math.max(0, totalSpend - awareSpend - trafficSpend - convSpend);
-      if (other > 0)        segs.push({ color: BLUE,   label:'Other',      pct: Math.round(other/total*100),        value: fmtSpendFull(other)        });
+      if (other > 0)        segs.push({ color: BLUE,   label:'Other',      pct: Math.round(other/total*100),        value: fmtSpendFull(other),        frac: other/total,        count: null                });
 
       const CIRC = 238.76;
       let offset = 0;
@@ -549,10 +818,12 @@ export default function DashboardPage() {
         return s;
       }));
       setDonutTotal({ value: fmtSpendFull(totalSpend), label: 'Total Spend' });
+      setUpdatedAt(new Date());
     } catch (err) {
+      if (token !== fetchToken.current) return;
       setError(err.message);
     }
-    setLoading(false);
+    if (token === fetchToken.current) setLoading(false);
   }
 
   async function handleDeleteSuggestion(id) {
@@ -602,54 +873,6 @@ export default function DashboardPage() {
     setCustomSince(s); setCustomUntil(u);
     const p = s.split('-'); setCalY(+p[0]); setCalM(+p[1] - 1);
   }
-  // Render satu bulan (dow + grid tanggal) dengan highlight range
-  function renderMonth(y, m) {
-    const todayStr = toYMD(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
-    return (
-      <div style={{ width:'232px' }}>
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', rowGap:'2px' }}>
-          {CAL_DOW.map(d => (
-            <div key={d} style={{ textAlign:'center', fontSize:'11px', color:MUTE, paddingBottom:'8px' }}>{d}</div>
-          ))}
-          {monthGrid(y, m).map((d, i) => {
-            if (!d) return <div key={i} />;
-            const ds       = toYMD(y, m, d);
-            const isStart  = ds === customSince;
-            const isEnd    = ds === customUntil;
-            const inRange  = customSince && customUntil && ds > customSince && ds < customUntil;
-            const isToday  = ds === todayStr;
-            const endpoint = isStart || isEnd;
-            const hasLeft  = customUntil && (isEnd || inRange);   // band menyambung ke kiri
-            const hasRight = customUntil && (isStart || inRange); // band menyambung ke kanan
-            return (
-              <div key={i} style={{ position:'relative', height:'32px', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                {(hasLeft || hasRight) && (
-                  <span style={{ position:'absolute', top:'3px', bottom:'3px',
-                    left: hasLeft ? 0 : '50%', right: hasRight ? 0 : '50%',
-                    background:'var(--cal-range)' }} />
-                )}
-                {endpoint && (
-                  <span style={{ position:'absolute', width:'30px', height:'30px', borderRadius:'50%',
-                    background:'var(--cal-accent)', boxShadow:'0 2px 8px var(--cal-glow)' }} />
-                )}
-                <button onClick={() => pickDay(ds)} style={{
-                  position:'relative', width:'30px', height:'30px', borderRadius:'50%',
-                  border: isToday && !endpoint ? '1px solid var(--cal-accent-line)' : '1px solid transparent',
-                  background:'transparent', cursor:'pointer', fontSize:'12.5px', fontFamily:'inherit',
-                  fontWeight: endpoint ? 700 : 400,
-                  color: endpoint ? 'var(--cal-accent-fg)' : isToday ? 'var(--cal-accent-line)' : inRange ? TXT : SUB,
-                  transition:'background 0.12s, color 0.12s',
-                }}
-                onMouseEnter={e => { if (!endpoint) e.currentTarget.style.background='var(--hover)'; }}
-                onMouseLeave={e => { if (!endpoint) e.currentTarget.style.background='transparent'; }}
-                >{d}</button>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
-  }
 
   function refresh() {
     if (isCustom && customSince && customUntil) fetchData(customSince, customUntil);
@@ -664,19 +887,22 @@ export default function DashboardPage() {
     return dateOpt.label;
   }
 
-  const center = hoverSeg === null
-    ? donutTotal
-    : { value: donutSegs[hoverSeg]?.value || '—', label: donutSegs[hoverSeg]?.label || '' };
+  // Rentang aktif (tanggal nyata) untuk pil filter: "This month │ 1–27 Sep 2026"
+  const curRange  = isCustom && customSince && customUntil
+    ? { since: customSince, until: customUntil }
+    : presetToRange(dateOpt.value);
+  const rangeText = fmtRangeShort(curRange.since, curRange.until, true);
+  const prevLabel = prevRange ? fmtRangeShort(prevRange.since, prevRange.until) : '';
 
-  // ── Refresh + Suggestions: di header (desktop) ATAU top bar via portal (mobile).
-  //    Ukuran 36px di mobile biar serasi dengan ThemeToggle top bar. ──
-  const ctrlSize   = isMobile ? '36px' : '40px';
-  const ctrlRadius = isMobile ? '9px'  : '10px';
+  const initialLoading = loading && !summary;
+  const busy = loading && summary ? ' rg-busy' : '';
 
-  const refreshButton = (
+  // ── Tombol top bar MOBILE (dirender via portal ke MobileNav — di luar skin,
+  //    jadi tetap gaya lama 36px agar serasi dengan theme toggle top bar) ──
+  const refreshButtonMobile = (
     <button onClick={refresh} title="Refresh" style={{
-      width:ctrlSize, height:ctrlSize, display:'flex', alignItems:'center', justifyContent:'center',
-      background: CARD, border:`1px solid ${BORDER}`, borderRadius:ctrlRadius, cursor:'pointer',
+      width:'36px', height:'36px', display:'flex', alignItems:'center', justifyContent:'center',
+      background: CARD, border:`1px solid ${BORDER}`, borderRadius:'9px', cursor:'pointer',
       flexShrink:0, transition:'border-color 0.15s',
     }}
     onMouseEnter={e => e.currentTarget.style.borderColor='var(--br-strong)'}
@@ -686,30 +912,39 @@ export default function DashboardPage() {
     </button>
   );
 
+  const suggestTrigger = isMobile ? (
+    <button
+      onClick={() => setShowSuggest(prev => !prev)}
+      title="Suggestions"
+      style={{
+        width:'36px', height:'36px', display:'flex', alignItems:'center', justifyContent:'center',
+        background: CARD, border:`1px solid ${showSuggest ? 'var(--cal-accent-line)' : BORDER}`,
+        borderRadius:'9px', cursor:'pointer', position:'relative',
+        flexShrink:0, transition:'border-color 0.15s',
+      }}
+    >
+      <MessageSquare size={15} color="var(--cal-accent-line)"/>
+      {hasUnread && (
+        <span style={{
+          position:'absolute', top:'6px', right:'6px',
+          width:'8px', height:'8px', borderRadius:'50%',
+          background:'#EF4444', border:`2px solid ${CARD}`,
+          animation:'wdPulseDot 1.5s ease-in-out infinite',
+        }}/>
+      )}
+    </button>
+  ) : (
+    <button type="button" className="rg-pill rg-round" aria-expanded={showSuggest}
+      title="User suggestions" aria-label={hasUnread ? 'User suggestions (new)' : 'User suggestions'}
+      onClick={() => setShowSuggest(prev => !prev)}>
+      <MessageSquare size={15} />
+      {hasUnread && <span className="rg-alert-dot" aria-hidden="true" />}
+    </button>
+  );
+
   const suggestionsBlock = isAdmin ? (
     <div ref={suggestRef} style={{ position:'relative' }}>
-      <button
-        onClick={() => setShowSuggest(prev => !prev)}
-        title="Suggestions"
-        style={{
-          width:ctrlSize, height:ctrlSize, display:'flex', alignItems:'center', justifyContent:'center',
-          background: CARD, border:`1px solid ${showSuggest ? 'var(--cal-accent-line)' : BORDER}`,
-          borderRadius:ctrlRadius, cursor:'pointer', position:'relative',
-          flexShrink:0, transition:'border-color 0.15s',
-        }}
-        onMouseEnter={e => e.currentTarget.style.borderColor='var(--br-strong)'}
-        onMouseLeave={e => { if (!showSuggest) e.currentTarget.style.borderColor=BORDER; }}
-      >
-        <MessageSquare size={15} color="var(--cal-accent-line)"/>
-        {hasUnread && (
-          <span style={{
-            position:'absolute', top:'6px', right:'6px',
-            width:'8px', height:'8px', borderRadius:'50%',
-            background:'#EF4444', border:`2px solid ${CARD}`,
-            animation:'wdPulseDot 1.5s ease-in-out infinite',
-          }}/>
-        )}
-      </button>
+      {suggestTrigger}
 
       {showSuggest && (
         <div style={ isMobile ? {
@@ -722,7 +957,7 @@ export default function DashboardPage() {
         } : {
           position:'absolute', top:'48px', right:0, zIndex:50,
           width:'380px', maxHeight:'440px',
-          background:'var(--cd)', border:`1px solid ${BORDER}`, borderRadius:'14px',
+          background:'var(--cd)', border:`1px solid ${BORDER}`, borderRadius:'16px',
           boxShadow:'var(--pop-shadow)', overflow:'hidden',
           animation:'wdScaleIn 0.15s cubic-bezier(0.4,0,0.2,1)',
           display:'flex', flexDirection:'column',
@@ -782,128 +1017,174 @@ export default function DashboardPage() {
     </div>
   ) : null;
 
-  return (
-    <div style={{ flex:1, minHeight:0, display:'flex', flexDirection:'column', background: BG }}>
+  const exportProps = {
+    summary, chartData, chartDates,
+    donut: { segs: donutSegs, total: donutTotal },
+    rangeLabel: filterLabel(),
+    activeCount: activeCampaignCount,
+    since: isCustom ? customSince : '',
+    until: isCustom ? customUntil : '',
+  };
 
-      {/* ══ HEADER — mobile 2 baris (lama) · desktop: CARD mengambang (redesain, dari referensi Nadir) ══ */}
-      <header style={ isMobile ? {
-        display:'flex', flexDirection:'column', alignItems:'stretch', gap:'12px',
-        padding:'14px 16px', flexShrink:0,
-        borderBottom:`1px solid ${BORDER}`,
-      } : {
-        display:'flex', alignItems:'center', justifyContent:'space-between',
-        padding:'12px 20px', margin:'12px 16px 0', flexShrink:0,
-        background: CARD, border:`1px solid ${BORDER}`, borderRadius:'18px',
-        boxShadow:'var(--shadow)',
-      }}>
-        <div>
-          <h1 style={{ ...TYPE.h1, ...(isMobile ? { fontSize:'20px' } : null) }}>Dashboard</h1>
-          <p style={{ ...TYPE.small, marginTop:'3px' }}>
-            {platform.available
-              ? (loading ? 'Loading…' : `${platform.label} Performance Overview · ${activeCampaignCount} active`)
-              : `${platform.label} · Under development`}
-          </p>
+  // ── Isi kartu (dipakai layout desktop & mobile) ──
+  let kpis = [], eff = [];
+  if (summary) {
+    kpis = [
+      { label:'Total Spend', icon:Wallet, unit:'Rp',
+        value:Math.round(summary.totalSpend), display:fmtNumFull(summary.totalSpend),
+        pct:summary.pctSpend, good:'none', spark:chartData.spend,
+        prevDisplay: fmtSpendFull(summary.prevSpend || 0),
+        info:'Total amount spent across all campaigns in the selected period. More or less spend is a budget decision, so its change is shown in grey.' },
+      { label:'Reach', icon:Users,
+        value:Math.round(summary.totalReach), display:fmtNumFull(summary.totalReach),
+        pct:summary.pctReach, good:'up', spark:chartData.awareness,
+        prevDisplay: fmtNumFull(summary.prevReach || 0),
+        info:'Unique people who saw at least one ad, across all campaigns.' },
+      { label:'Impressions', icon:Eye,
+        value:Math.round(summary.totalImpressions), display:fmtNumFull(summary.totalImpressions),
+        pct:summary.pctImpressions, good:'up', spark:chartData.awareness,
+        prevDisplay: fmtNumFull(summary.prevImpressions || 0),
+        info:'Total times ads were shown, across all campaigns.' },
+      { label:'Traffic', icon:MousePointerClick, tipAlign:'end',
+        value:summary.totalTraffic, display:fmtNumFull(summary.totalTraffic),
+        pct:summary.pctTraffic, good:'up', spark:chartData.traffic,
+        prevDisplay: fmtNumFull(summary.prevTraffic || 0),
+        info:'Link clicks from Traffic campaigns only — the objective built to drive visits.' },
+      { label:'Leads', icon:UserPlus, tipAlign:'end',
+        value:summary.totalLeads, display:fmtNumFull(summary.totalLeads),
+        pct:summary.pctLeads, good:'up', spark:chartData.leads,
+        onOpen:() => setShowLeadsInfo(true), openLabel:'View lead sources',
+        info:'Leads from Conversion campaigns: instant forms, website forms and WhatsApp chats.' },
+    ];
+    // Tren harian 4C untuk meter batang — basis blended level akun (sama seperti
+    // sparkline lama); angka utama kartu tetap kalkulasi final per tipe. Kalau angka
+    // utamanya "—" (tak ada campaign tipe itu), meter disembunyikan supaya tidak
+    // tampak ada tren untuk metrik yang kosong.
+    const _s = chartData.spend || [], _i = chartData.awareness || [], _t = chartData.traffic || [], _l = chartData.leads || [];
+    const _div = (a, b, mul = 1) => a.map((v, idx) => (v != null && b[idx] > 0) ? (v / b[idx]) * mul : null);
+    const _if  = (val, series) => (val ? series : null);
+    eff = [
+      { label:'CPM', scope:'All campaigns', value: summary.calcCPM ? fmtSpendFull(summary.calcCPM) : '—',
+        pct: summary.pctCPM, good:'down', spark:_if(summary.calcCPM, _div(_s, _i, 1000)), color:'var(--rg-spend)',
+        info:'Cost per 1,000 impressions = total spend ÷ total impressions × 1,000, all campaigns. Lower is better.' },
+      { label:'CPC', scope:'Traffic campaigns', scopeShort:'Traffic only', value: summary.calcCPC ? fmtSpendFull(summary.calcCPC) : '—',
+        pct: summary.pctCPC, good:'down', spark:_if(summary.calcCPC, _div(_s, _t)), color:'var(--rg-traffic)',
+        info:'Cost per link click = spend ÷ link clicks, Traffic campaigns only. Lower is better.' },
+      { label:'CPL', scope:'Conversion campaigns', scopeShort:'Conversion only', value: summary.calcCPL ? fmtSpendFull(summary.calcCPL) : '—',
+        pct: summary.pctCPL, good:'down', spark:_if(summary.calcCPL, _div(_s, _l)), color:'var(--rg-conv)',
+        info:'Cost per lead = spend ÷ leads, Conversion campaigns only. Lower is better.' },
+      { label:'CTR', scope:'Conversion campaigns', scopeShort:'Conversion only', value: summary.calcCTR ? fmtCtr(summary.calcCTR) : '—',
+        pct: summary.pctCTR, good:'up', spark:_if(summary.calcCTR, _div(_t, _i, 100)), color:'var(--rg-conv)',
+        info:'Click-through rate = clicks ÷ impressions × 100, Conversion campaigns only. Higher is better.' },
+    ];
+  }
+
+  const ctxLine = !platform.available
+    ? <span>{platform.label} · under development</span>
+    : initialLoading
+      ? <span>Loading Meta Ads data…</span>
+      : error
+        ? <span>Could not load data</span>
+        : (<>
+            <span className="rg-live" aria-hidden="true" />
+            <span>{platform.label}</span>
+            <span className="rg-ctx-sep" aria-hidden="true" />
+            <span>{activeCampaignCount} campaign{activeCampaignCount === 1 ? '' : 's'} with spend</span>
+            <span className="rg-ctx-sep" aria-hidden="true" />
+            <span>{loading ? 'Refreshing…' : updatedAt ? `Updated ${fmtClock(updatedAt)}` : ''}</span>
+          </>);
+
+  const dateButton = (
+    <div style={{ position:'relative' }} data-filter>
+      <button type="button" className="rg-pill" aria-expanded={showDropdown} aria-haspopup="dialog"
+        title="Date range" onClick={openFilter}>
+        <Calendar size={15} />
+        {isMobile ? (
+          <span>{filterLabel()}</span>
+        ) : (<>
+          <span className="rg-date-preset rg-hide-narrow">{isCustom ? 'Custom range' : dateOpt.label}</span>
+          <span className="rg-date-sep rg-hide-narrow" aria-hidden="true" />
+          <span>{rangeText}</span>
+        </>)}
+        <ChevronDown size={14} className="rg-caret" />
+      </button>
+
+      {showDropdown && (
+        <DateFilterPopup
+          presets={DATE_PRESETS_DASHBOARD}
+          dateOpt={dateOpt}
+          isCustom={isCustom}
+          customSince={customSince}
+          customUntil={customUntil}
+          calY={calY} calM={calM}
+          isMobile={isMobile}
+          onSelectPreset={handleSelectPreset}
+          onPickDay={pickDay}
+          onPickRange={pickRange}
+          onShiftCal={shiftCal}
+          onApply={applyCustomRange}
+          onClose={() => setShowDropdown(false)}
+        />
+      )}
+    </div>
+  );
+
+  return (
+    <div className={`rg ${dashboardFontVars}${isMobile ? ' is-mobile' : ''}`}
+      style={{ flex:1, minHeight:0, display:'flex', flexDirection:'column', background: BG }}>
+
+      {/* ══ TOP BAR — judul + konteks (kiri) · filter & aksi (kanan) ══ */}
+      <header className="rg-top">
+        <div className="rg-top-title">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <h1 className="rg-h1">Dashboard</h1>
+            {/* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */}
+            {demo && (
+              <span style={{
+                padding: '3px 9px', borderRadius: 999, fontSize: 11.5, fontWeight: 500, whiteSpace: 'nowrap',
+                background: 'rgba(233,160,52,0.16)', color: '#D98F1F',
+              }}>Demo data</span>
+            )}
+            {/* ═══ END PREVIEW-ONLY ═══ */}
+          </div>
+          <div className="rg-ctx">{ctxLine}</div>
         </div>
 
-        <div style={{
-          display:'flex', alignItems:'center',
-          gap:isMobile ? '8px' : '10px',
-          flexWrap: isMobile ? 'wrap' : 'nowrap',
-          // Mobile: chip platform + date filter rata kanan (semua role)
-          justifyContent: isMobile ? 'flex-end' : 'flex-start',
-        }}>
-          {/* Platform selector — desktop: tinggi 40px seragam dgn tombol icon */}
-          <PlatformSelector selected={platform} onSelect={setPlatform} height={isMobile ? undefined : 40} />
+        <div className="rg-tools">
+          <PlatformSelector selected={platform} onSelect={setPlatform} />
+          {dateButton}
 
-          {/* Date filter */}
-          <div style={{ position:'relative' }} data-filter>
-            <button onClick={openFilter} style={{
-              display:'flex', alignItems:'center', gap:'8px',
-              // Desktop: tinggi eksplisit 40px biar rata dengan tombol icon di kanannya
-              padding: isMobile ? '9px 14px' : '0 14px',
-              height: isMobile ? undefined : '40px',
-              background: CARD,
-              border:`1px solid ${isCustom ? GREEN+'55' : BORDER}`,
-              borderRadius:'10px', fontSize:'13px',
-              color: TXT, cursor:'pointer', transition:'border-color 0.15s',
-            }}>
-              <Calendar size={14} color={SUB}/>
-              {filterLabel()}
-              <ChevronDown size={13} color={SUB}/>
+          {!isMobile && (<>
+            <span className="rg-vsep" aria-hidden="true" />
+            <button type="button" className="rg-pill" title="Compare two periods" onClick={() => setShowCompare(true)}>
+              <GitCompareArrows size={15} />
+              <span className="rg-hide-narrow">Compare</span>
             </button>
-
-            {showDropdown && (
-              <DateFilterPopup
-                presets={DATE_PRESETS_DASHBOARD}
-                dateOpt={dateOpt}
-                isCustom={isCustom}
-                customSince={customSince}
-                customUntil={customUntil}
-                calY={calY} calM={calM}
-                isMobile={isMobile}
-                onSelectPreset={handleSelectPreset}
-                onPickDay={pickDay}
-                onPickRange={pickRange}
-                onShiftCal={shiftCal}
-                onApply={applyCustomRange}
-                onClose={() => setShowDropdown(false)}
-              />
+            {/* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ (saat data dummy: Export dimatikan
+                supaya laporan berisi angka rekaan tidak sampai tersebar) */}
+            {isAdmin && demo && (
+              <button type="button" className="rg-pill" disabled title="Export is disabled while demo data is on">
+                <Download size={15} /><span className="rg-hide-narrow">Export</span>
+              </button>
             )}
-          </div>
-
-          {/* Export lalu Compare (urutan ditukar 7 Agu 2026) — dua-duanya icon-only
-              seukuran tombol Refresh; Export tetap punya dropdown format */}
-          {!isMobile && isAdmin && (
-            <ExportMenu
-              summary={summary}
-              chartData={chartData}
-              chartDates={chartDates}
-              donut={{ segs: donutSegs, total: donutTotal }}
-              rangeLabel={filterLabel()}
-              activeCount={activeCampaignCount}
-              since={isCustom ? customSince : ''}
-              until={isCustom ? customUntil : ''}
-              compact
-              size={40}
-              radius={10}
-            />
-          )}
-
-          {!isMobile && (
-            <button onClick={() => setShowCompare(true)} title="Compare two periods" style={{
-              width:ctrlSize, height:ctrlSize, display:'flex', alignItems:'center', justifyContent:'center',
-              background: CARD, border:`1px solid ${BORDER}`, borderRadius:ctrlRadius, cursor:'pointer',
-              flexShrink:0, transition:'border-color 0.15s',
-            }}
-              onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--br-strong)'}
-              onMouseLeave={e => e.currentTarget.style.borderColor = BORDER}
-            >
-              <GitCompareArrows size={15} color={SUB} />
+            {isAdmin && !demo && <ExportMenu {...exportProps} pill labelClassName="rg-hide-narrow" />}
+            {/* ═══ END PREVIEW-ONLY ═══ */}
+            <span className="rg-vsep" aria-hidden="true" />
+            <button type="button" className="rg-pill rg-round" title="Refresh data" aria-label="Refresh data"
+              onClick={refresh} disabled={loading}>
+              <RefreshCw size={15} style={loading ? { animation:'wdSpin 0.8s linear infinite' } : undefined} />
             </button>
-          )}
-
-          {!isMobile && refreshButton}
-          {!isMobile && <ThemeToggle/>}
-          {!isMobile && suggestionsBlock}
+            <ThemeToggle className="rg-pill rg-round" />
+            {suggestionsBlock}
+          </>)}
 
           {/* Mobile: aksi pindah ke top bar. Urutan dari kanan:
               Suggestions → Theme toggle → Refresh → Export */}
           {isMobile && topbarSlot && createPortal(
             <>
-              {isAdmin && (
-                <ExportMenu
-                  summary={summary}
-                  chartData={chartData}
-                  chartDates={chartDates}
-                  donut={{ segs: donutSegs, total: donutTotal }}
-                  rangeLabel={filterLabel()}
-                  activeCount={activeCampaignCount}
-                  since={isCustom ? customSince : ''}
-                  until={isCustom ? customUntil : ''}
-                  compact
-                />
-              )}
-              {refreshButton}
+              {/* ═══ PREVIEW-ONLY: `!demo` — JANGAN DI-PUSH ═══ */}
+              {isAdmin && !demo && <ExportMenu {...exportProps} compact />}
+              {refreshButtonMobile}
             </>,
             topbarSlot
           )}
@@ -911,259 +1192,67 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      {/* ══ CONTENT ══ */}
-      <div style={{
-        flex:1, minHeight:0, display:'flex', flexDirection:'column',
-        padding: isMobile ? '16px' : '12px 16px 16px',
-        gap:     isMobile ? '16px' : '10px',
-        overflowY: isMobile ? 'auto' : 'hidden',
-        overflowX: 'hidden',
-      }}>
-
+      {/* ══ ISI ══ */}
+      <div className="rg-body">
         {!platform.available && <PlatformPlaceholder platform={platform} />}
 
-        {platform.available && loading && (
-          <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', color:SUB, fontSize:'13px' }}>Loading…</div>
-        )}
+        {platform.available && initialLoading && <DashboardSkeleton isMobile={isMobile} />}
 
         {platform.available && !loading && error && (
-          <div style={{ padding:'14px 18px', background:'rgba(239,68,68,0.08)', border:'1px solid rgba(239,68,68,0.2)', borderRadius:'12px', color:'#EF4444', fontSize:'12px' }}>
-            Error: {error}
+          <div className="rg-error" role="alert">
+            <span className="rg-error-ico"><TriangleAlert size={20} /></span>
+            <div style={{ flex:1, minWidth:0 }}>
+              <div className="rg-error-title">Meta Ads data couldn’t be loaded</div>
+              <div className="rg-error-msg">{error}</div>
+            </div>
+            <button type="button" className="rg-pill" onClick={refresh}>
+              <RefreshCw size={15} />Try again
+            </button>
           </div>
         )}
 
-        {platform.available && !loading && !error && summary && (<>
-
-          {/* ══ ROW 1: KPI — 5 equal cards (desktop) · swipe carousel (mobile) ══ */}
-          {(() => {
-            const kpis = [
-              { label:'Total Spend', icon:DollarSign, color:GREEN,
-                value:Math.round(summary.totalSpend), display:fmtSpendFull(summary.totalSpend),
-                pct:summary.pctSpend, spark:chartData.spend },
-              { label:'Reach', icon:Users, color:BLUE,
-                value:Math.round(summary.totalReach), display:fmtNumFull(summary.totalReach),
-                pct:summary.pctReach, spark:chartData.awareness },
-              { label:'Impressions', icon:Eye, color:PURPLE,
-                value:Math.round(summary.totalImpressions), display:fmtNumFull(summary.totalImpressions),
-                pct:summary.pctImpressions, spark:chartData.awareness },
-              { label:'Traffic', icon:LayoutGrid, color:ORANGE,
-                value:summary.totalTraffic, display:fmtNumFull(summary.totalTraffic),
-                pct:summary.pctTraffic, spark:chartData.traffic },
-              { label:'Leads', icon:User, color:GREEN,
-                value:summary.totalLeads, display:fmtNumFull(summary.totalLeads),
-                pct:summary.pctLeads, spark:chartData.leads,
-                onClick:() => setShowLeadsInfo(true) },
-            ];
-            if (isMobile) return (
-              // Carousel swipe: scroll-snap native (smooth di semua browser, tanpa library)
-              <div className="wd-hscroll" style={{
-                display:'flex', gap:'12px', overflowX:'auto', flexShrink:0,
-                scrollSnapType:'x mandatory',
-                margin:'0 -16px', padding:'0 16px',
-              }}>
-                {kpis.map((k, i) => (
-                  <div key={k.label} style={{ minWidth:'76%', flexShrink:0, scrollSnapAlign:'center', display:'grid' }}>
-                    <KpiCard {...k} delay={i * 55}/>
-                  </div>
-                ))}
-              </div>
-            );
-            return (
-              // Tinggi baris: lihat catatan "FIT LAYAR TINGGI" di ROW 3
-              <div style={{ flex:'1 1 0', minHeight:'150px', maxHeight:'210px', display:'grid', gridTemplateColumns:'repeat(5, 1fr)', gap:'10px' }}>
-                {kpis.map((k, i) => <KpiCard key={k.label} {...k} delay={i * 55}/>)}
-              </div>
-            );
-          })()}
-
-          {/* ══ ROW 2: SECONDARY METRICS — 4 KARTU TERPISAH + sparkline (desktop) · 1 kartu 2x2 (mobile, tidak berubah) ══ */}
-          {(() => {
-            // Tren harian untuk sparkline — dihitung dari series daily yang sudah ada
-            // (basis blended level akun; angka utama kartu tetap pakai kalkulasi final per tipe).
-            const _s = chartData.spend || [], _i = chartData.awareness || [], _t = chartData.traffic || [], _l = chartData.leads || [];
-            const _div = (a, b, mul = 1) => a.map((v, idx) => (v != null && b[idx] > 0) ? (v / b[idx]) * mul : null);
-            const mini = [
-              { label:'CPM', value: summary.calcCPM ? fmtSpendFull(summary.calcCPM) : '—', sub:'cost per 1K impressions', icon: ScanLine,          spark:_div(_s, _i, 1000) },
-              { label:'CPC', value: summary.calcCPC ? fmtSpendFull(summary.calcCPC) : '—', sub:'cost per click',          icon: MousePointerClick, spark:_div(_s, _t) },
-              { label:'CPL', value: summary.calcCPL ? fmtSpendFull(summary.calcCPL) : '—', sub:'cost per lead',           icon: UserPlus,          spark:_div(_s, _l) },
-              { label:'CTR', value: summary.calcCTR ? summary.calcCTR.toFixed(2)+'%' : '—', sub:'click through rate',  icon: Target,            spark:_div(_t, _i, 100) },
-            ];
-            if (isMobile) return (
-              <div style={{
-                ...CARD_BASE, overflow:'hidden', flexShrink:0,
-                display:'grid', gridTemplateColumns:'repeat(2, 1fr)',
-                animation:'wdFadeUp 0.4s cubic-bezier(0.4,0,0.2,1) 260ms backwards',
-              }}>
-                {mini.map((m, i) => {
-                  const Ic = m.icon;
-                  return (
-                    <div key={m.label} style={{
-                      display:'flex', alignItems:'center', justifyContent:'space-between',
-                      padding:'14px 16px',
-                      borderRight: i % 2 === 0 ? `1px solid ${BORDER}` : 'none',
-                      borderBottom: i < 2 ? `1px solid ${BORDER}` : 'none',
-                    }}>
-                      <div>
-                        <div style={{ ...TYPE.small, marginBottom:'3px' }}>{m.label}</div>
-                        <div style={{ ...TYPE.metricValueSm }}>{m.value}</div>
-                        <div style={{ ...TYPE.metricSub, marginTop:'3px' }}>{m.sub}</div>
-                      </div>
-                      <Ic size={18} color="var(--icon-muted)"/>
-                    </div>
-                  );
-                })}
-              </div>
-            );
-            return (
-              <div style={{
-                // Strip CPM/CPC/CPL/CTR sengaja TIDAK ikut melar (flex-grow 0):
-                // isinya cuma ikon + 2 baris teks, kalau ditinggikan malah kosong.
-                // Boleh menyusut sampai 74px di layar pendek.
-                flex:'0 1 96px', minHeight:'74px',
-                display:'grid', gridTemplateColumns:'repeat(4, minmax(0,1fr))', gap:'10px',
-              }}>
-                {mini.map((m, i) => {
-                  const Ic = m.icon;
-                  return (
-                    <div key={m.label} style={{
-                      ...CARD_BASE, overflow:'hidden',
-                      display:'flex', alignItems:'center', gap:'12px',
-                      padding:'0 18px',
-                      animation:`wdFadeUp 0.4s cubic-bezier(0.4,0,0.2,1) ${260 + i * 45}ms backwards`,
-                    }}>
-                      <div style={{
-                        width:'38px', height:'38px', borderRadius:'50%', flexShrink:0,
-                        background:'var(--s2)', border:`1px solid ${BORDER}`,
-                        display:'flex', alignItems:'center', justifyContent:'center',
-                      }}>
-                        <Ic size={16} color={SUB}/>
-                      </div>
-                      <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ ...TYPE.small, marginBottom:'3px' }}>{m.label}</div>
-                        <div style={{ ...TYPE.metricValueSm }}>{m.value}</div>
-                        <div style={{ ...TYPE.metricSub, marginTop:'3px', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{m.sub}</div>
-                      </div>
-                      <div style={{ width:'70px', flexShrink:0 }}>
-                        <Sparkline data={m.spark} color={GREEN} h={26}/>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })()}
-
-          {/* ══ ROW 3: ANALYTICS — 30/40/30 (desktop) · stack vertikal (mobile) ══ */}
-          <div style={ isMobile ? {
-            display:'flex', flexDirection:'column', gap:'16px', flexShrink:0,
-          } : {
-            /* FIT LAYAR TINGGI — baris ini penyerap utama sisa tinggi layar.
-               Dulu ketiga baris dipatok maxHeight tetap (190+96+500) sehingga di
-               layar 1080px ke atas tersisa pita kosong di bawah. Sekarang: strip
-               4C tidak melar, KPI melar sedikit (cap 210), sisanya ke baris ini —
-               isinya (donut/AreaChart/Top Campaigns) memang dibuat mengisi tinggi.
-               Cap 820px menjaga layar sangat tinggi tidak jadi melar aneh. */
-            flex:'1 1 0', minHeight:'260px', maxHeight:'820px', display:'grid', gridTemplateColumns:'2.8fr 4.2fr 3fr', gap:'10px',
+        {platform.available && summary && !error && (isMobile ? (<>
+          {/* Mobile: KPI carousel swipe (scroll-snap native), lalu kartu bertumpuk */}
+          <div className="wd-hscroll" style={{
+            display:'flex', gap:'12px', overflowX:'auto', flexShrink:0,
+            scrollSnapType:'x mandatory', margin:'0 -16px', padding:'2px 16px',
           }}>
-
-            {/* Spend Breakdown (donut) */}
-            <div style={{ ...CARD_BASE, display:'flex', flexDirection:'column', overflow:'hidden', padding:'18px 20px', ...(isMobile ? { flexShrink:0 } : null) }}>
-              <div style={{ ...TYPE.cardTitle, flexShrink:0 }}>Spend Breakdown</div>
-              {donutSegs.length === 0 ? (
-                <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'12px', color:SUB }}>No data</div>
-              ) : (
-                <div style={{ flex:1, minHeight:0, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:'20px', overflow:'hidden', marginTop: isMobile ? '16px' : 0 }}>
-                  <div style={{ position:'relative', flexShrink:0,
-                    width: isMobile ? '200px' : '236px', height: isMobile ? '200px' : '236px' }}>
-                    <svg viewBox="0 0 100 100" style={{ width:'100%', height:'100%' }}>
-                      <circle cx="50" cy="50" r="38" fill="none" stroke="var(--track)" strokeWidth="16"/>
-                      {donutSegs.map((seg, i) => {
-                        let sw=16, op=1;
-                        if (hoverSeg!==null){ sw=hoverSeg===i?19:12; op=hoverSeg===i?1:0.25; }
-                        return (
-                          <circle key={i} cx="50" cy="50" r="38" fill="none"
-                            stroke={seg.color} strokeWidth={sw}
-                            strokeDasharray={`${seg.dash} 239`} strokeDashoffset={seg.offset}
-                            transform="rotate(-90 50 50)" strokeLinecap="butt"
-                            style={{ opacity:op, transition:'stroke-width 0.2s, opacity 0.2s', cursor:'pointer' }}
-                            onMouseEnter={() => setHoverSeg(i)} onMouseLeave={() => setHoverSeg(null)}/>
-                        );
-                      })}
-                    </svg>
-                    <div style={{ position:'absolute', inset:0, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', pointerEvents:'none' }}>
-                      <div style={{ ...TYPE.metricValueSm }}>{center.value}</div>
-                      <div style={{ ...TYPE.caption, color:SUB, marginTop:'4px' }}>{center.label}</div>
-                    </div>
-                  </div>
-                  <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:'8px', overflow:'auto' }}>
-                    {donutSegs.map((seg, i) => (
-                      <div key={i} onMouseEnter={() => setHoverSeg(i)} onMouseLeave={() => setHoverSeg(null)}
-                        style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
-                          padding:'2px 4px', borderRadius:'7px', cursor:'pointer', flexShrink:0,
-                          background: hoverSeg===i ? 'var(--hover)' : 'transparent', transition:'background 0.15s' }}>
-                        <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
-                          <span style={{ width:'9px', height:'9px', borderRadius:'3px', background:seg.color, flexShrink:0 }}/>
-                          <span style={{ ...TYPE.body, color:SUB }}>{seg.label}</span>
-                        </div>
-                        <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
-                          <span style={{ ...TYPE.body, fontWeight:600 }}>{seg.value}</span>
-                          <span style={{ ...TYPE.small, color:MUTE }}>{seg.pct}%</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Daily Spend (area chart) — mobile: tinggi tetap 300px */}
-            {isMobile ? (
-              <div style={{ height:'300px', flexShrink:0, display:'flex', flexDirection:'column' }}>
-                <AreaChart data={chartData} dates={chartDates} today={todayIdx}/>
+            {kpis.map((k, i) => (
+              <div key={k.label} className={busy} style={{ minWidth:'76%', flexShrink:0, scrollSnapAlign:'center', height:'196px' }}>
+                <KpiCard {...k} prevLabel={prevLabel} delay={i * 55} />
               </div>
-            ) : (
-              <AreaChart data={chartData} dates={chartDates} today={todayIdx}/>
-            )}
-
-            {/* Top Campaigns */}
-            <div style={{ ...CARD_BASE, display:'flex', flexDirection:'column', overflow:'hidden', padding:'18px 20px', ...(isMobile ? { flexShrink:0, maxHeight:'420px' } : null) }}>
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'14px', flexShrink:0 }}>
-                <span style={{ ...TYPE.cardTitle }}>Top Campaigns</span>
-              </div>
-              {/* header row */}
-              <div style={{ display:'grid', gridTemplateColumns:'1.4fr 0.9fr 0.8fr 1.05fr 0.7fr', gap:'6px',
-                ...TYPE.tableHeader, paddingBottom:'10px', borderBottom:`1px solid ${BORDER}`, flexShrink:0 }}>
-                <span>Campaign</span>
-                <span style={{ textAlign:'right' }}>Spend</span>
-                <span style={{ textAlign:'right' }}>Result</span>
-                <span style={{ textAlign:'right' }}>Cost/Result</span>
-                <span style={{ textAlign:'right' }}>CTR</span>
-              </div>
-              <div style={{ flex:1, minHeight:0, overflow:'auto', display:'flex', flexDirection:'column' }}>
-                {topCampaigns.length === 0 ? (
-                  <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'12px', color:SUB }}>No data</div>
-                ) : topCampaigns.map((c, i) => (
-                  <div key={i}
-                    onMouseEnter={e => e.currentTarget.style.background='var(--hover)'}
-                    onMouseLeave={e => e.currentTarget.style.background='transparent'}
-                    style={{ display:'grid', gridTemplateColumns:'1.4fr 0.9fr 0.8fr 1.05fr 0.7fr', gap:'6px',
-                    alignItems:'center', padding:'11px 8px', margin:'0 -8px', borderRadius:'8px', transition:'background 0.15s',
-                    borderBottom: i < topCampaigns.length-1 ? '1px solid var(--divider)' : 'none' }}>
-                    <div style={{ display:'flex', alignItems:'center', gap:'8px', minWidth:0 }}>
-                      <span style={{ width:'7px', height:'7px', borderRadius:'50%', background:c.color, flexShrink:0 }}/>
-                      <span style={{ ...TYPE.tableCell, color:TXT, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }} title={c.name}>{c.name}</span>
-                    </div>
-                    <span style={{ ...TYPE.tableCell, textAlign:'right' }}>{fmtSpend(c.spend)}</span>
-                    <span style={{ ...TYPE.tableCell, textAlign:'right' }}>{fmtBigNum(c.result)}</span>
-                    <span style={{ ...TYPE.tableCellStrong, textAlign:'right' }}>{fmtCPR(c.cpr)}</span>
-                    <span style={{ ...TYPE.tableCell, textAlign:'right' }}>{c.ctr.toFixed(2)}%</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
+            ))}
           </div>
-        </>)}
+          <div className={busy} style={{ flexShrink:0 }}>
+            <EfficiencyCard items={eff} prevLabel={prevLabel} delay={220} fill={false} />
+          </div>
+          <div className={busy} style={{ flexShrink:0 }}>
+            <SpendCard segs={donutSegs} total={donutTotal.value} hover={hoverSeg} setHover={setHoverSeg} delay={260} fill={false} />
+          </div>
+          <div className={busy} style={{ height:'340px', flexShrink:0 }}>
+            <AreaChart data={chartData} dates={chartDates} today={todayIdx} since={chartSince} delay={300} />
+          </div>
+          <div className={busy} style={{ flexShrink:0, display:'flex', flexDirection:'column' }}>
+            <TopCampaignsCard rows={topCampaigns} delay={340} mobile />
+          </div>
+        </>) : (<>
+          {/* ══ BARIS 1: 5 KPI ══ */}
+          <div className={`rg-row-kpi${busy}`}>
+            {kpis.map((k, i) => <KpiCard key={k.label} {...k} prevLabel={prevLabel} delay={i * 55} />)}
+          </div>
+
+          {/* ══ BARIS 2: ke mana uang pergi · seberapa efisien ══ */}
+          <div className={`rg-row-mid${busy}`}>
+            <SpendCard segs={donutSegs} total={donutTotal.value} hover={hoverSeg} setHover={setHoverSeg} delay={240} />
+            <EfficiencyCard items={eff} prevLabel={prevLabel} delay={290} />
+          </div>
+
+          {/* ══ BARIS 3: tren harian · campaign terbaik ══ */}
+          <div className={`rg-row-bot${busy}`}>
+            <AreaChart data={chartData} dates={chartDates} today={todayIdx} since={chartSince} delay={340} />
+            <TopCampaignsCard rows={topCampaigns} delay={390} />
+          </div>
+        </>))}
       </div>
 
       {/* ══ COMPARE PERIODS ══ */}
@@ -1188,7 +1277,10 @@ export default function DashboardPage() {
           onClose={() => setShowLeadsInfo(false)}
         />
       )}
+
+      {/* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */}
+      {DEMO_ALLOWED && isAdmin && !isMobile && <PreviewPanel demo={demo} onDemo={toggleDemo} />}
+      {/* ═══ END PREVIEW-ONLY ═══ */}
     </div>
   );
 }
-

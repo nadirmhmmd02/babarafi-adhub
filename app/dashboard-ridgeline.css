@@ -1,0 +1,565 @@
+/* ══════════════════════════════════════════════════════════════════════
+   DASHBOARD ADS HUB — skin "Ridgeline" (redesain Sep 2026, PREVIEW LOKAL)
+   Referensi utama Nadir: dashboard SEO "Ridgeline" — kanvas charcoal,
+   kartu = cangkang (shell) + panel dalam (well), angka monospace, delta
+   ber-ikon bulat, panel KPI bergradasi warna naik/turun + tekstur titik,
+   kontrol berbentuk pil, grafik garis + tooltip ber-header.
+   SEMUA aturan di-scope ke .rg (akar halaman Dashboard): sidebar, halaman
+   lain & komponen bersama di luar dashboard TIDAK terpengaruh.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* ── Token: TERANG (default) ── */
+.rg {
+  --rg-bg: #F2F2EF;
+  --rg-shell: #EAEAE6;
+  --rg-well: #FFFFFF;
+  --rg-well-2: #F6F6F3;
+  --rg-well-line: #E3E3DE;
+  --rg-line: #DFDFDA;
+  --rg-line-soft: #ECECE7;
+  --rg-grid: #E1E1DC;
+  --rg-track: #E8E8E3;
+  --rg-hover: rgba(22,22,22,0.045);
+  --rg-range: rgba(22,22,22,0.08);
+  --rg-pill: #FFFFFF;
+  --rg-pill-hover: #F4F4F1;
+  --rg-pill-line: #DCDCD6;
+  --rg-seg: #E6E6E1;
+  --rg-seg-on: #FFFFFF;
+  --rg-t1: #161616;
+  --rg-t2: #57574F;
+  --rg-t3: #686862;
+  --rg-pos: #0B8157;
+  --rg-neg: #CF363C;
+  /* warna data — divalidasi skill dataviz (CVD & normal-vision, semua pasangan) */
+  --rg-aware: #7C4DEB;
+  --rg-traffic: #C9661A;
+  --rg-conv: #0E9486;
+  --rg-other: #A3A39D;
+  --rg-spend: #2E78C7;
+  --rg-tint-pos: rgba(14,148,134,0.17);
+  --rg-tint-neg: rgba(207,54,60,0.14);
+  --rg-tint-neu: rgba(22,22,22,0.05);
+  --rg-dots: rgba(22,22,22,0.11);
+  --rg-shadow: 0 1px 2px rgba(22,22,22,0.04), 0 6px 20px rgba(22,22,22,0.045);
+  --rg-pop: 0 18px 48px rgba(22,22,22,0.16);
+  --rg-tip-bg: #1B1B1B;
+  --rg-tip-line: #1B1B1B;
+  --rg-tip-tx: #F5F5F5;
+  --rg-tip-sub: #B8B8B8;
+  --rg-tip-head: #2C2C2C;
+  --rg-scroll: #CFCFC9;
+  --rg-focus: #161616;
+}
+
+/* ── Token: GELAP — nilai netral disampel langsung dari gambar referensi ── */
+html[data-theme="dark"] .rg {
+  --rg-bg: #222222;
+  --rg-shell: #1D1D1D;
+  --rg-well: #2A2A2A;
+  --rg-well-2: #303030;
+  --rg-well-line: rgba(255,255,255,0.035);
+  --rg-line: #2E2E2E;
+  --rg-line-soft: #363636;
+  --rg-grid: #3A3A3A;
+  --rg-track: #3B3B3B;
+  --rg-hover: rgba(255,255,255,0.045);
+  --rg-range: rgba(255,255,255,0.09);
+  --rg-pill: #262626;
+  --rg-pill-hover: #2E2E2E;
+  --rg-pill-line: #353535;
+  --rg-seg: #1D1D1D;
+  --rg-seg-on: #333333;
+  --rg-t1: #F5F5F5;
+  --rg-t2: #A8A8A8;
+  --rg-t3: #939393;
+  --rg-pos: #2BBE8A;
+  --rg-neg: #F26A6E;
+  --rg-aware: #8B5CF6;
+  --rg-traffic: #D9782A;
+  --rg-conv: #10A393;
+  --rg-other: #6E6E6E;
+  --rg-spend: #4A90E2;
+  --rg-tint-pos: rgba(16,163,147,0.32);
+  --rg-tint-neg: rgba(242,106,110,0.26);
+  --rg-tint-neu: rgba(255,255,255,0.07);
+  --rg-dots: rgba(255,255,255,0.085);
+  --rg-shadow: 0 10px 30px rgba(0,0,0,0.22);
+  --rg-pop: 0 24px 60px rgba(0,0,0,0.55);
+  --rg-tip-bg: #1B1B1B;
+  --rg-tip-line: #343434;
+  --rg-tip-tx: #F5F5F5;
+  --rg-tip-sub: #A8A8A8;
+  --rg-tip-head: #2C2C2C;
+  --rg-scroll: #3E3E3E;
+  --rg-focus: #F5F5F5;
+  color-scheme: dark;
+}
+
+/* Token lama dipetakan ke skin, supaya popup/komponen bersama yang dirender DI
+   DALAM dashboard (Compare, rincian Leads, filter tanggal, Export, Suggestions)
+   ikut nuansa baru tanpa mengubah kode komponennya. */
+.rg {
+  --pg: var(--rg-bg);
+  --cd: var(--rg-well);
+  --sf: var(--rg-shell);
+  --s2: var(--rg-well-2);
+  --br: var(--rg-line-soft);
+  --br-strong: var(--rg-pill-line);
+  --bs: var(--rg-pill-line);
+  --divider: var(--rg-line-soft);
+  --hover: var(--rg-hover);
+  --grid: var(--rg-grid);
+  --track: var(--rg-track);
+  --t1: var(--rg-t1);
+  --t2: var(--rg-t2);
+  --t3: var(--rg-t3);
+  --data-bg: var(--rg-well-2);
+  --tooltip-bg: var(--rg-tip-bg);
+  --tooltip-br: var(--rg-tip-line);
+  --tooltip-tx: var(--rg-tip-tx);
+  --pop-shadow: var(--rg-pop);
+  --shadow: var(--rg-shadow);
+  /* seleksi (tanggal, platform) netral seperti referensi — bukan warna aksen */
+  --cal-accent: var(--rg-t1);
+  --cal-accent-fg: var(--rg-well);
+  --cal-accent-line: var(--rg-t1);
+  --cal-accent-soft: var(--rg-hover);
+  --cal-glow: transparent;
+  --cal-range: var(--rg-range);
+
+  font-family: var(--font-geist), -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color: var(--rg-t1);
+  background: var(--rg-bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Permukaan browser ikut desain (seleksi, scrollbar, fokus keyboard) ── */
+.rg ::selection { background: color-mix(in srgb, var(--rg-conv) 32%, transparent); }
+.rg * { scrollbar-width: thin; scrollbar-color: var(--rg-scroll) transparent; }
+.rg :focus-visible { outline: 2px solid var(--rg-focus); outline-offset: 2px; }
+.rg button { font-family: inherit; }
+
+.rg-mono {
+  font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+.rg-sr {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* Laporan Export tersembunyi tetap Plus Jakarta Sans → hasil PDF/JPG tidak berubah */
+.rg [data-export-report] { font-family: var(--font-jakarta), 'Plus Jakarta Sans', sans-serif; }
+
+/* ══ TOP BAR ══ */
+.rg-top {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 14px 16px 12px; flex-shrink: 0;
+}
+.rg-top-title { min-width: 0; }
+.rg-h1 {
+  margin: 0; font-size: 20px; font-weight: 600; line-height: 1.15;
+  letter-spacing: -0.025em; color: var(--rg-t1);
+}
+.rg-ctx {
+  display: flex; align-items: center; gap: 7px; margin-top: 5px;
+  font-size: 12.5px; line-height: 1.3; color: var(--rg-t2);
+  white-space: nowrap; overflow: hidden;
+}
+.rg-ctx-sep { width: 3px; height: 3px; border-radius: 50%; background: var(--rg-t3); flex-shrink: 0; }
+.rg-ctx > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.rg-live {
+  width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+  background: var(--rg-pos);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--rg-pos) 20%, transparent);
+}
+.rg-tools { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.rg-vsep { width: 1px; height: 24px; background: var(--rg-line); margin: 0 4px; flex-shrink: 0; }
+
+/* ══ KONTROL: pil & tombol bulat (tinggi seragam 40px) ══ */
+.rg-pill {
+  position: relative; height: 40px; display: inline-flex; align-items: center; gap: 8px;
+  padding: 0 15px; border-radius: 999px; flex-shrink: 0;
+  background: var(--rg-pill); border: 1px solid var(--rg-pill-line);
+  color: var(--rg-t1); font-size: 13px; font-weight: 500; letter-spacing: -0.005em;
+  white-space: nowrap; cursor: pointer; text-decoration: none;
+  transition: background-color .15s ease, border-color .15s ease;
+}
+.rg-pill:hover { background: var(--rg-pill-hover); }
+.rg-pill > svg { color: var(--rg-t2); flex-shrink: 0; }
+.rg-pill[aria-expanded="true"] { background: var(--rg-pill-hover); border-color: var(--rg-t3); }
+.rg-pill:disabled { cursor: default; opacity: .6; }
+.rg-round { width: 40px; padding: 0; justify-content: center; }
+.rg-caret { transition: transform .18s ease; }
+.rg-pill[aria-expanded="true"] .rg-caret { transform: rotate(180deg); }
+.rg-date-preset { color: var(--rg-t2); }
+.rg-date-sep { width: 1px; height: 18px; background: var(--rg-pill-line); flex-shrink: 0; }
+.rg-alert-dot {
+  position: absolute; top: 7px; right: 7px; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--rg-neg); border: 2px solid var(--rg-pill);
+  animation: wdPulseDot 1.5s ease-in-out infinite;
+}
+/* Area dashboard sempit (layar kecil ATAU sidebar dibuka): label tombol aksi
+   disembunyikan, ikon tetap + tooltip title. Diukur dari lebar header sendiri
+   (container query), bukan lebar layar. Desktop saja — di HP popup tanggal
+   memakai position:fixed yang akan terkurung kalau header jadi container. */
+.rg:not(.is-mobile) .rg-top { container-type: inline-size; }
+@container (max-width: 1180px) {
+  .rg-top .rg-hide-narrow { display: none; }
+}
+
+/* ══ KARTU: cangkang + panel dalam ══ */
+.rg-card {
+  display: flex; flex-direction: column; min-width: 0; min-height: 0;
+  padding: 4px; border-radius: 20px;
+  background: var(--rg-shell); border: 1px solid var(--rg-line);
+  box-shadow: var(--rg-shadow);
+}
+.rg-rise { animation: wdFadeUp .45s cubic-bezier(.22,1,.36,1) backwards; }
+.rg-head {
+  display: flex; align-items: center; gap: 8px; min-height: 40px;
+  padding: 4px 8px 4px 12px; flex-shrink: 0; min-width: 0;
+}
+.rg-head-ico { display: inline-flex; color: var(--rg-t2); flex-shrink: 0; }
+.rg-title {
+  font-size: 14px; font-weight: 500; letter-spacing: -0.01em; color: var(--rg-t1);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.rg-meta { margin-left: auto; font-size: 12px; color: var(--rg-t2); white-space: nowrap; }
+.rg-well {
+  position: relative; min-width: 0; min-height: 0;
+  background: var(--rg-well); border: 1px solid var(--rg-well-line); border-radius: 16px;
+}
+.rg-foot {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  min-height: 36px; padding: 2px 12px 0; flex-shrink: 0;
+  font-size: 12.5px; color: var(--rg-t2);
+}
+.rg-foot-val { font-size: 12.5px; color: var(--rg-t1); white-space: nowrap; }
+button.rg-foot {
+  width: 100%; border: 0; background: transparent; cursor: pointer; text-align: left;
+  border-radius: 0 0 16px 16px; transition: color .15s ease;
+}
+button.rg-foot:hover { color: var(--rg-t1); }
+.rg-foot-arrow { transition: transform .2s cubic-bezier(.22,1,.36,1); }
+button.rg-foot:hover .rg-foot-arrow { transform: translateX(3px); }
+.rg-iconbtn {
+  width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--rg-pill); border: 1px solid var(--rg-pill-line); color: var(--rg-t2);
+  cursor: pointer; transition: background-color .15s ease, color .15s ease;
+}
+.rg-iconbtn:hover { background: var(--rg-pill-hover); color: var(--rg-t1); }
+
+/* Ikon (i) + tooltip definisi metrik — CSS murni, muncul saat hover/fokus */
+.rg-info {
+  position: relative; width: 18px; height: 18px; padding: 0; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 0; border-radius: 50%; background: transparent; color: var(--rg-t3); cursor: help;
+}
+.rg-info:hover { color: var(--rg-t1); }
+.rg-info::after {
+  content: attr(data-tip);
+  position: absolute; z-index: 70; top: calc(100% + 8px); left: -10px;
+  width: max-content; max-width: 250px; padding: 9px 11px; border-radius: 10px;
+  background: var(--rg-tip-bg); border: 1px solid var(--rg-tip-line); color: var(--rg-tip-tx);
+  font-size: 12px; font-weight: 400; line-height: 1.45; letter-spacing: 0;
+  text-align: left; white-space: normal; box-shadow: var(--rg-pop);
+  opacity: 0; transform: translateY(-3px); pointer-events: none;
+  transition: opacity .14s ease, transform .14s ease;
+}
+.rg-info:hover::after, .rg-info:focus-visible::after { opacity: 1; transform: none; }
+.rg-info[data-align="end"]::after { left: auto; right: -10px; }
+
+/* ══ DELTA: lingkaran berpanah + persen monospace ══ */
+.rg-delta {
+  display: inline-flex; align-items: center; gap: 5px; white-space: nowrap;
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums; font-size: 12px; font-weight: 500; letter-spacing: -0.02em;
+}
+.rg-delta.is-pos { color: var(--rg-pos); }
+.rg-delta.is-neg { color: var(--rg-neg); }
+.rg-delta.is-neu { color: var(--rg-t2); }
+.rg-delta.is-na  { color: var(--rg-t3); }
+.rg-delta-ico {
+  width: 15px; height: 15px; border-radius: 50%; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center; background: currentColor;
+}
+.rg-delta-ico svg { color: var(--rg-well); }
+
+/* ══ KPI ══ */
+.rg-tone-pos { --rg-tint: var(--rg-tint-pos); --rg-tone: var(--rg-pos); }
+.rg-tone-neg { --rg-tint: var(--rg-tint-neg); --rg-tone: var(--rg-neg); }
+.rg-tone-neu { --rg-tint: var(--rg-tint-neu); --rg-tone: var(--rg-t2); }
+.rg-kpi-well {
+  flex: 1; display: flex; flex-direction: column; overflow: hidden; isolation: isolate;
+  padding: 13px 14px 0; container-type: inline-size;
+}
+.rg-kpi-well::before {
+  content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: radial-gradient(85% 120% at 100% 100%, var(--rg-tint) 0%, transparent 72%);
+}
+.rg-kpi-well::after {
+  content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background-image: radial-gradient(circle, var(--rg-dots) 1px, transparent 1.4px);
+  background-size: 7px 7px;
+  -webkit-mask-image: linear-gradient(105deg, transparent 40%, #000 100%);
+  mask-image: linear-gradient(105deg, transparent 40%, #000 100%);
+}
+.rg-kpi-value {
+  display: flex; align-items: baseline; gap: 5px; white-space: nowrap;
+  font-size: 27px; font-weight: 500; line-height: 1.05; letter-spacing: -0.035em;
+  font-variant-numeric: tabular-nums; color: var(--rg-t1);
+}
+.rg-unit { font-size: 15px; font-weight: 500; letter-spacing: -0.01em; color: var(--rg-t2); }
+@container (max-width: 190px) {
+  .rg-kpi-value { font-size: 23px; }
+  .rg-unit { font-size: 13px; }
+}
+.rg-kpi-sub {
+  display: flex; align-items: center; gap: 8px; margin-top: 9px; min-width: 0;
+  font-size: 12px; color: var(--rg-t2); white-space: nowrap;
+}
+.rg-kpi-sub > span:last-child { overflow: hidden; text-overflow: ellipsis; }
+.rg-spark { position: relative; flex: 1; min-height: 32px; margin: 8px -14px 0; }
+.rg-spark svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.rg-spark-line { animation: wdDrawLine .9s cubic-bezier(.22,1,.36,1) backwards; }
+.rg-spark-dot {
+  position: absolute; width: 9px; height: 9px; border-radius: 50%; transform: translate(-50%, -50%);
+  background: var(--rg-well); border: 2px solid var(--rg-tone);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--rg-tone) 18%, transparent);
+  animation: wdFadeIn .3s ease .7s backwards;
+}
+.rg-spark-drop {
+  position: absolute; bottom: 0; width: 0;
+  border-left: 1px dashed color-mix(in srgb, var(--rg-tone) 55%, transparent);
+  animation: wdFadeIn .3s ease .7s backwards;
+}
+
+/* ══ COST EFFICIENCY (2×2 ala "SEO Overview") ══ */
+.rg-eff {
+  flex: 1; display: grid; padding: 0 18px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+}
+/* Sel = grid: label & angka di kiri, meter batang di kanan (setinggi 2 baris itu,
+   seperti "SEO Overview"); baris delta + cakupan memakai lebar penuh di bawahnya. */
+.rg-eff-cell {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-content: center;
+  column-gap: 12px; min-width: 0; min-height: 0; padding: 12px 0;
+}
+.rg-eff-cell > .rg-eff-label { grid-column: 1; grid-row: 1; }
+.rg-eff-cell > .rg-eff-value { grid-column: 1; grid-row: 2; }
+.rg-eff-cell > .rg-eff-scope { grid-column: 1 / -1; grid-row: 3; }
+.rg-eff-cell > .rg-bars { grid-column: 2; grid-row: 1 / 3; align-self: center; }
+/* Sel sempit: meter batang dipangkas (hari terlama dulu), lalu disembunyikan —
+   angka utama tidak boleh tertimpa */
+.rg-eff-cell { container-type: inline-size; }
+.rg-scope-short { display: none; }
+@container (max-width: 250px) {
+  .rg-bar:nth-child(-n+3) { display: none; }
+  .rg-eff-num { font-size: 19px; }
+  .rg-scope-long { display: none; }
+  .rg-scope-short { display: inline; }
+}
+@container (max-width: 200px) {
+  .rg-bars { display: none; }
+}
+.rg-eff-cell:nth-child(odd)  { padding-right: 18px; }
+.rg-eff-cell:nth-child(even) { padding-left: 18px; }
+.rg-eff-cell:nth-child(-n+2) { border-bottom: 1px solid var(--rg-line-soft); }
+.rg-eff-label { display: flex; align-items: center; gap: 5px; font-size: 13px; color: var(--rg-t1); white-space: nowrap; }
+.rg-eff-value { display: flex; align-items: center; margin-top: 7px; }
+.rg-eff-num { font-size: 21px; font-weight: 500; line-height: 1.1; color: var(--rg-t1); white-space: nowrap; }
+.rg-eff-scope {
+  display: flex; align-items: center; gap: 8px; margin-top: 8px; min-width: 0;
+  font-size: 12px; color: var(--rg-t2); white-space: nowrap;
+}
+.rg-eff-scope > span:last-child { overflow: hidden; text-overflow: ellipsis; }
+.rg-bars { display: flex; align-items: flex-end; gap: 4px; height: 40px; flex-shrink: 0; }
+.rg-bar { position: relative; width: 6px; height: 100%; border-radius: 3px; background: var(--rg-track); overflow: hidden; }
+.rg-bar > i {
+  position: absolute; left: 0; right: 0; bottom: 0; border-radius: 3px;
+  transform-origin: bottom; animation: rgGrowY .6s cubic-bezier(.22,1,.36,1) backwards;
+}
+@keyframes rgGrowY { from { transform: scaleY(0); } }
+
+/* ══ SPEND BREAKDOWN (donut + meter ala "AI Search Visibility") ══ */
+.rg-split {
+  flex: 1; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center;
+  gap: 24px; padding: 12px 20px 12px 16px; overflow: hidden;
+}
+.rg-donut { position: relative; width: var(--d, 172px); aspect-ratio: 1; flex-shrink: 0; }
+.rg-donut svg {
+  width: 100%; height: 100%; overflow: visible; transform: rotate(-90deg);
+  animation: rgDonutIn .8s cubic-bezier(.22,1,.36,1) backwards;
+}
+@keyframes rgDonutIn { from { transform: rotate(-160deg); opacity: 0; } }
+.rg-donut circle { transition: opacity .2s ease; }
+.rg-donut-center {
+  position: absolute; inset: 0; pointer-events: none; text-align: center;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+.rg-donut-label { font-size: 12px; color: var(--rg-t2); }
+.rg-donut-value { margin-top: 4px; font-size: 15px; font-weight: 500; color: var(--rg-t1); }
+.rg-donut-chip {
+  margin-top: 7px; padding: 2px 9px; border-radius: 999px; font-size: 11.5px;
+  background: var(--rg-hover); color: var(--rg-t2);
+}
+.rg-legend { display: flex; flex-direction: column; gap: 16px; min-width: 0; container-type: inline-size; }
+/* Legenda sempit: jumlah campaign disembunyikan (daripada terpotong "3 c…") */
+@container (max-width: 300px) {
+  .rg-lg-count { display: none; }
+}
+.rg-lg {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center;
+  column-gap: 12px; row-gap: 8px; transition: opacity .2s ease;
+}
+.rg-lg.is-dim { opacity: .42; }
+.rg-lg-name { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; color: var(--rg-t1); }
+.rg-lg-name > span:nth-child(2) { white-space: nowrap; }
+.rg-lg-sw { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+.rg-lg-count { font-size: 12px; color: var(--rg-t2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rg-lg-vals { display: flex; align-items: baseline; gap: 10px; font-size: 13px; color: var(--rg-t1); white-space: nowrap; }
+.rg-lg-pct { min-width: 36px; text-align: right; color: var(--rg-t2); }
+.rg-meter { grid-column: 1 / -1; display: flex; gap: 4px; height: 8px; }
+.rg-meter > span { height: 100%; border-radius: 4px; }
+.rg-meter > span:first-child { transform-origin: left; animation: wdGrowX .8s cubic-bezier(.22,1,.36,1) backwards; }
+.rg-meter > span:last-child:not(:first-child) { flex: 1; background: var(--rg-track); }
+
+/* ══ GRAFIK HARIAN (ala "Traffic Analytics") ══ */
+.rg-segs {
+  display: inline-flex; gap: 2px; padding: 3px; border-radius: 999px; flex-shrink: 0;
+  background: var(--rg-seg); border: 1px solid var(--rg-line);
+}
+.rg-segs button {
+  height: 28px; padding: 0 12px; border: 0; border-radius: 999px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
+  background: transparent; color: var(--rg-t2); font-size: 12.5px; font-weight: 500;
+  transition: background-color .15s ease, color .15s ease;
+}
+.rg-segs button:hover { color: var(--rg-t1); }
+.rg-segs button[aria-pressed="true"] {
+  background: var(--rg-seg-on); color: var(--rg-t1);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.12);
+}
+.rg-seg-key { width: 9px; height: 2px; border-radius: 2px; flex-shrink: 0; }
+.rg-chart-well { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.rg-stats { display: flex; gap: 32px; padding: 14px 18px 0; flex-wrap: wrap; row-gap: 10px; flex-shrink: 0; }
+.rg-stat-label { font-size: 12px; color: var(--rg-t2); }
+.rg-stat-value { display: flex; align-items: baseline; gap: 7px; margin-top: 5px; font-size: 18px; font-weight: 500; color: var(--rg-t1); white-space: nowrap; }
+.rg-stat-sub { font-family: var(--font-geist), sans-serif; font-size: 12px; font-weight: 400; letter-spacing: 0; color: var(--rg-t2); }
+.rg-plot { position: relative; flex: 1; min-height: 110px; margin: 8px 12px 6px 6px; cursor: crosshair; }
+.rg-plot > svg { position: absolute; inset: 0; overflow: visible; }
+.rg-gridline { stroke: var(--rg-grid); stroke-width: 1; stroke-dasharray: 3 5; }
+.rg-axis {
+  font-family: var(--font-geist-mono), ui-monospace, monospace; font-size: 10.5px;
+  fill: var(--rg-t3); letter-spacing: -0.02em;
+}
+.rg-axis.is-today { fill: var(--rg-t1); font-weight: 600; }
+.rg-today-line { stroke: var(--rg-t3); stroke-width: 1; stroke-dasharray: 2 4; opacity: .7; }
+.rg-crosshair { stroke: var(--rg-t2); stroke-width: 1; stroke-dasharray: 3 4; }
+.rg-area { animation: wdFadeIn .6s ease backwards; }
+.rg-line { animation: wdDrawLine .8s cubic-bezier(.22,1,.36,1) backwards; }
+.rg-pt { stroke: var(--rg-well); stroke-width: 2; }
+.rg-tipcard {
+  position: absolute; z-index: 5; min-width: 176px; padding: 5px; border-radius: 12px;
+  background: var(--rg-tip-bg); border: 1px solid var(--rg-tip-line); box-shadow: var(--rg-pop);
+  pointer-events: none; transform: translate(16px, -50%);
+}
+.rg-tipcard.is-left { transform: translate(calc(-100% - 16px), -50%); }
+.rg-tipcard-head {
+  padding: 6px 9px; border-radius: 8px; background: var(--rg-tip-head); color: var(--rg-tip-tx);
+  font-size: 11.5px; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase;
+}
+.rg-tipcard-row {
+  display: flex; align-items: center; gap: 8px; padding: 8px 9px 5px;
+  font-size: 12.5px; color: var(--rg-tip-sub); white-space: nowrap;
+}
+.rg-tipcard-row b { margin-left: auto; padding-left: 12px; font-weight: 500; color: var(--rg-tip-tx); }
+.rg-tipcard-key { width: 12px; height: 2px; border-radius: 2px; flex-shrink: 0; }
+
+/* ══ TOP CAMPAIGNS ══ */
+.rg-list-well { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.rg-list-head {
+  display: flex; justify-content: space-between; padding: 11px 16px 9px; flex-shrink: 0;
+  font-size: 11.5px; color: var(--rg-t2); border-bottom: 1px solid var(--rg-line-soft);
+}
+.rg-list { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 6px 6px; }
+.rg-camp {
+  display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: center;
+  column-gap: 10px; padding: 10px; border-radius: 12px; transition: background-color .15s ease;
+}
+.rg-camp:hover { background: var(--rg-hover); }
+.rg-camp + .rg-camp { box-shadow: 0 -1px 0 var(--rg-line-soft); }
+.rg-camp:hover, .rg-camp:hover + .rg-camp { box-shadow: none; }
+.rg-rank { font-size: 12px; color: var(--rg-t3); }
+.rg-camp-name { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; color: var(--rg-t1); }
+.rg-camp-name > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rg-camp-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.rg-camp-meta {
+  margin-top: 4px; padding-left: 15px; font-size: 11.5px; color: var(--rg-t2);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.rg-camp-right { text-align: right; }
+.rg-camp-ctr { font-size: 14px; color: var(--rg-t1); }
+.rg-camp-spend { margin-top: 4px; font-size: 11.5px; color: var(--rg-t2); }
+
+/* ══ STATE: kosong, memuat, error ══ */
+.rg-empty {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 6px; padding: 18px; text-align: center; font-size: 12.5px; color: var(--rg-t2);
+}
+.rg-empty strong { font-size: 13px; font-weight: 500; color: var(--rg-t1); }
+.rg-skel {
+  border-radius: 10px;
+  background: linear-gradient(90deg, var(--rg-well) 25%, var(--rg-well-2) 50%, var(--rg-well) 75%);
+  background-size: 200% 100%;
+  animation: rgShimmer 1.3s ease-in-out infinite;
+}
+@keyframes rgShimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+.rg-busy { opacity: .55; transition: opacity .2s ease; }
+.rg-error {
+  display: flex; align-items: center; gap: 14px; padding: 16px 18px; border-radius: 16px;
+  background: color-mix(in srgb, var(--rg-neg) 9%, var(--rg-well));
+  border: 1px solid color-mix(in srgb, var(--rg-neg) 28%, transparent);
+}
+.rg-error-ico { color: var(--rg-neg); flex-shrink: 0; display: inline-flex; }
+.rg-error-title { font-size: 13.5px; font-weight: 500; color: var(--rg-t1); }
+.rg-error-msg { margin-top: 3px; font-size: 12px; color: var(--rg-t2); }
+
+/* ══ TATA LETAK DESKTOP: fit 1 layar (boleh scroll sedikit di layar pendek) ══ */
+.rg-body {
+  flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px;
+  padding: 0 16px 16px; overflow-y: auto; overflow-x: hidden;
+}
+.rg-row-kpi { flex: 0 1 190px; min-height: 172px; max-height: 214px; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.rg-row-mid { flex: 1 1 236px; min-height: 226px; max-height: 330px; display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 12px; }
+.rg-row-bot { flex: 1.8 1 300px; min-height: 290px; max-height: 580px; display: grid; grid-template-columns: minmax(0, 2.15fr) minmax(0, 1fr); gap: 12px; }
+
+/* ══ MOBILE (≤767px): tata letak lama (carousel KPI, susun vertikal) ══ */
+.rg.is-mobile .rg-top { flex-direction: column; align-items: stretch; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--rg-line); }
+.rg.is-mobile .rg-tools { justify-content: flex-end; flex-wrap: wrap; }
+.rg.is-mobile .rg-body { padding: 16px; gap: 14px; }
+.rg.is-mobile .rg-split { grid-template-columns: 1fr; justify-items: center; gap: 18px; padding: 18px 16px; }
+.rg.is-mobile .rg-legend { width: 100%; }
+.rg.is-mobile .rg-eff { padding: 0 14px; }
+.rg.is-mobile .rg-eff-cell:nth-child(odd)  { padding-right: 12px; }
+.rg.is-mobile .rg-eff-cell:nth-child(even) { padding-left: 12px; }
+/* HP: pilihan metrik grafik pindah ke baris sendiri, selebar kartu */
+.rg.is-mobile .rg-chart-head { flex-wrap: wrap; row-gap: 8px; padding-bottom: 8px; }
+.rg.is-mobile .rg-chart-head .rg-segs { order: 3; width: 100%; margin-left: 0 !important; }
+.rg.is-mobile .rg-chart-head .rg-segs button { flex: 1; justify-content: center; padding: 0 6px; }
+/* HP: tanpa meter batang (sama seperti kartu 4C mobile lama), cakupan boleh turun baris */
+.rg.is-mobile .rg-eff-cell > .rg-bars { display: none; }
+.rg.is-mobile .rg-eff-scope { flex-wrap: wrap; row-gap: 3px; white-space: normal; }
+
+@media (prefers-reduced-motion: reduce) {
+  .rg *, .rg *::before, .rg *::after {
+    animation-duration: 1ms !important; animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+}

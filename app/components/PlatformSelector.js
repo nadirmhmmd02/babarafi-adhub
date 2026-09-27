@@ -57,11 +57,9 @@ export const PLATFORMS = [
 
 export const DEFAULT_PLATFORM = PLATFORMS[0]; // Meta Ads
 
-/* ── Komponen dropdown — visual identik dengan tombol Date Filter ── */
-// height (px, opsional): tinggi eksplisit tombol — dashboard desktop kirim 40
-// biar sama persis dengan tombol icon (Export/Compare/Refresh). Tanpa height,
-// tinggi ikut padding (perilaku lama, dipakai mobile).
-export default function PlatformSelector({ selected, onSelect, height }) {
+/* ── Komponen dropdown — tombol pil gaya dashboard "Ridgeline" (.rg-pill di
+   app/dashboard-ridgeline.css, tinggi 40px seragam dengan kontrol lain) ── */
+export default function PlatformSelector({ selected, onSelect }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -76,23 +74,11 @@ export default function PlatformSelector({ selected, onSelect, height }) {
 
   return (
     <div ref={ref} style={{ position: 'relative' }}>
-      <button onClick={() => setOpen(prev => !prev)} style={{
-        display: 'flex', alignItems: 'center', gap: '8px',
-        padding: height ? '0 14px' : '9px 14px',
-        height: height ? height + 'px' : undefined,
-        background: 'var(--cd)',
-        border: `1px solid ${open ? 'var(--br-strong)' : 'var(--br)'}`,
-        borderRadius: '10px', fontSize: '13px',
-        color: 'var(--t1)', cursor: 'pointer', transition: 'border-color 0.15s',
-      }}
-      onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--br-strong)'}
-      onMouseLeave={e => { if (!open) e.currentTarget.style.borderColor = 'var(--br)'; }}
-      >
+      <button type="button" className="rg-pill" aria-expanded={open} aria-haspopup="menu"
+        onClick={() => setOpen(prev => !prev)}>
         <SelIcon size={15} />
         {selected.label}
-        <ChevronDown size={13} color="var(--t2)" style={{
-          transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s',
-        }}/>
+        <ChevronDown size={14} className="rg-caret" />
       </button>
 
       {open && (
@@ -129,6 +115,12 @@ export default function PlatformSelector({ selected, onSelect, height }) {
                 <Icon size={15} color={active ? 'var(--cal-accent-fg)' : undefined} />
                 <span style={{ flex: 1 }}>{p.label}</span>
                 {active && <Check size={14} color="var(--cal-accent-fg)" strokeWidth={2.5} />}
+                {!active && !p.available && (
+                  <span style={{
+                    fontSize: '10.5px', fontWeight: 500, padding: '2px 7px', borderRadius: '999px',
+                    background: 'var(--hover)', color: 'var(--t2)',
+                  }}>Soon</span>
+                )}
               </div>
             );
           })}

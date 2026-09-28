@@ -50,6 +50,23 @@ html[data-theme="dark"] .rg { --lh-warm: #E3A33B; }
   font-size: 10.5px; color: var(--rg-t2); background: var(--rg-well); border: 1px solid var(--rg-line-soft);
 }
 
+/* ══ Lead Quality: batang bertumpuk Warm · Hot · Deal + legenda mini di kepala kartu ══ */
+.rgl-qual { position: relative; flex: 1; min-height: 40px; margin: 16px 0 14px; display: flex; align-items: flex-end; }
+.rgl-qual-bar { display: flex; gap: 3px; width: 100%; height: 26px; }
+.rgl-qual-bar > i {
+  height: 100%; border-radius: 3px; flex-shrink: 0; transform-origin: left;
+  animation: wdGrowX .8s cubic-bezier(.22,1,.36,1) backwards;
+}
+.rgl-qual-bar > i.is-rest { flex: 1 1 0; min-width: 0; background: var(--rg-track); animation: none; }
+.rgl-legend-mini {
+  margin-left: auto; display: flex; align-items: center; gap: 10px; padding-right: 4px;
+  font-size: 12px; color: var(--rg-t2); white-space: nowrap;
+}
+.rgl-legend-mini > span { display: inline-flex; align-items: center; gap: 5px; }
+.rgl-legend-mini .rgl-dot { width: 7px; height: 7px; }
+/* Kartu KPI sempit (layar kecil / sidebar terbuka): legenda disembunyikan, judul tidak boleh terpotong */
+@media (max-width: 1180px) { .rg:not(.is-mobile) .rgl-legend-mini { display: none; } }
+
 /* ══ Leads by Status: 5 sel sejajar dipisah garis (ala "SEO Overview") ══ */
 .rgl-status { flex: 1; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); padding: 0 4px; }
 .rgl-st { display: flex; flex-direction: column; min-width: 0; min-height: 0; padding: 14px 16px; }
@@ -138,6 +155,7 @@ html[data-theme="dark"] .rg { --lh-warm: #E3A33B; }
    Sisa tinggi dibagi proporsional; tiap baris punya batas min/max supaya tidak ada
    yang menggelembung sendirian (pelajaran Leads v3.1 & Dashboard Ads Hub). */
 .rgl-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; flex-shrink: 0; }
+.rgl-row.rgl-row-kpi { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .rg:not(.is-mobile) .rgl-row-kpi    { flex: 1 1 0; min-height: 200px; max-height: 250px; }
 .rg:not(.is-mobile) .rgl-row-status { flex: 0.85 1 0; min-height: 156px; max-height: 200px; display: flex; }
 .rg:not(.is-mobile) .rgl-row-split  { flex: 1.2 1 0; min-height: 278px; max-height: 340px; }

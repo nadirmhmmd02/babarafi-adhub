@@ -12,7 +12,9 @@
    LOGIKA DATA SAMA dgn v3.1: leads approved cohort by created_at, filter kategori,
    spend konversi via /api/leads?mode=spend, ROAS = closing ÷ spend,
    ROI = (closing − spend) ÷ spend, Black Box = lead unverified (admin).
-   BARU (boleh dibuang kalau Nadir tidak suka): delta vs periode sebelumnya di 2 KPI
+   KPI ke-3 "Lead Quality" (pilihan Nadir 28 Sep 2026): % lead yang sudah Warm/Hot/Deal —
+   deretan KPI bercerita jumlah → kecepatan (follow-up) → kualitas.
+   BARU (boleh dibuang kalau Nadir tidak suka): delta vs periode sebelumnya di KPI
    (query leads periode pembanding, aturan periode sama dgn Ads Hub — previousRange),
    penanda "prev" di meter follow-up, rata-rata nilai per deal.
    Dedup metrik: Total Closing & ROAS cukup di kartu Total Closing (dulu dobel di Cost & ROI).
@@ -24,7 +26,7 @@ import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import {
-  RefreshCw, Users, PhoneCall, ListChecks, Tags, Wallet, Calculator,
+  RefreshCw, Users, PhoneCall, Gem, ListChecks, Tags, Wallet, Calculator,
   Inbox, ArrowUpRight, ArrowRight, ArrowUp, ArrowDown, Check, ChevronDown, TriangleAlert,
 } from 'lucide-react';
 import { useAuth } from '../components/AuthContext';
@@ -57,6 +59,11 @@ const STATUS_VAR = {
   'No Status': 'var(--lh-none)', Cold: 'var(--lh-cold)', Warm: 'var(--lh-warm)', Hot: 'var(--lh-hot)', Deal: 'var(--lh-deal)',
 };
 const SALES_VAR = { Akmel: 'var(--lh-akmel)', Hendra: 'var(--lh-hendra)', Dedik: 'var(--lh-dedik)' };
+
+/* Lead "qualified" = sudah diproses sales ke Warm, Hot atau Deal */
+const QUALIFIED = ['Warm', 'Hot', 'Deal'];
+const qualCount = counts => QUALIFIED.reduce((n, s) => n + (counts[s] || 0), 0);
+const ptsTone = pts => (pts == null ? 'na' : Math.abs(pts) < 0.05 ? 'neu' : pts > 0 ? 'pos' : 'neg');
 
 /* preset → {since, until} (versi client; SAMA dengan v3.1 — logika query tidak diubah) */
 function ymd(d) { return d.toISOString().slice(0, 10); }
@@ -130,13 +137,14 @@ function DeltaPts({ pts }) {
 }
 
 /* ─── Kartu KPI (anatomi sama dengan Dashboard Ads Hub: kepala · panel bergradasi · kaki) ─── */
-function LeadsKpi({ label, icon: Icon, info, tipAlign, tone, footLabel, footVal, delay = 0, children }) {
+function LeadsKpi({ label, icon: Icon, info, tipAlign, tone, footLabel, footVal, delay = 0, headExtra, children }) {
   return (
     <div className="rg-card rg-rise" style={{ animationDelay: `${delay}ms` }}>
       <div className="rg-head">
         <span className="rg-head-ico"><Icon size={15} /></span>
         <span className="rg-title">{label}</span>
         <InfoTip text={info} align={tipAlign} />
+        {headExtra}
       </div>
       <div className={`rg-well rg-kpi-well rg-tone-${tone === 'na' ? 'neu' : tone}`}>{children}</div>
       <div className="rg-foot">
@@ -159,6 +167,30 @@ function FollowTicks({ rate, prevRate }) {
       {Array.from({ length: TICKS }).map((_, i) => (
         <i key={i} className={i < on ? 'is-on' : undefined} style={{ animationDelay: `${200 + i * 10}ms` }} />
       ))}
+      {p != null && (
+        <span className="rgl-ticks-prev" style={{ left: `${p}%` }}>
+          <span style={{ transform: `translateX(${shift}%)` }}>prev {fmtPct0(p)}</span>
+        </span>
+      )}
+    </div>
+  );
+}
+
+/* ─── Meter kualitas: batang bertumpuk Warm · Hot · Deal (warna sama dgn Leads by Status)
+   + sisa lead (belum/tidak qualified) sebagai track, penanda rate periode lalu ─── */
+function QualityMeter({ counts, total, prevRate, delay = 0 }) {
+  const segs = QUALIFIED.map(s => ({ s, n: counts[s] || 0 })).filter(x => x.n > 0);
+  const p = prevRate != null ? Math.max(0, Math.min(prevRate, 100)) : null;
+  const shift = p == null ? 0 : p < 12 ? 0 : p > 88 ? -100 : -50;
+  return (
+    <div className="rgl-qual">
+      <div className="rgl-qual-bar" aria-hidden="true">
+        {total > 0 && segs.map((x, i) => (
+          <i key={x.s} title={`${x.s}: ${fmtInt(x.n)} lead${x.n === 1 ? '' : 's'}`}
+            style={{ width: `calc(${(x.n / total) * 100}% - 3px)`, minWidth: 4, background: STATUS_VAR[x.s], animationDelay: `${delay + 200 + i * 90}ms` }} />
+        ))}
+        <i className="is-rest" />
+      </div>
       {p != null && (
         <span className="rgl-ticks-prev" style={{ left: `${p}%` }}>
           <span style={{ transform: `translateX(${shift}%)` }}>prev {fmtPct0(p)}</span>
@@ -519,6 +551,11 @@ export default function LeadsDashboardPage() {
         prev,
         pctLeads: prev && prev.total ? ((cur.total - prev.total) / prev.total) * 100 : null,
         fuPts:    prev && prev.total ? cur.fuRate - prev.fuRate : null,
+        qualCount: qualCount(cur.statusCounts),
+        qualRate:  cur.total ? (qualCount(cur.statusCounts) / cur.total) * 100 : 0,
+        prevQualRate: prev && prev.total ? (qualCount(prev.statusCounts) / prev.total) * 100 : null,
+        qualPts: prev && prev.total && cur.total
+          ? (qualCount(cur.statusCounts) / cur.total - qualCount(prev.statusCounts) / prev.total) * 100 : null,
       });
       setUpdatedAt(new Date());
     } catch (err) {
@@ -686,14 +723,14 @@ export default function LeadsDashboardPage() {
         )}
 
         {initialLoading && (<>
-          <div className="rgl-row rgl-row-kpi"><SkelCard /><SkelCard /></div>
+          <div className="rgl-row rgl-row-kpi"><SkelCard /><SkelCard /><SkelCard /></div>
           <div className="rgl-row-status"><SkelCard lines={1} /></div>
           <div className="rgl-row rgl-row-split"><SkelCard lines={3} /><SkelCard lines={3} /></div>
           <div className="rgl-row rgl-row-money"><SkelCard lines={1} /><SkelCard lines={1} /></div>
         </>)}
 
         {d && (<>
-          {/* ── 1 · KPI: Total Leads + Follow-up ── */}
+          {/* ── 1 · KPI: jumlah (Total Leads) → kecepatan (Follow-up) → kualitas (Lead Quality) ── */}
           <div className={`rgl-row rgl-row-kpi${busy}`} style={{ order: 1 }}>
             <LeadsKpi label="Total Leads" icon={Users} tone={toneOf(d.pctLeads, 'up')} delay={0}
               info="Approved leads that came in during this period, by the date the lead was created. Leads still waiting in Black Box are not counted."
@@ -709,8 +746,7 @@ export default function LeadsDashboardPage() {
               <KpiSpark data={d.daily} />
             </LeadsKpi>
 
-            <LeadsKpi label="Follow-up" icon={PhoneCall} tipAlign="end" delay={55}
-              tone={d.fuPts == null ? 'na' : Math.abs(d.fuPts) < 0.05 ? 'neu' : d.fuPts > 0 ? 'pos' : 'neg'}
+            <LeadsKpi label="Follow-up" icon={PhoneCall} delay={55} tone={ptsTone(d.fuPts)}
               info="Share of this period’s leads that sales have marked as followed up. The change is in percentage points."
               footLabel="Followed up" footVal={`${fmtInt(d.fuCount)} of ${fmtInt(d.total)}`}>
               <div className="rg-kpi-value rg-mono">
@@ -724,6 +760,27 @@ export default function LeadsDashboardPage() {
                 <span>vs {prevLabel}</span>
               </div>
               <FollowTicks rate={d.fuRate} prevRate={d.prev && d.prev.total ? d.prev.fuRate : null} />
+            </LeadsKpi>
+
+            <LeadsKpi label="Lead Quality" icon={Gem} tipAlign="end" delay={110} tone={ptsTone(d.qualPts)}
+              info="Share of this period’s leads that sales have moved to Warm, Hot or Deal. The change is in percentage points. Newer leads may not be qualified yet."
+              headExtra={(
+                <span className="rgl-legend-mini" aria-hidden="true">
+                  {QUALIFIED.map(s => <span key={s}><span className="rgl-dot" style={{ background: STATUS_VAR[s] }} />{s}</span>)}
+                </span>
+              )}
+              footLabel="Qualified" footVal={`${fmtInt(d.qualCount)} of ${fmtInt(d.total)}`}>
+              <div className="rg-kpi-value rg-mono">
+                <span>
+                  <CountUp value={Math.round(d.qualRate)} display={fmtInt(d.qualRate)} delay={230} />
+                  <span className="rg-unit" style={{ marginLeft: 2 }}>%</span>
+                </span>
+              </div>
+              <div className="rg-kpi-sub">
+                <DeltaPts pts={d.qualPts} />
+                <span>vs {prevLabel}</span>
+              </div>
+              <QualityMeter counts={d.statusCounts} total={d.total} prevRate={d.prevQualRate} delay={110} />
             </LeadsKpi>
           </div>
 

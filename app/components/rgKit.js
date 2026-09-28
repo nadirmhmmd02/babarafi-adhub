@@ -5,11 +5,12 @@
    (Dashboard, Campaigns, Analytics & Insights). Styling di app/ridgeline.css.
    Satu sumber untuk: preset → rentang tanggal nyata, format rentang pendek,
    delta ber-ikon bulat, ikon (i) definisi, pil filter tanggal, periode pembanding
-   (previousRange) dan sparkline kartu KPI (KpiSpark — Dashboard Ads Hub & Leads Hub).
+   (previousRange), sparkline kartu KPI (KpiSpark — Dashboard Ads Hub & Leads Hub),
+   menu pilihan (RgMenu) & dialog (RgDialog) — dipakai halaman Notes.
    ───────────────────────────────────────────────────────────── */
 
 import { useState, useRef, useEffect, useId } from 'react';
-import { ArrowUp, ArrowDown, Info, Calendar, ChevronDown } from 'lucide-react';
+import { ArrowUp, ArrowDown, Info, Calendar, ChevronDown, Check, X } from 'lucide-react';
 import { monotonePath } from './AreaChart';
 
 export const ID  = 'id-ID';
@@ -113,6 +114,86 @@ export function DatePill({ open, onToggle, isMobile, isCustom, presetLabel, mobi
         <ChevronDown size={14} className="rg-caret" />
       </button>
       {open && children}
+    </div>
+  );
+}
+
+/* Menu pilihan: tombol (default pil) + daftar .rg-menu. Lapisan POSISI (.rg-menu-pos)
+   dipisah dari lapisan ANIMASI (.rg-menu wdScaleIn) — kalau digabung popup "loncat".
+   Klik di luar (guard contains) / Esc menutup. Opsi: { value, label, Icon?, dot?, hint?, tone? }.
+   `footer` boleh fungsi (close) => node, untuk tombol aksi di kaki menu. Dipakai Notes (To Do). */
+export function RgMenu({
+  options, value, onSelect, label, icon: Icon, dot, title, disabled,
+  className = 'rg-pill', align = 'left', direction = 'down', minWidth = 180,
+  footer, block = false, caret = true, showCheck = true,
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const onKey = e => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    window.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onDown); window.removeEventListener('keydown', onKey); };
+  }, [open]);
+  const close = () => setOpen(false);
+  return (
+    <div ref={ref} className={`rg-menu-wrap${block ? ' is-block' : ''}`}>
+      <button type="button" className={className} aria-expanded={open} aria-haspopup="menu"
+        title={title} disabled={disabled} onClick={() => setOpen(o => !o)}>
+        {Icon && <Icon size={15} />}
+        {dot && <span className="rg-menu-dot" style={{ background: dot }} />}
+        {label != null && <span className="rg-menu-label">{label}</span>}
+        {caret && <ChevronDown size={14} className="rg-caret" />}
+      </button>
+      {open && (
+        <div className={`rg-menu-pos is-${direction} is-${align}`}>
+          <div className="rg-menu" role="menu" style={{ minWidth }}>
+            {options.map(o => {
+              const on = value !== undefined && o.value === value;
+              const OIcon = o.Icon;
+              return (
+                <button key={String(o.value)} type="button" role="menuitemradio" aria-checked={on}
+                  className={`rg-menu-item${on ? ' is-on' : ''}${o.tone ? ` is-${o.tone}` : ''}`}
+                  onClick={() => { onSelect(o.value); close(); }}>
+                  {OIcon && <OIcon size={15} className="rg-menu-ico" />}
+                  {o.dot && <span className="rg-menu-dot" style={{ background: o.dot }} />}
+                  <span className="rg-menu-label">{o.label}</span>
+                  {o.hint && <span className="rg-menu-hint">{o.hint}</span>}
+                  {showCheck && on && <Check size={14} className="rg-menu-check" />}
+                </button>
+              );
+            })}
+            {footer && <div className="rg-menu-foot">{typeof footer === 'function' ? footer(close) : footer}</div>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* Dialog skin (.rg-dialog) — Esc & klik latar menutup (kecuali sedang `busy`). */
+export function RgDialog({ icon: Icon, tone, title, sub, onClose, busy, children, foot, width }) {
+  useEffect(() => {
+    const onKey = e => { if (e.key === 'Escape' && !busy) onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose, busy]);
+  return (
+    <div className="rg-overlay" onMouseDown={e => { if (e.target === e.currentTarget && !busy) onClose(); }}>
+      <div className="rg-dialog" role="dialog" aria-modal="true" aria-label={title} style={width ? { maxWidth: width } : undefined}>
+        <div className="rg-dialog-head">
+          {Icon && <span className={`rg-dialog-ico${tone ? ` is-${tone}` : ''}`}><Icon size={17} /></span>}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="rg-dialog-title">{title}</div>
+            {sub && <div className="rg-dialog-sub rg-clip">{sub}</div>}
+          </div>
+          <button type="button" className="rg-iconbtn" onClick={onClose} disabled={busy} aria-label="Close"><X size={15} /></button>
+        </div>
+        <div className="rg-dialog-body">{children}</div>
+        {foot && <div className="rg-dialog-foot">{foot}</div>}
+      </div>
     </div>
   );
 }

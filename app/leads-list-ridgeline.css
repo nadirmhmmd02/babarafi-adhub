@@ -39,10 +39,7 @@
   display: inline-flex; align-items: center; justify-content: center;
   font-size: 11px; font-weight: 600; background: var(--rg-neg); color: #fff;
 }
-/* Aksi utama top bar (Add leads) = netral kontras tinggi, seperti tombol utama skin */
-.rg-pill.is-primary { background: var(--rg-t1); border-color: var(--rg-t1); color: var(--rg-well); }
-.rg-pill.is-primary:hover { background: var(--rg-t1); filter: brightness(.9); }
-.rg-pill.is-primary > svg { color: inherit; }
+/* Aksi utama top bar (Add leads) = .rg-pill.is-primary — kini di ridgeline.css (dipakai Notes juga) */
 
 /* Kotak cari (pil 40px) */
 .rgll-search {

@@ -1,11 +1,12 @@
 /* ══════════════════════════════════════════════════════════════════════
    RIDGELINE — skin bersama halaman Ads Hub (redesain Sep 2026, PREVIEW LOKAL)
-   Dipakai: Dashboard (/), Campaigns, Calendar, Analytics & Insights (/reports).
+   Dipakai: Dashboard (/), Campaigns, Calendar, Analytics & Insights (/reports),
+   Dashboard Leads Hub, Leads List, Notes (/notes — notes-ridgeline.css).
    Referensi utama Nadir: dashboard SEO "Ridgeline" — kanvas charcoal,
    kartu = cangkang (shell) + panel dalam (well), angka monospace, delta
    ber-ikon bulat, kontrol berbentuk pil, pilihan/aktif NETRAL (bukan aksen).
-   SEMUA aturan di-scope ke .rg (akar tiap halaman): sidebar, Leads Hub, Maps,
-   Notes & komponen bersama di luar .rg TIDAK terpengaruh.
+   SEMUA aturan di-scope ke .rg (akar tiap halaman): sidebar, Maps, Login &
+   komponen bersama di luar .rg TIDAK terpengaruh.
    Di-import sekali di app/layout.js. Bagian khusus halaman:
    dashboard-ridgeline.css · campaigns-ridgeline.css · calendar-ridgeline.css ·
    reports-ridgeline.css.
@@ -218,6 +219,10 @@ html[data-theme="dark"] .rg {
 .rg-pill[aria-expanded="true"] { background: var(--rg-pill-hover); border-color: var(--rg-t3); }
 .rg-pill:disabled { cursor: default; opacity: .6; }
 .rg-round { width: 40px; padding: 0; justify-content: center; }
+/* Aksi utama top bar (Add leads, New note) = netral kontras tinggi, seperti tombol utama skin */
+.rg-pill.is-primary { background: var(--rg-t1); border-color: var(--rg-t1); color: var(--rg-well); }
+.rg-pill.is-primary:hover { background: var(--rg-t1); filter: brightness(.9); }
+.rg-pill.is-primary > svg { color: inherit; }
 .rg-caret { transition: transform .18s ease; }
 .rg-pill[aria-expanded="true"] .rg-caret { transform: rotate(180deg); }
 .rg-date-preset { color: var(--rg-t2); }
@@ -391,7 +396,27 @@ button.rg-chip:hover { border-color: currentColor; }
   transition: background-color .1s ease;
 }
 .rg-menu-item:hover, .rg-menu-item.is-on { background: var(--rg-hover); }
-.rg-menu-check { margin-left: auto; color: var(--rg-t2); }
+.rg-menu-check { margin-left: auto; color: var(--rg-t2); flex-shrink: 0; }
+.rg-menu-hint + .rg-menu-check { margin-left: 8px; }
+/* RgMenu (rgKit): lapisan posisi terpisah dari animasi .rg-menu */
+.rg-menu-wrap { position: relative; display: inline-flex; min-width: 0; }
+.rg-menu-wrap.is-block { display: flex; width: 100%; }
+.rg-menu-wrap [aria-expanded="true"] > .rg-caret { transform: rotate(180deg); }
+.rg-menu-pos { position: absolute; z-index: 60; }
+.rg-menu-pos.is-down { top: calc(100% + 6px); }
+.rg-menu-pos.is-up { bottom: calc(100% + 6px); }
+.rg-menu-pos.is-left { left: 0; }
+.rg-menu-pos.is-right { right: 0; }
+.rg-menu-pos.is-center { left: 50%; transform: translateX(-50%); }
+.rg-menu-pos .rg-menu { max-height: 340px; overflow-y: auto; }
+.rg-menu-pos.is-up .rg-menu { transform-origin: bottom center; }
+.rg-menu-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rg-menu-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.rg-menu-ico { color: var(--rg-t2); flex-shrink: 0; }
+.rg-menu-hint { margin-left: auto; padding-left: 12px; font-size: 11.5px; color: var(--rg-t3); white-space: nowrap; }
+.rg-menu-item.is-neg, .rg-menu-item.is-neg .rg-menu-ico { color: var(--rg-neg); }
+.rg-menu-foot { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--rg-line-soft); }
+.rg-clip { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ══ FORM ══ */
 .rg-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }

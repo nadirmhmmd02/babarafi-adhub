@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { supabase } from '../supabase';
+import { supabase as realSupabase } from '../supabase'; // PREVIEW-ONLY: alias → kembalikan ke `{ supabase }` saat demo dicabut
 import { playDoneSound, playStepSound } from './todoSound';
 
 /* ─────────────────────────────────────────────────────────────
@@ -42,7 +42,11 @@ function missingTable(err) {
     || /could not find the table|does not exist/i.test(err.message || ''));
 }
 
-export default function useTodos(enabled) {
+export default function useTodos(enabled, client) {
+  /* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ (`client` = klien data dummy dari demoNotes.js saat
+     saklar Demo data nyala; saat dicabut: hapus param `client` + baris ini, ganti `supabase` lagi) */
+  const supabase = client || realSupabase;
+  /* ═══ END PREVIEW-ONLY ═══ */
   const [lists, setLists] = useState([]);
   const [todos, setTodos] = useState(null);      // null = loading
   const [error, setError] = useState(null);      // { missing, message }
@@ -65,7 +69,7 @@ export default function useTodos(enabled) {
     setError(null);
     setLists(l || []);
     setTodos(t || []);
-  }, []);
+  }, [supabase]);
 
   useEffect(() => { if (enabled) load(); }, [enabled, load]);
   useEffect(() => () => Object.values(timers.current).forEach(clearTimeout), []);

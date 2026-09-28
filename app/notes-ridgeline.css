@@ -1,0 +1,353 @@
+/* ══════════════════════════════════════════════════════════════════════
+   NOTES — redesain "Ridgeline" (Sep 2026, PREVIEW LOKAL). Dasar (token, kartu
+   cangkang+panel, pil, menu, dialog, form, state) di app/ridgeline.css. Prefix: .rgn-
+   SUSUNAN & FITUR TIDAK BERUBAH: kartu Notes (cari + Pinned/All notes) & kartu To Do
+   di kolom kiri (lebar & tinggi bisa digeser, To Do bisa di-minimize), editor /
+   detail tugas di kanan. Isi halaman netral — aksen Saffron hanya di sidebar.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* Warna khusus Notes: link = biru "info" (satu-satunya teks berwarna di catatan,
+   harus beda dari teks biasa); bintang Important = kuning tua (--rg-warn). */
+.rgn { --rgn-link: var(--rg-spend); --rgn-star: var(--rg-warn); }
+
+/* ══ TATA LETAK ══ */
+.rgn-body { flex: 1; min-height: 0; display: flex; padding: 0 16px 16px; }
+.rgn-side { display: flex; flex-direction: column; min-height: 0; flex-shrink: 0; }
+.rgn-notes { flex: 1; min-height: 150px; }
+/* To Do menempel di dasar kolom: minimize = tinggi menyusut ke kepala kartu
+   (tampak "turun & mengecil ke bawah"); transisi dimatikan saat pembatas digeser */
+.rgn-todo { flex-shrink: 0; min-height: 0; transition: height .34s cubic-bezier(.4,0,.2,1); }
+/* Tinggi To Do tersimpan bisa lebih besar dari layar yang sedang dipakai (mis. diatur di
+   monitor besar, dibuka di laptop) → dijepit supaya kartu Notes tetap ≥150px + celah 12px */
+.rg:not(.is-mobile) .rgn-todo { max-height: calc(100% - 162px); }
+.rgn-todo.is-min { overflow: hidden; }
+.rgn-todo.is-dragging { transition: none; }
+.rgn-editor { flex: 1; min-width: 0; min-height: 0; }
+
+/* Pembatas geser = celah 12px antar kartu; pegangan pil muncul saat disentuh/digeser */
+.rgn-vsplit, .rgn-hsplit { position: relative; flex-shrink: 0; }
+.rgn-vsplit { width: 12px; cursor: col-resize; }
+.rgn-hsplit { height: 12px; cursor: row-resize; }
+.rgn-hsplit.is-off { cursor: default; }
+.rgn-vsplit::after, .rgn-hsplit::after {
+  content: ''; position: absolute; left: 50%; top: 50%; border-radius: 999px;
+  background: var(--rg-t3); opacity: 0; transform: translate(-50%, -50%);
+  transition: opacity .15s ease;
+}
+.rgn-vsplit::after { width: 4px; height: 44px; }
+.rgn-hsplit::after { width: 44px; height: 4px; }
+.rgn-vsplit:hover::after, .rgn-vsplit.is-drag::after,
+.rgn-hsplit:not(.is-off):hover::after, .rgn-hsplit.is-drag::after { opacity: .75; }
+
+/* Kepala kartu: jumlah kecil di samping judul */
+.rgn-count { font-size: 12px; color: var(--rg-t2); white-space: nowrap; }
+
+/* ══ KOTAK CARI & TAMBAH TUGAS (pil di dalam panel) ══ */
+.rgn-field {
+  display: flex; align-items: center; gap: 8px; height: 36px; margin: 10px 10px 4px; padding: 0 6px 0 12px;
+  flex-shrink: 0; border-radius: 999px; color: var(--rg-t3);
+  background: var(--rg-well-2); border: 1px solid var(--rg-line-soft);
+  transition: border-color .15s ease, box-shadow .15s ease, background-color .15s ease;
+}
+.rgn-field:focus-within { background: var(--rg-well); border-color: var(--rg-t2); box-shadow: 0 0 0 3px var(--rg-range); }
+.rgn-field input {
+  flex: 1; min-width: 0; height: 100%; border: 0; outline: none; background: transparent;
+  font-family: inherit; font-size: 13px; color: var(--rg-t1);
+}
+.rg .rgn-field input:focus-visible { outline: none; }
+.rgn-field input::placeholder { color: var(--rg-t3); }
+.rgn-field-x {
+  width: 24px; height: 24px; padding: 0; border: 0; border-radius: 50%; flex-shrink: 0; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; background: transparent; color: var(--rg-t3);
+}
+.rgn-field-x:hover { background: var(--rg-hover); color: var(--rg-t1); }
+.rgn-field-go {
+  width: 26px; height: 26px; padding: 0; border: 0; border-radius: 50%; flex-shrink: 0; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--rg-t1); color: var(--rg-well); animation: wdScaleIn .14s cubic-bezier(.22,1,.36,1);
+}
+
+/* ══ DAFTAR CATATAN ══ */
+.rgn-list-well { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.rgn-list { flex: 1; min-height: 0; overflow-y: auto; padding: 2px 8px 10px; display: flex; flex-direction: column; }
+.rgn-hint { padding: 10px 8px; font-size: 12.5px; line-height: 1.55; color: var(--rg-t2); }
+.rgn-hint strong { color: var(--rg-t1); font-weight: 600; }
+
+/* Grup Pinned / All notes — bisa dilipat: isi "tersedot" ke atas (grid 1fr→0fr) */
+.rgn-group {
+  display: flex; align-items: center; gap: 6px; width: 100%; height: 30px; padding: 0 6px; margin-top: 6px;
+  border: 0; border-radius: 8px; background: transparent; cursor: pointer; text-align: left; flex-shrink: 0;
+  font-family: inherit; font-size: 12px; font-weight: 500; color: var(--rg-t2); transition: color .12s ease;
+}
+.rgn-group:hover { color: var(--rg-t1); }
+.rgn-group > svg { flex-shrink: 0; transition: transform .3s cubic-bezier(.4,0,.2,1); }
+.rgn-group.is-min > svg { transform: rotate(-90deg); }
+.rgn-group-n { font-size: 11.5px; color: var(--rg-t3); }
+.rgn-group-body { display: grid; grid-template-rows: 1fr; transition: grid-template-rows .34s cubic-bezier(.4,0,.2,1); }
+.rgn-group-body.is-min { grid-template-rows: 0fr; }
+.rgn-group-in {
+  overflow: hidden; min-height: 0; display: flex; flex-direction: column; gap: 2px;
+  transition: opacity .26s ease, transform .34s cubic-bezier(.4,0,.2,1);
+}
+.rgn-group-body.is-min .rgn-group-in { opacity: 0; transform: translateY(-8px); }
+
+/* Baris catatan: judul + (pin · hapus saat disentuh) / cuplikan + waktu */
+.rgn-note {
+  position: relative; display: flex; flex-direction: column; gap: 3px; flex-shrink: 0;
+  padding: 9px 8px 9px 14px; border-radius: 12px; cursor: pointer;
+  transition: background-color .12s ease, opacity .12s ease;
+}
+.rgn-note:hover { background: var(--rg-hover); }
+.rgn-note.is-on { background: var(--rg-range); }
+.rgn-note.is-drag { opacity: .45; }
+.rgn-note-top { display: flex; align-items: center; gap: 2px; min-width: 0; }
+.rgn-note-title {
+  flex: 1; min-width: 0; font-size: 13px; font-weight: 500; color: var(--rg-t1);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.rgn-note.is-on .rgn-note-title { font-weight: 600; }
+.rgn-note-sub { display: flex; align-items: baseline; gap: 10px; min-width: 0; padding-right: 6px; font-size: 12px; color: var(--rg-t2); }
+.rgn-note-prev { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rgn-note-time { flex-shrink: 0; font-size: 11.5px; color: var(--rg-t3); }
+.rgn-note-act {
+  width: 24px; height: 24px; padding: 0; border: 0; border-radius: 50%; flex-shrink: 0; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: transparent; color: var(--rg-t3); opacity: 0;
+  transition: opacity .12s ease, background-color .12s ease, color .12s ease;
+}
+.rgn-note:hover .rgn-note-act, .rgn-note-act:focus-visible, .rgn-note-act.is-on { opacity: 1; }
+.rgn-note-act:hover { background: var(--rg-hover); color: var(--rg-t1); }
+.rgn-note-act.is-on { color: var(--rg-t1); }
+.rgn-note-act.is-del:hover { background: color-mix(in srgb, var(--rg-neg) 12%, transparent); color: var(--rg-neg); }
+/* Pegangan geser urutan (desktop) — di celah kiri baris, muncul saat disentuh */
+.rgn-grip {
+  position: absolute; left: 0; top: 10px; display: flex; padding: 1px 0; cursor: grab;
+  color: var(--rg-t3); opacity: 0; transition: opacity .12s ease;
+}
+.rgn-note:hover .rgn-grip { opacity: 1; }
+.rgn-grip:hover { color: var(--rg-t1); }
+.rgn-skel { padding: 8px 12px; display: flex; flex-direction: column; gap: 7px; }
+
+/* ══ TO DO ══ */
+.rgn-todo-in { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.rgn-todo-head { gap: 6px; }
+/* Judul & jumlah tidak boleh terpotong — pil view yang mengalah (nama daftar dielipsis) */
+.rgn-todo-head .rg-title, .rgn-todo-head .rgn-count { flex-shrink: 0; }
+.rgn-todo-head .rg-menu-wrap { flex-shrink: 1; min-width: 0; }
+.rgn-todo-head .rgn-view { max-width: 100%; }
+.rgn-min { width: 26px; height: 26px; margin-left: 2px; }
+.rg .rgn-view {
+  height: 30px; padding: 0 10px 0 11px; gap: 6px; font-size: 12.5px; max-width: 170px; min-width: 0; flex-shrink: 1;
+}
+.rgn-todo-well { flex: 1; display: flex; flex-direction: column; overflow: hidden; transition: opacity .22s ease; }
+.rgn-todo.is-min .rgn-todo-well { opacity: 0; }
+.rgn-tasks { flex: 1; min-height: 0; overflow-y: auto; padding: 2px 8px 10px; display: flex; flex-direction: column; gap: 1px; }
+.rgn-task {
+  position: relative; display: flex; align-items: flex-start; gap: 9px; flex-shrink: 0;
+  padding: 8px 8px 8px 9px; border-radius: 12px; cursor: pointer;
+  transition: background-color .12s ease, box-shadow .15s ease, transform .15s ease, opacity .15s ease;
+  animation: wdFadeUp .25s cubic-bezier(.22,1,.36,1) backwards;
+}
+.rgn-task:hover { background: var(--rg-hover); }
+.rgn-task.is-sel { background: var(--rg-range); }
+.rgn-tasks.is-dragmode .rgn-task { cursor: grabbing; }
+.rgn-tasks.is-dragmode .rgn-task:not(.is-sel):not(.is-drag):hover { background: transparent; }
+.rgn-task.is-drag {
+  z-index: 2; background: var(--rg-well-2); box-shadow: var(--rg-pop); transform: scale(1.02); opacity: .95;
+}
+.rgn-circle {
+  display: inline-flex; padding: 0; border: 0; border-radius: 50%; flex-shrink: 0; margin-top: 1px;
+  background: transparent; color: var(--rg-t3); cursor: pointer; transition: color .15s ease, transform .15s ease;
+}
+.rgn-circle:hover { color: var(--rg-t1); transform: scale(1.1); }
+.rgn-circle.is-done, .rgn-circle.is-done:hover { color: var(--rg-pos); }
+.rgn-task-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.rgn-task-title {
+  font-size: 13px; font-weight: 500; color: var(--rg-t1); line-height: 1.4;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.rgn-task.is-done .rgn-task-title { color: var(--rg-t3); font-weight: 400; text-decoration: line-through; }
+.rgn-task-meta { display: flex; flex-wrap: wrap; gap: 3px 10px; font-size: 11.5px; color: var(--rg-t2); }
+.rgn-task-meta > span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.rgn-due.is-today { color: var(--rg-t1); font-weight: 600; }
+.rgn-due.is-late { color: var(--rg-neg); font-weight: 600; }
+.rgn-star {
+  display: inline-flex; padding: 3px; border: 0; border-radius: 50%; flex-shrink: 0;
+  background: transparent; color: var(--rg-t3); cursor: pointer; transition: color .12s ease, transform .15s ease;
+}
+.rgn-star:hover { color: var(--rg-t1); transform: scale(1.1); }
+.rgn-star.is-on, .rgn-star.is-on:hover { color: var(--rgn-star); }
+.rgn-done-toggle {
+  display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 6px; margin-top: 4px; flex-shrink: 0;
+  border: 0; background: transparent; cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 500;
+  color: var(--rg-t2); text-align: left;
+}
+.rgn-done-toggle:hover { color: var(--rg-t1); }
+.rgn-done-toggle > svg { transition: transform .18s ease; }
+.rgn-done-toggle[aria-expanded="true"] > svg { transform: rotate(90deg); }
+
+/* Dialog daftar baru / ganti nama */
+.rgn-dlg { display: flex; flex-direction: column; gap: 16px; }
+.rgn-swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+.rgn-swatch {
+  width: 26px; height: 26px; padding: 0; border-radius: 50%; cursor: pointer;
+  background: var(--c); border: 2px solid transparent; box-shadow: inset 0 0 0 2px var(--rg-well);
+  transition: transform .12s ease, border-color .12s ease;
+}
+.rgn-swatch:hover { transform: scale(1.08); }
+.rgn-swatch.is-on { border-color: var(--rg-t1); }
+
+/* ══ EDITOR ══ */
+.rgn-ed-head { gap: 8px; flex-wrap: wrap; padding-top: 4px; padding-bottom: 4px; }
+.rgn-toolbar { display: flex; align-items: center; gap: 2px; flex-wrap: wrap; min-width: 0; flex: 1; }
+.rgn-ed-head > .rgn-tool { align-self: flex-start; }   /* tombol copy tetap di baris atas saat toolbar terlipat (HP) */
+.rgn-tool {
+  position: relative; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 10px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: transparent; color: var(--rg-t2); cursor: pointer;
+  transition: background-color .12s ease, color .12s ease;
+}
+.rgn-tool:hover, .rgn-tool[aria-expanded="true"] { background: var(--rg-hover); color: var(--rg-t1); }
+.rgn-tsep { width: 1px; height: 18px; margin: 0 5px; flex-shrink: 0; background: var(--rg-line); }
+.rgn-copied { color: var(--rg-pos) !important; }
+
+/* Popover stabilo (lapisan posisi terpisah dari animasi) */
+.rgn-hl-wrap { position: relative; display: inline-flex; }
+.rgn-hl-pos { position: absolute; top: calc(100% + 6px); left: 50%; z-index: 60; transform: translateX(-50%); }
+.rgn-hl {
+  display: flex; gap: 6px; padding: 7px; border-radius: 14px;
+  background: var(--rg-well); border: 1px solid var(--rg-pill-line); box-shadow: var(--rg-pop);
+  animation: wdScaleIn .14s cubic-bezier(.22,1,.36,1);
+}
+.rgn-hl-sw {
+  width: 26px; height: 26px; padding: 0; border-radius: 8px; cursor: pointer;
+  border: 1px solid rgba(0,0,0,0.12); transition: transform .12s ease;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.rgn-hl-sw:hover { transform: scale(1.1); }
+.rgn-hl-sw.is-none { background: var(--rg-hover); border-color: var(--rg-pill-line); color: var(--rg-t2); }
+
+/* Dokumen: judul besar + meta, garis tipis, lalu isi catatan */
+.rgn-doc { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.rgn-doc-head { flex-shrink: 0; padding: 20px 24px 12px; }
+.rgn-doc-title {
+  display: block; width: 100%; padding: 0; border: 0; outline: none; background: transparent;
+  font-family: inherit; font-size: 22px; font-weight: 600; line-height: 1.25; letter-spacing: -0.025em; color: var(--rg-t1);
+}
+.rg .rgn-doc-title:focus-visible { outline: none; }
+.rgn-doc-title::placeholder { color: var(--rg-t3); }
+.rgn-doc-meta { display: flex; align-items: center; gap: 8px; margin-top: 7px; min-width: 0; font-size: 12px; color: var(--rg-t2); white-space: nowrap; }
+.rgn-doc-meta .rg-chip { height: 22px; padding: 0 8px; gap: 5px; font-size: 11.5px; }
+.rgn-status { display: inline-flex; align-items: center; gap: 5px; }
+.rgn-status.is-saved { color: var(--rg-pos); }
+.rgn-status.is-saving::before {
+  content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--rg-t3);
+  animation: wdPulseDot 1.2s ease-in-out infinite;
+}
+.rgn-rule { flex-shrink: 0; height: 1px; margin: 0 24px; background: var(--rg-line-soft); }
+
+/* Isi catatan (class global .wd-note-editor tetap dipakai: pre-wrap/tab-size, gutter, wd-ctrl) */
+.rg .wd-note-editor.rgn-editor-body {
+  flex: 1; min-height: 0; overflow-y: auto; padding: 16px 24px 28px; outline: none;
+  font-size: 14px; line-height: 1.7; color: var(--rg-t1);
+}
+.rg .wd-note-editor.rgn-editor-body:focus-visible { outline: none; }
+.rg .wd-note-editor:empty::before { color: var(--rg-t3); }
+.rg .wd-note-editor h3 { font-size: 16px; font-weight: 600; letter-spacing: -0.015em; margin: 16px 0 6px; }
+.rg .wd-note-editor h3:first-child { margin-top: 0; }
+.rg .wd-note-editor a {
+  color: var(--rgn-link); font-weight: 500;
+  text-decoration-color: color-mix(in srgb, var(--rgn-link) 45%, transparent);
+}
+.rg .wd-note-editor a:hover, .rg .wd-note-editor.wd-ctrl a:hover { text-decoration-color: var(--rgn-link); }
+.rg .wd-note-editor .wd-check { color: var(--rg-t2); }
+.rg .wd-note-editor .wd-check[data-done="1"] { color: var(--rg-pos); opacity: 1; }
+/* Stabilo pastel di tema gelap: teks di atasnya dibuat gelap supaya terbaca
+   (dulu teks putih di atas kuning muda). Stabilo yang dihapus (transparent) tidak kena. */
+html[data-theme="dark"] .rg .wd-note-editor [style*="background-color"]:not([style*="transparent"]):not([style*="rgba(0, 0, 0, 0)"]) {
+  color: #1D1D1D;
+}
+
+/* Kosong + error di kartu editor */
+.rgn-empty-ico {
+  width: 44px; height: 44px; border-radius: 50%; margin-bottom: 6px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--rg-hover); color: var(--rg-t2);
+}
+.rgn-empty span { max-width: 320px; line-height: 1.55; }
+.rgn-empty .rg-btn { margin-top: 10px; }
+.rgn-err {
+  display: flex; align-items: center; gap: 10px; flex-shrink: 0; margin-top: 4px; padding: 8px 8px 8px 14px;
+  border-radius: 16px; font-size: 12.5px; color: var(--rg-t1);
+  background: color-mix(in srgb, var(--rg-neg) 9%, var(--rg-well));
+  border: 1px solid color-mix(in srgb, var(--rg-neg) 28%, transparent);
+}
+.rgn-err > svg { color: var(--rg-neg); flex-shrink: 0; }
+.rgn-err > span { flex: 1; min-width: 0; }
+.rgn-err .rg-btn { height: 30px; padding: 0 12px; font-size: 12px; }
+
+/* ══ DETAIL TUGAS (menggantikan editor) ══ */
+.rgn-crumb { display: inline-flex; align-items: center; gap: 6px; min-width: 0; font-size: 12px; color: var(--rg-t2); white-space: nowrap; }
+.rgn-detail { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.rgn-detail-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 20px 22px 22px; display: flex; flex-direction: column; gap: 16px; }
+.rgn-detail-title { display: flex; align-items: center; gap: 12px; }
+.rgn-detail-title .rgn-circle, .rgn-detail-title .rgn-star { margin-top: 0; }
+.rgn-task-input {
+  flex: 1; min-width: 0; padding: 0; border: 0; outline: none; background: transparent;
+  font-family: inherit; font-size: 20px; font-weight: 600; letter-spacing: -0.02em; color: var(--rg-t1);
+}
+.rg .rgn-task-input:focus-visible, .rg .rgn-step input:focus-visible { outline: none; }
+.rgn-task-input.is-done { color: var(--rg-t3); text-decoration: line-through; }
+.rgn-task-input::placeholder { color: var(--rg-t3); }
+.rgn-steps { display: flex; flex-direction: column; gap: 1px; }
+.rgn-step { display: flex; align-items: center; gap: 10px; min-height: 38px; padding: 0 6px 0 10px; border-radius: 11px; transition: background-color .12s ease; }
+.rgn-step:hover, .rgn-step:focus-within { background: var(--rg-hover); }
+.rgn-step input {
+  flex: 1; min-width: 0; height: 36px; padding: 0; border: 0; outline: none; background: transparent;
+  font-family: inherit; font-size: 13.5px; color: var(--rg-t1);
+}
+.rgn-step input::placeholder { color: var(--rg-t3); }
+.rgn-step.is-done input { color: var(--rg-t3); text-decoration: line-through; }
+.rgn-step .rgn-circle { margin-top: 0; }
+.rgn-step.is-add > svg { color: var(--rg-t2); flex-shrink: 0; margin: 0 1px; }
+.rgn-step .rgn-step-x { opacity: 0; width: 26px; height: 26px; }
+.rgn-step:hover .rgn-step-x, .rgn-step .rgn-step-x:focus-visible { opacity: 1; }
+.rgn-steps-meta { padding: 4px 10px 0; font-size: 12px; color: var(--rg-t2); }
+
+.rgn-actions {
+  display: flex; flex-direction: column; padding: 3px; border-radius: 14px;
+  background: var(--rg-well-2); border: 1px solid var(--rg-line-soft);
+}
+.rgn-act-row { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.rgn-act-row + .rgn-act-row { border-top: 1px solid var(--rg-line-soft); }
+.rgn-act {
+  flex: 1; min-width: 0; height: 42px; padding: 0 12px; display: flex; align-items: center; gap: 10px;
+  border: 0; border-radius: 11px; background: transparent; cursor: pointer; text-align: left;
+  font-family: inherit; font-size: 13px; font-weight: 500; color: var(--rg-t2);
+  transition: background-color .12s ease, color .12s ease;
+}
+.rgn-act:hover { background: var(--rg-hover); color: var(--rg-t1); }
+.rgn-act > svg { flex-shrink: 0; }
+.rgn-act.is-on { color: var(--rg-t1); }
+.rgn-act.is-sun > svg { color: var(--rgn-star); }
+.rgn-act.is-late, .rgn-act.is-late:hover { color: var(--rg-neg); }
+.rgn-act-row .rg-iconbtn { width: 28px; height: 28px; margin-right: 6px; }
+.rgn-pick { display: flex; align-items: center; gap: 8px; padding: 2px 12px 10px 37px; }
+.rgn-pick .rg-input { width: auto; height: 36px; }
+.rgn-textarea { height: auto; min-height: 110px; padding: 11px 14px; line-height: 1.55; resize: vertical; }
+.rgn-del:hover { color: var(--rg-neg); background: color-mix(in srgb, var(--rg-neg) 10%, transparent); }
+.rgn-detail-foot .rg-btn { height: 30px; padding: 0 12px; font-size: 12.5px; }
+
+/* ══ MOBILE (≤767px) ══ */
+/* Top bar cukup satu tombol → sebaris dengan judul (bukan baris sendiri seperti halaman lain) */
+.rg.is-mobile.rgn .rg-top { flex-direction: row; align-items: center; }
+.rg.is-mobile.rgn .rg-top-title { flex: 1; min-width: 0; }
+.rg.is-mobile .rgn-body { padding: 16px; }
+.rg.is-mobile .rgn-side { flex: 1; width: 100%; gap: 12px; }
+.rg.is-mobile .rgn-note-act { opacity: 1; }
+.rg.is-mobile .rgn-step .rgn-step-x { opacity: 1; }
+.rg.is-mobile .rgn-doc-head { padding: 16px 16px 10px; }
+.rg.is-mobile .rgn-rule { margin: 0 16px; }
+.rg.is-mobile .wd-note-editor.rgn-editor-body { padding: 14px 16px 24px; }
+.rg.is-mobile .rgn-detail-scroll { padding: 16px; }
+.rgn-back { width: 36px; height: 36px; }

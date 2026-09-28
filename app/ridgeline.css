@@ -223,6 +223,8 @@ html[data-theme="dark"] .rg {
 .rg-pill.is-primary { background: var(--rg-t1); border-color: var(--rg-t1); color: var(--rg-well); }
 .rg-pill.is-primary:hover { background: var(--rg-t1); filter: brightness(.9); }
 .rg-pill.is-primary > svg { color: inherit; }
+/* Pil filter yang sedang aktif = garis lebih tegas (netral, bukan aksen) — Leads List, Maps */
+.rg-pill.is-set { border-color: var(--rg-t3); }
 .rg-caret { transition: transform .18s ease; }
 .rg-pill[aria-expanded="true"] .rg-caret { transform: rotate(180deg); }
 .rg-date-preset { color: var(--rg-t2); }

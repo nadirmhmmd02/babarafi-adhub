@@ -58,7 +58,6 @@
 .rgll-search button:hover { color: var(--rg-t1); background: var(--rg-hover); }
 
 /* Pil filter aktif = garis lebih tegas (netral, bukan aksen) · nonaktif = abu-abu + not-allowed */
-.rg-pill.is-set { border-color: var(--rg-t3); }
 .rg-pill.is-off, .rg-pill.is-off:hover { opacity: .5; cursor: not-allowed; background: var(--rg-pill); }
 .rgll-pill-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 

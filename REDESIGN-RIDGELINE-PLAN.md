@@ -1,6 +1,6 @@
 # REDESAIN 2 — GAYA "RIDGELINE" (Dashboard Ads Hub + Sidebar)
 
-Status: **🔄 DILANJUTKAN 28 Sep 2026 (ronde 7 = Notes, ronde 8 = Outlet Maps + Leads Analytics, ronde 9 = Login) — preview LOKAL, BELUM LIVE.** Semua kode ada di branch lokal `redesign/dashboard-ridgeline` (tidak di-push; web live & branch `main` tidak tersentuh).
+Status: **✅ LIVE 28 Sep 2026** — branch `redesign/dashboard-ridgeline` di-merge ke `main` setelah scaffolding PREVIEW-ONLY (data dummy, panel preview, /preview-login) dibuang. Backup versi sebelumnya: folder `Desktop\dashboard-ads-backup-1` + tag `backup-1-sebelum-ridgeline`. Belum ikut: menu HP (`MobileNav`). Bagian 0 & 7 di bawah = arsip cara kerja preview (sudah tidak berlaku).
 Sumber: sesi Claude Code 27 Sep 2026 — critique UI (skill impeccable) → referensi baru dari Nadir → preview lokal ronde 1 (Dashboard) & ronde 2 (data dummy + Sidebar + eksplorasi warna). **Ronde 3 (28 Sep 2026)** — 5 permintaan Nadir dari screenshot, lihat Bagian 11. **Ronde 4 (28 Sep 2026)** — semua keputusan dijawab + seluruh halaman Ads Hub & laporan Export diredesain, lihat Bagian 12.
 
 ---
@@ -146,12 +146,12 @@ SEMUA SUDAH DIJAWAB NADIR (28 Sep 2026):
 - Yang DIPERTAHANKAN: penjaga `fetchToken` di `fetchData` Dashboard, Campaigns & Analytics (respons lama tidak menimpa hasil baru; di Analytics baru ditambahkan 28 Sep 2026).
 
 ## 8. CHECKLIST SEBELUM LIVE
-- [ ] Keputusan Bagian 6 dijawab & diterapkan
-- [ ] Item Bagian 7 dibuang, `npm run build` lolos
+- [x] Keputusan Bagian 6 dijawab & diterapkan
+- [x] Item Bagian 7 dibuang, `npm run build` lolos (28 Sep 2026)
 - [ ] Finish review impeccable + tulis `DESIGN.md` (sengaja ditunda sampai arah disetujui)
-- [ ] Cek live dengan data asli: gelap/terang, HP, sidebar buka/tutup, halaman lain
-- [ ] Merge ke `main` → push → cek deploy Vercel
-- [ ] Update CLAUDE.md (struktur file, aturan warna/font baru)
+- [x] Cek dengan data asli di localhost sebelum merge (28 Sep 2026: semua halaman admin) — cek HP & role lain di live oleh Nadir
+- [x] Merge ke `main` → push → cek deploy Vercel (28 Sep 2026)
+- [x] Update CLAUDE.md (struktur file, aturan warna/font baru)
 
 ## 9. CATATAN LAIN DARI SESI INI
 - 🐞 **Bug production terpisah**: peta dasar Outlet Maps rusak — tile CARTO sekarang mengirim gambar "API KEY REQUIRED" (terverifikasi 27 Sep 2026). Belum diperbaiki.

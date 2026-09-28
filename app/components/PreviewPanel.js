@@ -10,7 +10,8 @@
    Posisi buka/tutup panel disimpan di localStorage supaya tetap saat refresh. */
 
 import { useState, useEffect } from 'react';
-import { FlaskConical, Minus } from 'lucide-react';
+import Link from 'next/link';
+import { FlaskConical, Minus, LogIn } from 'lucide-react';
 import { useDemoMode, setDemoMode } from './demoMode';
 
 export default function PreviewPanel({ note }) {
@@ -78,6 +79,14 @@ export default function PreviewPanel({ note }) {
       <div style={{ padding: '8px 10px 6px', fontSize: 11.5, lineHeight: 1.45, color: 'var(--rg-t2)' }}>
         {demo ? (note || 'Applies to Dashboard, Campaigns, Calendar and Analytics. Nothing is sent to Meta or saved.') : 'Turn on demo data to see every panel filled.'}
       </div>
+      {/* Pratinjau halaman login (redesain) tanpa perlu logout */}
+      <Link href="/preview-login" style={{
+        display: 'flex', alignItems: 'center', gap: 8, margin: '2px 4px 4px', padding: '9px 10px', borderRadius: 12,
+        fontSize: 12.5, color: 'var(--rg-t1)', textDecoration: 'none', background: 'var(--rg-well)', border: '1px solid var(--rg-well-line)',
+      }}>
+        <LogIn size={14} color="var(--rg-t2)" />View login page
+        <span style={{ marginLeft: 'auto', color: 'var(--rg-t3)' }}>→</span>
+      </Link>
     </div>
   );
 }

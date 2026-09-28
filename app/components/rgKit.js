@@ -4,10 +4,13 @@
    RG KIT — potongan bersama halaman Ads Hub redesain "Ridgeline"
    (Dashboard, Campaigns, Analytics & Insights). Styling di app/ridgeline.css.
    Satu sumber untuk: preset → rentang tanggal nyata, format rentang pendek,
-   delta ber-ikon bulat, ikon (i) definisi, dan pil filter tanggal.
+   delta ber-ikon bulat, ikon (i) definisi, pil filter tanggal, periode pembanding
+   (previousRange) dan sparkline kartu KPI (KpiSpark — Dashboard Ads Hub & Leads Hub).
    ───────────────────────────────────────────────────────────── */
 
+import { useState, useRef, useEffect, useId } from 'react';
 import { ArrowUp, ArrowDown, Info, Calendar, ChevronDown } from 'lucide-react';
+import { monotonePath } from './AreaChart';
 
 export const ID  = 'id-ID';
 export const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -112,4 +115,84 @@ export function DatePill({ open, onToggle, isMobile, isCustom, presetLabel, mobi
       {open && children}
     </div>
   );
+}
+
+/* Periode pembanding — SALINAN previousRange() di app/api/meta/route.js (aturan Nadir
+   2 Sep 2026): N bulan kalender penuh → N bulan tepat sebelumnya; bulan berjalan →
+   tanggal yang sama bulan lalu; selain itu → periode sama panjang tepat sebelumnya.
+   Dipakai Dashboard Leads Hub (delta vs periode sebelumnya) — jaga sinkron. */
+export function previousRange(since, until) {
+  const P = s => new Date(s + 'T00:00:00Z');
+  const Y = d => d.toISOString().slice(0, 10);
+  const s = P(since), u = P(until);
+  if (s.getUTCDate() === 1 && u >= s) {
+    const months      = (u.getUTCFullYear() - s.getUTCFullYear()) * 12 + (u.getUTCMonth() - s.getUTCMonth()) + 1;
+    const lastOfUntil = new Date(Date.UTC(u.getUTCFullYear(), u.getUTCMonth() + 1, 0)).getUTCDate();
+    const prevUntilD  = new Date(Date.UTC(s.getUTCFullYear(), s.getUTCMonth(), 0));
+    if (u.getUTCDate() === lastOfUntil) {
+      return { since: Y(new Date(Date.UTC(s.getUTCFullYear(), s.getUTCMonth() - months, 1))), until: Y(prevUntilD) };
+    }
+    if (months === 1) {
+      const prevSinceD = new Date(Date.UTC(s.getUTCFullYear(), s.getUTCMonth() - 1, 1));
+      const day        = Math.min(u.getUTCDate(), prevUntilD.getUTCDate());
+      return { since: Y(prevSinceD), until: Y(new Date(Date.UTC(prevSinceD.getUTCFullYear(), prevSinceD.getUTCMonth(), day))) };
+    }
+  }
+  const len = Math.round((u - s) / 86400000) + 1;
+  const pu = new Date(s); pu.setUTCDate(pu.getUTCDate() - 1);
+  const ps = new Date(pu); ps.setUTCDate(ps.getUTCDate() - (len - 1));
+  return { since: Y(ps), until: Y(pu) };
+}
+
+/* ─── Sparkline kartu KPI: kurva + titik akhir bercincin + garis jatuh putus-putus ───
+   Revisi 28 Sep 2026: dulu digambar dalam persen (viewBox 0–100) di pita ±29px, titik
+   akhir yang rendah terpotong tepi bawah panel. Sekarang diukur dalam piksel asli
+   (ResizeObserver): garis berada di pita SPARK_T dari atas s.d. SPARK_B dari bawah,
+   titik terakhir berhenti SPARK_R dari tepi kanan → cincin titik selalu utuh. */
+const SPARK_T = 10, SPARK_B = 16, SPARK_R = 18;
+export function KpiSpark({ data }) {
+  const gid = useId().replace(/:/g, '');
+  const ref = useRef(null);
+  const [box, setBox] = useState({ w: 0, h: 0 });
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([e]) => {
+      setBox({ w: Math.round(e.contentRect.width), h: Math.round(e.contentRect.height) });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const vals = (data || []).filter(v => v != null && v >= 0);
+  const { w, h } = box;
+  let body = null;
+  if (vals.length >= 2 && w > SPARK_R && h > SPARK_T + SPARK_B) {
+    const max = Math.max(...vals), min = Math.min(...vals);
+    const band = h - SPARK_T - SPARK_B;
+    const pts = vals.map((v, i) => ({
+      x: (i / (vals.length - 1)) * (w - SPARK_R),
+      // Nilai datar (semua sama) → garis di tengah pita, bukan menempel di dasar
+      y: SPARK_T + (max > min ? (1 - (v - min) / (max - min)) * band : band / 2),
+    }));
+    const d = monotonePath(pts);
+    const last = pts[pts.length - 1];
+    body = (<>
+      <svg width={w} height={h}>
+        <defs>
+          <linearGradient id={`${gid}-g`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" style={{ stopColor: 'var(--rg-tone)', stopOpacity: 0.26 }} />
+            <stop offset="100%" style={{ stopColor: 'var(--rg-tone)', stopOpacity: 0 }} />
+          </linearGradient>
+        </defs>
+        <path d={`${d}L${last.x.toFixed(1)},${h}L0,${h}Z`} fill={`url(#${gid}-g)`} className="rg-area" />
+        <path d={d} fill="none" pathLength="1" strokeDasharray="1"
+          className="rg-spark-line"
+          style={{ stroke: 'var(--rg-tone)', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round' }} />
+      </svg>
+      <span className="rg-spark-drop" style={{ left: last.x, top: last.y }} />
+      <span className="rg-spark-dot" style={{ left: last.x, top: last.y }} />
+    </>);
+  }
+  return <div ref={ref} className="rg-spark" aria-hidden="true">{body}</div>;
 }

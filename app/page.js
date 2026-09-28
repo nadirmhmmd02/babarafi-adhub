@@ -23,7 +23,7 @@ import {
   ArrowRight, ArrowUpRight,
   ChartPie, Gauge, Trophy, TriangleAlert,
 } from 'lucide-react';
-import { ID, presetToRange, fmtRangeShort, fmtClock, toneOf, Delta, InfoTip, DatePill } from './components/rgKit';
+import { ID, presetToRange, fmtRangeShort, fmtClock, toneOf, Delta, InfoTip, DatePill, KpiSpark } from './components/rgKit';
 import CountUp from './components/CountUp';
 import AreaChart, { monotonePath } from './components/AreaChart';
 import CompareModal from './components/CompareModal';
@@ -40,7 +40,6 @@ import { TYPE } from './components/typography';
 import { dashboardFontVars } from './components/dashboardFonts';
 import { supabase, authFetch } from './supabase';
 /* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */
-import { Download } from 'lucide-react';
 import PreviewPanel from './components/PreviewPanel';
 import { buildDemoDashboard } from './components/demoDashboard';
 import { DEMO_ALLOWED, useDemoMode, DemoChip, demoDelay } from './components/demoMode';
@@ -220,58 +219,7 @@ function buildChartData(daily, range) {
 
 /* ─── Arah perubahan → nada (toneOf), Delta & InfoTip: rgKit.js ─── */
 
-/* ─── Sparkline kartu KPI: kurva + titik akhir bercincin + garis jatuh putus-putus ───
-   Revisi 28 Sep 2026: dulu digambar dalam persen (viewBox 0–100) di pita ±29px, titik
-   akhir yang rendah terpotong tepi bawah panel. Sekarang diukur dalam piksel asli
-   (ResizeObserver): garis berada di pita SPARK_T dari atas s.d. SPARK_B dari bawah,
-   titik terakhir berhenti SPARK_R dari tepi kanan → cincin titik selalu utuh. */
-const SPARK_T = 10, SPARK_B = 16, SPARK_R = 18;
-function KpiSpark({ data }) {
-  const gid = useId().replace(/:/g, '');
-  const ref = useRef(null);
-  const [box, setBox] = useState({ w: 0, h: 0 });
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const ro = new ResizeObserver(([e]) => {
-      setBox({ w: Math.round(e.contentRect.width), h: Math.round(e.contentRect.height) });
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
-  const vals = (data || []).filter(v => v != null && v >= 0);
-  const { w, h } = box;
-  let body = null;
-  if (vals.length >= 2 && w > SPARK_R && h > SPARK_T + SPARK_B) {
-    const max = Math.max(...vals), min = Math.min(...vals);
-    const band = h - SPARK_T - SPARK_B;
-    const pts = vals.map((v, i) => ({
-      x: (i / (vals.length - 1)) * (w - SPARK_R),
-      // Nilai datar (semua sama) → garis di tengah pita, bukan menempel di dasar
-      y: SPARK_T + (max > min ? (1 - (v - min) / (max - min)) * band : band / 2),
-    }));
-    const d = monotonePath(pts);
-    const last = pts[pts.length - 1];
-    body = (<>
-      <svg width={w} height={h}>
-        <defs>
-          <linearGradient id={`${gid}-g`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" style={{ stopColor: 'var(--rg-tone)', stopOpacity: 0.26 }} />
-            <stop offset="100%" style={{ stopColor: 'var(--rg-tone)', stopOpacity: 0 }} />
-          </linearGradient>
-        </defs>
-        <path d={`${d}L${last.x.toFixed(1)},${h}L0,${h}Z`} fill={`url(#${gid}-g)`} className="rg-area" />
-        <path d={d} fill="none" pathLength="1" strokeDasharray="1"
-          className="rg-spark-line"
-          style={{ stroke: 'var(--rg-tone)', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round' }} />
-      </svg>
-      <span className="rg-spark-drop" style={{ left: last.x, top: last.y }} />
-      <span className="rg-spark-dot" style={{ left: last.x, top: last.y }} />
-    </>);
-  }
-  return <div ref={ref} className="rg-spark" aria-hidden="true">{body}</div>;
-}
+/* ─── Sparkline kartu KPI (KpiSpark): rgKit.js — dipakai juga Dashboard Leads Hub ─── */
 
 /* ─── Kartu KPI (anatomi kartu proyek referensi: header · panel bergradasi · footer) ─── */
 function KpiCard({ label, icon: Icon, info, tipAlign, unit, value, display, pct, good, spark, prevLabel, prevDisplay, onOpen, openLabel, delay = 0 }) {
@@ -1096,16 +1044,9 @@ export default function DashboardPage() {
               aria-label="Compare two periods" onClick={() => setShowCompare(true)}>
               <GitCompareArrows size={15} />
             </button>
-            {/* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ (saat data dummy: Export dimatikan
-                supaya laporan berisi angka rekaan tidak sampai tersebar) */}
-            {isAdmin && demo && (
-              <button type="button" className="rg-pill rg-round" disabled
-                title="Export is disabled while demo data is on" aria-label="Export report (disabled while demo data is on)">
-                <Download size={15} />
-              </button>
-            )}
-            {isAdmin && !demo && <ExportMenu {...exportProps} pill iconOnly />}
-            {/* ═══ END PREVIEW-ONLY ═══ */}
+            {/* Export tetap jalan saat Demo data (permintaan Nadir 28 Sep 2026) — laporan dari data
+                dummy, nama file ber-"DEMO" (lihat PREVIEW-ONLY di ExportMenu.js) */}
+            {isAdmin && <ExportMenu {...exportProps} pill iconOnly />}
             <span className="rg-vsep" aria-hidden="true" />
             <button type="button" className="rg-pill rg-round" title="Refresh data" aria-label="Refresh data"
               onClick={refresh} disabled={loading}>
@@ -1119,8 +1060,7 @@ export default function DashboardPage() {
               Suggestions → Theme toggle → Refresh → Export */}
           {isMobile && topbarSlot && createPortal(
             <>
-              {/* ═══ PREVIEW-ONLY: `!demo` — JANGAN DI-PUSH ═══ */}
-              {isAdmin && !demo && <ExportMenu {...exportProps} compact />}
+              {isAdmin && <ExportMenu {...exportProps} compact />}
               {refreshButtonMobile}
             </>,
             topbarSlot
@@ -1219,7 +1159,7 @@ export default function DashboardPage() {
 
       {/* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */}
       {DEMO_ALLOWED && isAdmin && !isMobile && (
-        <PreviewPanel note="Applies to every Ads Hub page. Export is disabled while demo data is on." />
+        <PreviewPanel note="Applies to every Ads Hub page. Exported reports use the demo numbers (file name starts with DEMO)." />
       )}
       {/* ═══ END PREVIEW-ONLY ═══ */}
     </div>

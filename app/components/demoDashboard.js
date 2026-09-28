@@ -6,6 +6,7 @@
    - buildDemoCampaigns      → bentuk respons /api/meta (default — halaman Campaigns)
    - buildDemoCampaignDetail → bentuk respons mode=campaign_detail (popup detail campaign)
    - demoCalendar*           → baris tabel Supabase `campaigns` (halaman Calendar), CRUD di memori
+   - buildDemoLeads          → baris tabel Supabase `leads` + spend konversi (Dashboard Leads Hub)
    Angka dihitung PER HARI per campaign (tarif harian × pola mingguan × promo × faktor
    bulan × acak deterministik), lalu dijumlah sesuai rentang → rentang apa pun (termasuk
    periode pembanding & Compare) konsisten satu sama lain.
@@ -435,4 +436,59 @@ export function demoCalendarSave(payload, id) {
 }
 export function demoCalendarDelete(id) { calStore = store().filter(r => r.id !== id); }
 export function demoCalendarPatch(id, patch) { calStore = store().map(r => r.id === id ? { ...r, ...patch } : r); }
+/* ═══ Leads Hub — baris tabel `leads` (approved) + spend konversi + isi Black Box ═══
+   Lead per hari mengikuti pola mingguan & faktor bulan yang sama dengan Ads Hub (bulan ini
+   naik vs bulan lalu; bulan lalu "bulan berat"). Status bergantung umur lead: lead baru
+   kebanyakan belum diproses; Deal hanya dari lead ≥10 hari → "Last 7 days" = baris uang
+   dormant (tanpa closing), "This month" = baris uang menyala. Spend = spend campaign
+   PROSPEK/KONVERSI dummy periode yang sama (rumus sama dgn /api/leads?mode=spend). */
+const LEAD_SALES = [['Akmel', 0.38], ['Hendra', 0.34], ['Dedik', 0.28]];
+const DEAL_SIZES = [35000000, 45000000, 55000000, 75000000];
+
+function pickW(r, list) {
+  let x = r;
+  for (const [v, w] of list) { if (x < w) return v; x -= w; }
+  return list[list.length - 1][0];
+}
+
+function leadRows(since, until, today) {
+  const rows = [];
+  for (const ds of datesOf(since, until, today)) {
+    const rnd = seeded(`lead|${ds}`);
+    const d = parse(ds);
+    const fx = monthFx(monthOffset(ds, today));
+    const n = Math.floor(7.2 * DOW[d.getUTCDay()] * fx.leads * (0.75 + rnd() * 0.5) + rnd());
+    const age = daysBetween(ds, today) - 1;
+    for (let i = 0; i < n; i++) {
+      const r = rnd();
+      const status = age < 2
+        ? pickW(r, [['No Status', 0.7], ['Cold', 0.22], ['Warm', 0.08]])
+        : age < 10
+          ? pickW(r, [['No Status', 0.35], ['Cold', 0.3], ['Warm', 0.2], ['Hot', 0.15]])
+          : pickW(r, [['No Status', 0.24], ['Cold', 0.31], ['Warm', 0.22], ['Hot', 0.17], ['Deal', 0.06]]);
+      const fuChance = age < 1 ? 0.35 : age < 3 ? 0.7 : 0.9;
+      const followed_up = status !== 'No Status' || rnd() < fuChance * 0.6;
+      const sales = age < 2 && rnd() < 0.45 ? null : pickW(rnd(), LEAD_SALES);
+      const kategori_promo = rnd() < 0.8 ? 'Autopilot' : null;
+      const hh = String(8 + Math.floor(rnd() * 14)).padStart(2, '0');
+      const mm = String(Math.floor(rnd() * 60)).padStart(2, '0');
+      rows.push({
+        status, followed_up, sales, kategori_promo,
+        closing_amount: status === 'Deal' ? DEAL_SIZES[Math.floor(rnd() * DEAL_SIZES.length)] : null,
+        created_at: `${ds}T${hh}:${mm}:00`,
+      });
+    }
+  }
+  return rows;
+}
+
+export function buildDemoLeads({ since, until }) {
+  const today = localToday();
+  const dash = buildDemoDashboard({ since, until });
+  const spend = dash.campaigns.reduce((s, c) => {
+    const n = (c.name || '').toUpperCase();
+    return (n.includes('PROSPEK') || n.includes('KONVERSI')) ? s + parseFloat(c.insights?.data?.[0]?.spend || 0) : s;
+  }, 0);
+  return { rows: leadRows(since, until, today), spend, inboxCount: 7 };
+}
 /* ═══ END PREVIEW-ONLY ═══ */

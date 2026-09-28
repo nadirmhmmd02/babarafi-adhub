@@ -1,48 +1,64 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+/* ══ LEADS HUB — DASHBOARD, redesain "Ridgeline" (PREVIEW LOKAL, 28 Sep 2026) ══════
+   Nuansa sama dengan Dashboard Ads Hub: top bar judul + konteks | pil filter & aksi,
+   kartu cangkang + panel dalam, angka Geist Mono penuh, delta ber-ikon bulat, warna
+   hanya untuk data (status, sales) — pilihan/aktif netral. Skin: app/ridgeline.css +
+   anatomi KPI dari app/dashboard-ridgeline.css + khusus Leads: app/leads-ridgeline.css.
+   SUSUNAN INFORMASI = keputusan Nadir (G1, Jul 2026), tidak diubah:
+     KPI pair (Total Leads + Follow-up) → Leads by Status (5 sel, tanpa donut) →
+     Leads by Sales + By Category → baris uang DORMANT (Total Closing + Cost & ROI,
+     abu-abu garis putus-putus s.d. ada Deal; saat ada Deal naik tepat di bawah status).
+   LOGIKA DATA SAMA dgn v3.1: leads approved cohort by created_at, filter kategori,
+   spend konversi via /api/leads?mode=spend, ROAS = closing ÷ spend,
+   ROI = (closing − spend) ÷ spend, Black Box = lead unverified (admin).
+   BARU (boleh dibuang kalau Nadir tidak suka): delta vs periode sebelumnya di 2 KPI
+   (query leads periode pembanding, aturan periode sama dgn Ads Hub — previousRange),
+   penanda "prev" di meter follow-up, rata-rata nilai per deal.
+   Dedup metrik: Total Closing & ROAS cukup di kartu Total Closing (dulu dobel di Cost & ROI).
+   ══════════════════════════════════════════════════════════════════════════ */
+
+import '../dashboard-ridgeline.css';
+import '../leads-ridgeline.css';
+import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import {
-  Calendar, ChevronDown, RefreshCw, Users, PhoneCall,
-  Wallet, CircleAlert, Inbox,
-} from 'lucide-react';
 import Link from 'next/link';
+import {
+  RefreshCw, Users, PhoneCall, ListChecks, Tags, Wallet, Calculator,
+  Inbox, ArrowUpRight, ArrowRight, ArrowUp, ArrowDown, Check, ChevronDown, TriangleAlert,
+} from 'lucide-react';
 import { useAuth } from '../components/AuthContext';
 import { supabase, authFetch } from '../supabase';
 import useIsMobile from '../components/useIsMobile';
 import ThemeToggle from '../components/ThemeToggle';
 import DateFilterPopup from '../components/DateFilterPopup';
-import Dropdown from '../components/Dropdown';
-import { STATUSES, STATUS_COLOR, SALES, SALES_COLOR, CATEGORIES, kategoriLabel } from '../components/leadsConfig';
-import { useLeadsFilter, DATE_PRESETS_DASHBOARD } from '../components/DateFilterContext';
-import { TYPE } from '../components/typography';
 import CountUp from '../components/CountUp';
+import { STATUSES, SALES, CATEGORIES, kategoriLabel } from '../components/leadsConfig';
+import { useLeadsFilter, DATE_PRESETS_DASHBOARD } from '../components/DateFilterContext';
+import { dashboardFontVars } from '../components/dashboardFonts';
+import {
+  fmtRangeShort, fmtClock, fmtPct1, toneOf, Delta, InfoTip, DatePill, KpiSpark, previousRange,
+} from '../components/rgKit';
+/* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */
+import PreviewPanel from '../components/PreviewPanel';
+import { buildDemoLeads } from '../components/demoDashboard';
+import { DEMO_ALLOWED, useDemoMode, DemoChip, demoDelay } from '../components/demoMode';
+/* ═══ END PREVIEW-ONLY ═══ */
 
-/* ─────────────────────────────────────────────────────────────
-   LEADS HUB — DASHBOARD (v3.1, redesain G1 "Forest Panel")
-   Logika data SAMA dgn v3.0 (MASTER PLAN 3.3): leads per periode,
-   breakdown status, follow-up compliance, spend konversi, CPD,
-   ROI (atribusi cohort). Desktop = fit 1 layar: KPI pair →
-   panel forest status → Leads by Sales + By Category (compact) →
-   baris uang DORMANT (abu-abu s.d. ada Deal). Mobile tetap
-   layout lama.
-   ───────────────────────────────────────────────────────────── */
+/* ─── Format angka — PENUH gaya Indonesia (sama dengan Dashboard Ads Hub) ─── */
+const fmtInt = v => Math.round(v || 0).toLocaleString('id-ID');
+const fmtRp  = v => 'Rp ' + fmtInt(v);
+const fmtPct0 = v => fmtInt(v) + '%';
+const fmtX = v => v.toLocaleString('id-ID', { minimumFractionDigits: v < 10 ? 2 : 1, maximumFractionDigits: v < 10 ? 2 : 1 }) + 'x';
+const plural = (n, w) => `${fmtInt(n)} ${w}${n === 1 ? '' : 's'}`;
 
-function fmtRp(v) { return 'Rp ' + Math.round(v || 0).toLocaleString('id-ID'); }
-function fmtPct(v) { return (v || 0).toFixed(0) + '%'; }
-
-/* Warna status khusus panel forest (bg gelap tetap kontras dua tema).
-   Deal pakai lime biar jadi klimaks panel; di luar panel tetap STATUS_COLOR. */
-const PANEL_STATUS_COLOR = {
-  'No Status': '#8E9C92',
-  Cold: '#3B82F6',
-  Warm: '#F59E0B',
-  Hot: '#EF4444',
-  Deal: '#C8F169',
+/* Warna status & sales = token skin (app/leads-ridgeline.css) */
+const STATUS_VAR = {
+  'No Status': 'var(--lh-none)', Cold: 'var(--lh-cold)', Warm: 'var(--lh-warm)', Hot: 'var(--lh-hot)', Deal: 'var(--lh-deal)',
 };
-const FOREST = '#14382A';
+const SALES_VAR = { Akmel: 'var(--lh-akmel)', Hendra: 'var(--lh-hendra)', Dedik: 'var(--lh-dedik)' };
 
-/* preset → {since, until} (versi client; sama logikanya dgn /api/meta) */
+/* preset → {since, until} (versi client; SAMA dengan v3.1 — logika query tidak diubah) */
 function ymd(d) { return d.toISOString().slice(0, 10); }
 function presetToRange(preset) {
   const now = new Date();
@@ -64,6 +80,327 @@ function presetToRange(preset) {
   }
 }
 
+/* Ringkas satu kumpulan lead (rumus v3.1, tidak diubah) */
+function summarize(leads, range) {
+  const total = leads.length;
+  const fu = leads.filter(l => l.followed_up).length;
+  const statusCounts = Object.fromEntries(STATUSES.map(s => [s, 0]));
+  const byKategori = Object.fromEntries([...CATEGORIES.map(c => c.value), '—'].map(k => [k, 0]));
+  const bySales = Object.fromEntries([...SALES, '—'].map(s => [s, { leads: 0, deals: 0 }]));
+  let closing = 0;
+  for (const l of leads) {
+    statusCounts[l.status] = (statusCounts[l.status] || 0) + 1;
+    byKategori[l.kategori_promo || '—'] = (byKategori[l.kategori_promo || '—'] || 0) + 1;
+    const sk = l.sales && bySales[l.sales] ? l.sales : '—';
+    bySales[sk].leads += 1;
+    if (l.status === 'Deal') bySales[sk].deals += 1;
+    if (l.status === 'Deal' && l.closing_amount) closing += parseFloat(l.closing_amount);
+  }
+  // Lead per hari dalam rentang (sparkline Total Leads)
+  const daily = [];
+  if (range) {
+    const dayCounts = {};
+    for (const l of leads) {
+      const day = (l.created_at || '').slice(0, 10);
+      if (day) dayCounts[day] = (dayCounts[day] || 0) + 1;
+    }
+    const end = new Date(range.until + 'T00:00:00');
+    for (let dt = new Date(range.since + 'T00:00:00'); dt <= end; dt.setDate(dt.getDate() + 1)) {
+      daily.push(dayCounts[ymd(dt)] || 0);
+    }
+  }
+  return {
+    total, fuCount: fu, fuRate: total ? (fu / total) * 100 : 0,
+    statusCounts, byKategori, bySales, deals: statusCounts.Deal || 0, closing, daily,
+  };
+}
+
+/* ─── Delta dalam poin persen (follow-up rate: 58% → 72% = naik 14 pts) ─── */
+function DeltaPts({ pts }) {
+  if (pts == null || !isFinite(pts)) return <span className="rg-delta is-na" title="No leads in the comparison period">—</span>;
+  const tone = Math.abs(pts) < 0.05 ? 'neu' : pts > 0 ? 'pos' : 'neg';
+  const Arrow = pts >= 0 ? ArrowUp : ArrowDown;
+  return (
+    <span className={`rg-delta is-${tone}`}>
+      <span className="rg-delta-ico" aria-hidden="true"><Arrow size={10} strokeWidth={3} /></span>
+      <span className="rg-sr">{pts >= 0 ? 'Up' : 'Down'} </span>
+      {Math.abs(pts).toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} pts
+    </span>
+  );
+}
+
+/* ─── Kartu KPI (anatomi sama dengan Dashboard Ads Hub: kepala · panel bergradasi · kaki) ─── */
+function LeadsKpi({ label, icon: Icon, info, tipAlign, tone, footLabel, footVal, delay = 0, children }) {
+  return (
+    <div className="rg-card rg-rise" style={{ animationDelay: `${delay}ms` }}>
+      <div className="rg-head">
+        <span className="rg-head-ico"><Icon size={15} /></span>
+        <span className="rg-title">{label}</span>
+        <InfoTip text={info} align={tipAlign} />
+      </div>
+      <div className={`rg-well rg-kpi-well rg-tone-${tone === 'na' ? 'neu' : tone}`}>{children}</div>
+      <div className="rg-foot">
+        <span>{footLabel}</span>
+        <span className="rg-mono rg-foot-val">{footVal}</span>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Meter "barcode" follow-up + penanda rate periode lalu ─── */
+const TICKS = 60;
+function FollowTicks({ rate, prevRate }) {
+  const on = Math.round((Math.max(0, Math.min(rate, 100)) / 100) * TICKS);
+  const p = prevRate != null ? Math.max(0, Math.min(prevRate, 100)) : null;
+  // Label "prev" jangan keluar panel di ujung kiri/kanan
+  const shift = p == null ? 0 : p < 12 ? 0 : p > 88 ? -100 : -50;
+  return (
+    <div className="rgl-ticks" role="img" aria-label={`${Math.round(rate)}% of leads followed up`}>
+      {Array.from({ length: TICKS }).map((_, i) => (
+        <i key={i} className={i < on ? 'is-on' : undefined} style={{ animationDelay: `${200 + i * 10}ms` }} />
+      ))}
+      {p != null && (
+        <span className="rgl-ticks-prev" style={{ left: `${p}%` }}>
+          <span style={{ transform: `translateX(${shift}%)` }}>prev {fmtPct0(p)}</span>
+        </span>
+      )}
+    </div>
+  );
+}
+
+/* ─── Leads by Status: 5 sel sejajar (tanpa donut — keputusan Nadir Jul 2026) ─── */
+function StatusCard({ d, delay = 0 }) {
+  return (
+    <div className="rg-card rg-rise" style={{ animationDelay: `${delay}ms` }}>
+      <div className="rg-head">
+        <span className="rg-head-ico"><ListChecks size={15} /></span>
+        <span className="rg-title">Leads by Status</span>
+        <span className="rg-meta rgl-meta-long">Where this period’s leads stand now</span>
+        <Link href="/leads/list" className="rg-iconbtn" title="Open Leads List" aria-label="Open Leads List">
+          <ArrowUpRight size={15} />
+        </Link>
+      </div>
+      <div className="rg-well rgl-status">
+        {STATUSES.map((s, i) => {
+          const n = d.statusCounts[s] || 0;
+          const pct = d.total ? (n / d.total) * 100 : 0;
+          return (
+            <div key={s} className="rgl-st">
+              <div className="rgl-st-name"><span className="rgl-dot" style={{ background: STATUS_VAR[s] }} />{s}</div>
+              <div className="rgl-st-num rg-mono"><CountUp value={n} display={fmtInt(n)} delay={delay + 120} /></div>
+              <div className="rgl-st-pct">{fmtPct0(pct)} of leads</div>
+              <div className="rgl-bar" aria-hidden="true">
+                <i style={{ width: `${pct}%`, minWidth: n ? 4 : 0, background: STATUS_VAR[s], animationDelay: `${delay + 200 + i * 60}ms` }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ─── Leads by Sales — pembagian lead, BUKAN performa (keputusan Nadir) ─── */
+function SalesCard({ d, delay = 0 }) {
+  const entries = [...SALES, '—'].filter(s => s !== '—' || (d.bySales['—']?.leads || 0) > 0);
+  const max = Math.max(...entries.map(s => d.bySales[s]?.leads || 0), 1);
+  return (
+    <div className="rg-card rg-rise" style={{ animationDelay: `${delay}ms` }}>
+      <div className="rg-head">
+        <span className="rg-head-ico"><Users size={15} /></span>
+        <span className="rg-title">Leads by Sales</span>
+        <span className="rg-meta rgl-meta-long">How leads are shared across the team</span>
+      </div>
+      <div className="rg-well rgl-list">
+        {d.total === 0 ? (
+          <div className="rg-empty">
+            <strong>No leads in this period</strong>
+            <span>Pick a wider date range to see how leads were assigned.</span>
+          </div>
+        ) : entries.map((s, i) => {
+          const row = d.bySales[s] || { leads: 0, deals: 0 };
+          const c = s === '—' ? 'var(--rg-other)' : SALES_VAR[s];
+          const pct = d.total ? (row.leads / d.total) * 100 : 0;
+          return (
+            <div key={s} className="rgl-sales">
+              <span className="rgl-avatar" style={{ '--c': c }} aria-hidden="true">{s === '—' ? '?' : s.charAt(0)}</span>
+              <div className="rgl-who">
+                <b>{s === '—' ? 'Unassigned' : s}</b>
+                <span>{fmtPct1(pct)} of leads{row.deals ? ` · ${plural(row.deals, 'deal')}` : ''}</span>
+              </div>
+              <div className="rgl-bar" aria-hidden="true">
+                <i style={{ width: `${(row.leads / max) * 100}%`, minWidth: row.leads ? 4 : 0, background: c, animationDelay: `${delay + 200 + i * 60}ms` }} />
+              </div>
+              <span className="rgl-count rg-mono">{fmtInt(row.leads)}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ─── By Category (terdeteksi dari nama campaign) ─── */
+function CategoryCard({ d, delay = 0 }) {
+  const keys = [...CATEGORIES.map(c => c.value), '—'].filter(k => k !== '—' || (d.byKategori['—'] || 0) > 0);
+  return (
+    <div className="rg-card rg-rise" style={{ animationDelay: `${delay}ms` }}>
+      <div className="rg-head">
+        <span className="rg-head-ico"><Tags size={15} /></span>
+        <span className="rg-title">By Category</span>
+        <span className="rg-meta rgl-meta-long">Detected from campaign name</span>
+      </div>
+      <div className="rg-well rgl-list">
+        {d.total === 0 ? (
+          <div className="rg-empty">
+            <strong>No leads in this period</strong>
+            <span>Categories appear once leads come in.</span>
+          </div>
+        ) : keys.map((k, i) => {
+          const n = d.byKategori[k] || 0;
+          const pct = d.total ? (n / d.total) * 100 : 0;
+          const c = k === '—' ? 'var(--rg-other)' : 'var(--rg-conv)';
+          return (
+            <div key={k} className="rgl-cat">
+              <span className="rgl-cat-name">{k === '—' ? 'Uncategorized' : kategoriLabel(k)}</span>
+              <span className="rgl-cat-vals rg-mono"><span>{fmtInt(n)}</span><span>{fmtPct0(pct)}</span></span>
+              <div className="rgl-bar" aria-hidden="true">
+                <i style={{ width: `${pct}%`, minWidth: n ? 4 : 0, background: c, animationDelay: `${delay + 200 + i * 60}ms` }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ─── Total Closing — cincin ROAS saat menyala; DORMANT saat belum ada Deal ─── */
+function ClosingCard({ d, dormant, delay = 0 }) {
+  const ringP = d.spend ? Math.min(d.roas / 4, 1) * 100 : 0;
+  return (
+    <div className={`rg-card rg-rise${dormant ? ' rgl-dormant' : ''}`} style={{ animationDelay: `${delay}ms` }}>
+      <div className="rg-head">
+        <span className="rg-head-ico"><Wallet size={15} /></span>
+        <span className="rg-title">Total Closing</span>
+        <span className={`rg-chip ${dormant ? 'is-muted' : 'is-pos'}`} style={{ marginLeft: 'auto', marginRight: 4 }}>
+          {plural(d.deals, 'deal')}
+        </span>
+      </div>
+      <div className="rg-well rgl-close">
+        {!dormant && (
+          <div className="rgl-ring" style={{ '--p': ringP }} title="ROAS = total closing ÷ conversion spend">
+            <div className="rgl-ring-in">
+              <span className="rgl-ring-val rg-mono">{d.spend ? fmtX(d.roas) : '—'}</span>
+              <span className="rgl-ring-lbl">ROAS</span>
+            </div>
+          </div>
+        )}
+        <div style={{ minWidth: 0 }}>
+          <div className="rgl-close-val rg-mono">
+            <span className="rg-unit">Rp</span>
+            <CountUp value={Math.round(d.closing)} display={fmtInt(d.closing)} delay={delay + 120} />
+          </div>
+          <div className="rgl-close-sub">
+            {dormant
+              ? 'No closing in this period yet — this card lights up when the first deal lands'
+              : `Avg. ${fmtRp(d.closing / d.deals)} per deal · counted by lead created date`}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Cost & ROI (atribusi cohort) ─── */
+function CostRoiCard({ d, dormant, delay = 0 }) {
+  const live = !!(d.spend && d.deals);
+  const cells = [
+    { label: 'Conversion spend', value: fmtRp(d.spend), note: 'Conversion campaigns',
+      info: 'Meta spend of Conversion campaigns (name contains PROSPEK or KONVERSI) in this period.' },
+    { label: 'Cost per deal', value: d.deals ? fmtRp(d.cpd) : '—', note: 'Spend ÷ deals',
+      info: 'Conversion spend divided by the number of deals from this period’s leads.' },
+    { label: 'ROI', value: live ? `${d.roi >= 0 ? '+' : '−'}${fmtInt(Math.abs(d.roi))}%` : '—',
+      tone: live ? (d.roi >= 0 ? 'is-pos' : 'is-neg') : '', note: '(Closing − spend) ÷ spend',
+      info: 'Return on conversion spend: (total closing − spend) ÷ spend.', align: 'end' },
+  ];
+  return (
+    <div className={`rg-card rg-rise${dormant ? ' rgl-dormant' : ''}`} style={{ animationDelay: `${delay}ms` }}>
+      <div className="rg-head">
+        <span className="rg-head-ico"><Calculator size={15} /></span>
+        <span className="rg-title">Cost &amp; ROI</span>
+        <span className="rg-meta">Cohort attribution</span>
+        <InfoTip align="end" text="Closings are counted in the period the lead came in (by created date), so they line up with that period’s spend." />
+      </div>
+      <div className="rg-well rgl-roi">
+        {cells.map(c => (
+          <div key={c.label} className="rgl-roi-cell">
+            <div className="rgl-roi-label"><span>{c.label}</span><InfoTip text={c.info} align={c.align} /></div>
+            <div className={`rgl-roi-val rg-mono ${c.tone || ''}`}>{c.value}</div>
+            <div className="rgl-roi-note">{c.note}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ─── Pil kategori promo (menu rata tengah thd tombol — lapisan posisi dipisah dari animasi) ─── */
+function CategoryPill({ value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    window.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onDown); window.removeEventListener('keydown', onKey); };
+  }, [open]);
+  const opts = [{ value: 'Semua', label: 'All categories' }, ...CATEGORIES.map(c => ({ value: c.value, label: c.label }))];
+  const cur = opts.find(o => o.value === value) || opts[0];
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button type="button" className="rg-pill" aria-expanded={open} aria-haspopup="menu" title="Lead category"
+        onClick={() => setOpen(o => !o)}>
+        <Tags size={15} />
+        <span>{cur.label}</span>
+        <ChevronDown size={14} className="rg-caret" />
+      </button>
+      {open && (
+        <div style={{ position: 'absolute', top: 46, left: '50%', transform: 'translateX(-50%)', zIndex: 50 }}>
+          <div className="rg-menu" role="menu" style={{ minWidth: 240 }}>
+            {opts.map(o => (
+              <button key={o.value} type="button" role="menuitemradio" aria-checked={o.value === value}
+                className={`rg-menu-item${o.value === value ? ' is-on' : ''}`}
+                onClick={() => { onChange(o.value); setOpen(false); }}>
+                {o.label}
+                {o.value === value && <Check size={14} className="rg-menu-check" />}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Skeleton muat pertama (refetch berikutnya: tampilan lama diredupkan) ─── */
+function SkelCard({ lines = 2 }) {
+  return (
+    <div className="rg-card">
+      <div className="rg-head"><span className="rg-skel" style={{ width: '32%', height: 11 }} /></div>
+      <div className="rg-well" style={{ flex: 1, padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <span className="rg-skel" style={{ width: '40%', height: 22 }} />
+        {Array.from({ length: lines }).map((_, i) => (
+          <span key={i} className="rg-skel" style={{ width: `${56 - i * 12}%`, height: 10 }} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ═══ MAIN ═══ */
 export default function LeadsDashboardPage() {
   const { role } = useAuth();
   const isMobile = useIsMobile();
@@ -71,9 +408,12 @@ export default function LeadsDashboardPage() {
 
   const [showDropdown, setShowDropdown] = useState(false);
   const [kategori, setKategori] = useState('Semua');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [data, setData] = useState(null); // { total, fuRate, statusCounts, deals, closing, spend, cpd, roi, byKategori, inboxCount, daily }
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState(null);
+  const [data, setData]         = useState(null);
+  const [updatedAt, setUpdatedAt] = useState(null);
+  // Penanda permintaan terakhir: respons lama (ganti filter cepat) tidak menimpa yang baru
+  const fetchToken = useRef(0);
 
   // Kalender popup (UI only)
   const _initCal = new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1);
@@ -82,11 +422,21 @@ export default function LeadsDashboardPage() {
   const [localSince, setLocalSince] = useState('');
   const [localUntil, setLocalUntil] = useState('');
 
-  // Slot top bar mobile (refresh via portal, pola Reports)
+  // Slot top bar mobile (refresh via portal, pola halaman lain)
   const [topbarSlot, setTopbarSlot] = useState(null);
   useEffect(() => {
     setTopbarSlot(isMobile ? document.getElementById('wd-topbar-actions') : null);
   }, [isMobile]);
+
+  /* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ (saklar Demo data bersama — app/components/demoMode.js) */
+  const demo = useDemoMode();
+  const prevDemo = useRef(demo);
+  useEffect(() => {
+    if (prevDemo.current === demo) return;
+    prevDemo.current = demo;
+    if (role) fetchData();
+  }, [demo]);
+  /* ═══ END PREVIEW-ONLY ═══ */
 
   useEffect(() => { if (!role) return; fetchData(); }, [role, dateOpt, isCustom, customSince, customUntil, kategori]);
 
@@ -97,93 +447,85 @@ export default function LeadsDashboardPage() {
     return () => document.removeEventListener('mousedown', h);
   }, [showDropdown]);
 
+  const range = isCustom && customSince && customUntil
+    ? { since: customSince, until: customUntil }
+    : presetToRange(dateOpt.value);
+  const prevR = previousRange(range.since, range.until);
+
   async function fetchData() {
+    const token = ++fetchToken.current;
     setLoading(true); setError(null);
     try {
-      const range = isCustom && customSince && customUntil
-        ? { since: customSince, until: customUntil }
-        : presetToRange(dateOpt.value);
+      let leads, prevLeads = null, spend = 0, inboxCount = 0;
 
-      // 1. Leads approved dalam periode (cohort by created_at)
-      let query = supabase
-        .from('leads')
-        .select('status, followed_up, closing_amount, kategori_promo, sales, created_at')
-        .eq('verification', 'approved')
-        .gte('created_at', range.since + 'T00:00:00')
-        .lte('created_at', range.until + 'T23:59:59.999');
-      if (kategori !== 'Semua') query = query.eq('kategori_promo', kategori);
-      const { data: leads, error: qErr } = await query.limit(10000);
-      if (qErr) throw new Error(qErr.message);
-
-      // 2. Spend campaign konversi (agregat) — periode sama
-      let spend = 0;
-      try {
-        const url = isCustom && customSince && customUntil
-          ? `/api/leads?mode=spend&since=${customSince}&until=${customUntil}`
-          : `/api/leads?mode=spend&date_preset=${dateOpt.value}`;
-        const res  = await authFetch(url);
-        const json = await res.json();
-        if (!json.error) spend = json.spend || 0;
-      } catch (e) {}
-
-      // 3. Inbox count (admin only, info kecil)
-      let inboxCount = 0;
-      if (role === 'admin') {
-        const { count } = await supabase.from('leads').select('id', { count: 'exact', head: true }).eq('verification', 'unverified');
-        inboxCount = count || 0;
-      }
-
-      const total = leads.length;
-      const fu = leads.filter(l => l.followed_up).length;
-      const statusCounts = Object.fromEntries(STATUSES.map(s => [s, 0]));
-      const byKategori = Object.fromEntries([...CATEGORIES.map(c => c.value), '—'].map(k => [k, 0]));
-      const bySales = Object.fromEntries([...SALES, '—'].map(s => [s, { leads: 0, deals: 0 }]));
-      let closing = 0;
-      for (const l of leads) {
-        statusCounts[l.status] = (statusCounts[l.status] || 0) + 1;
-        byKategori[l.kategori_promo || '—'] = (byKategori[l.kategori_promo || '—'] || 0) + 1;
-        const sk = l.sales && bySales[l.sales] ? l.sales : '—';
-        bySales[sk].leads += 1;
-        if (l.status === 'Deal') bySales[sk].deals += 1;
-        if (l.status === 'Deal' && l.closing_amount) closing += parseFloat(l.closing_amount);
-      }
-      const deals = statusCounts.Deal;
-
-      // Sparkline harian New Leads (jumlah lead per hari dalam rentang)
-      const dayCounts = {};
-      for (const l of leads) {
-        const day = (l.created_at || '').slice(0, 10);
-        if (day) dayCounts[day] = (dayCounts[day] || 0) + 1;
-      }
-      const daily = [];
+      /* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */
+      if (demo) {
+        await demoDelay();
+        const byCat = rows => (kategori === 'Semua' ? rows : rows.filter(l => l.kategori_promo === kategori));
+        const cur = buildDemoLeads(range);
+        leads = byCat(cur.rows);
+        prevLeads = byCat(buildDemoLeads(prevR).rows);
+        spend = cur.spend;
+        inboxCount = role === 'admin' ? cur.inboxCount : 0;
+      } else
+      /* ═══ END PREVIEW-ONLY ═══ */
       {
-        const start = new Date(range.since + 'T00:00:00');
-        const end = new Date(range.until + 'T00:00:00');
-        for (let dt = new Date(start); dt <= end; dt.setDate(dt.getDate() + 1)) {
-          daily.push(dayCounts[ymd(dt)] || 0);
+        // 1. Leads approved dalam periode (cohort by created_at) + periode pembanding
+        const q = (r, cols) => {
+          let query = supabase
+            .from('leads')
+            .select(cols)
+            .eq('verification', 'approved')
+            .gte('created_at', r.since + 'T00:00:00')
+            .lte('created_at', r.until + 'T23:59:59.999');
+          if (kategori !== 'Semua') query = query.eq('kategori_promo', kategori);
+          return query.limit(10000);
+        };
+        const [curRes, prevRes] = await Promise.all([
+          q(range, 'status, followed_up, closing_amount, kategori_promo, sales, created_at'),
+          q(prevR, 'status, followed_up'),
+        ]);
+        if (curRes.error) throw new Error(curRes.error.message);
+        leads = curRes.data;
+        prevLeads = prevRes.error ? null : prevRes.data;   // gagal → delta "—", halaman tetap jalan
+
+        // 2. Spend campaign konversi (agregat) — periode sama
+        try {
+          const url = isCustom && customSince && customUntil
+            ? `/api/leads?mode=spend&since=${customSince}&until=${customUntil}`
+            : `/api/leads?mode=spend&date_preset=${dateOpt.value}`;
+          const res  = await authFetch(url);
+          const json = await res.json();
+          if (!json.error) spend = json.spend || 0;
+        } catch (e) {}
+
+        // 3. Black Box count (admin only)
+        if (role === 'admin') {
+          const { count } = await supabase.from('leads').select('id', { count: 'exact', head: true }).eq('verification', 'unverified');
+          inboxCount = count || 0;
         }
       }
+      if (token !== fetchToken.current) return;
 
+      const cur  = summarize(leads, range);
+      const prev = prevLeads ? summarize(prevLeads, null) : null;
       setData({
-        total,
-        fuRate: total ? (fu / total) * 100 : 0,
-        fuCount: fu,
-        statusCounts,
-        byKategori,
-        bySales,
-        deals,
-        closing,
+        ...cur,
         spend,
-        cpd: deals ? spend / deals : 0,
-        roas: spend ? closing / spend : 0,                 // ROAS = omzet ÷ spend
-        roi:  spend ? (closing - spend) / spend * 100 : 0, // ROI  = (omzet − spend) ÷ spend
+        cpd:  cur.deals ? spend / cur.deals : 0,
+        roas: spend ? cur.closing / spend : 0,                  // ROAS = omzet ÷ spend
+        roi:  spend ? (cur.closing - spend) / spend * 100 : 0,  // ROI  = (omzet − spend) ÷ spend
         inboxCount,
-        daily,
+        prev,
+        pctLeads: prev && prev.total ? ((cur.total - prev.total) / prev.total) * 100 : null,
+        fuPts:    prev && prev.total ? cur.fuRate - prev.fuRate : null,
       });
+      setUpdatedAt(new Date());
     } catch (err) {
+      if (token !== fetchToken.current) return;
       setError(err.message);
     }
-    setLoading(false);
+    if (token === fetchToken.current) setLoading(false);
   }
 
   /* ── Handler filter (pola sama Reports) ── */
@@ -225,633 +567,190 @@ export default function LeadsDashboardPage() {
     return dateOpt.label;
   }
 
-  const card = {
-    background: 'var(--cd)', border: '1px solid var(--br)',
-    borderRadius: '18px', boxShadow: 'var(--shadow)',
-  };
-  /* Kartu "dormant" (mati) — dipakai baris uang saat belum ada Deal */
-  const dormCard = {
-    background: 'var(--hover)', border: '1px dashed var(--br)',
-    borderRadius: '18px', boxShadow: 'none',
-  };
-  const refreshButton = (
-    <button onClick={fetchData} title="Refresh" style={{
-      width: isMobile ? '36px' : '40px', height: isMobile ? '36px' : '40px',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'var(--cd)', border: '1px solid var(--br)', borderRadius: isMobile ? '9px' : '10px',
-      cursor: 'pointer', flexShrink: 0, transition: 'border-color 0.15s',
-    }}>
-      <RefreshCw size={15} color="var(--t2)" style={loading ? { animation: 'wdSpin 0.8s linear infinite' } : undefined} />
-    </button>
-  );
-
   if (!role) return null;
 
   const d = data;
-  const hasDeal = !loading && !!d && d.deals > 0;
-  const dormant = !loading && !!d && d.deals === 0;
-  const maxStatus = d ? Math.max(...STATUSES.map(s => d.statusCounts?.[s] || 0), 1) : 1;
+  const initialLoading = loading && !d;
+  const busy = loading && d ? ' rg-busy' : '';
+  const hasDeal = !!d && d.deals > 0;
+  const dormant = !!d && d.deals === 0;
+  const prevLabel = fmtRangeShort(prevR.since, prevR.until);
+  const rangeText = fmtRangeShort(range.since, range.until, true);
+  const showInbox = role === 'admin' && !!d && d.inboxCount > 0;
 
-  /* KPI card kecil seragam (dipakai layout mobile lama) */
-  function Kpi({ Icon, label, value, display, sub, color }) {
-    return (
-      <div style={{ ...card, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: '10px', minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
-          <div style={{
-            width: '30px', height: '30px', borderRadius: '50%', flexShrink: 0,
-            background: (color || 'var(--ac)') + '1f',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <Icon size={15} color={color || 'var(--ac)'} />
-          </div>
-          <span style={{ ...TYPE.small, fontWeight: 600 }}>{label}</span>
-        </div>
-        <div style={{ ...TYPE.metricValueSm, fontSize: isMobile ? '20px' : '24px' }}>
-          {loading || !d ? '—' : <CountUp value={value} display={display} />}
-        </div>
-        <div style={{ ...TYPE.metricSub, minHeight: '14px' }}>{loading || !d ? '' : sub}</div>
-      </div>
-    );
-  }
+  const ctxLine = initialLoading
+    ? <span>Loading leads…</span>
+    : error && !d
+      ? <span>Could not load data</span>
+      : (<>
+          <span className="rg-live" aria-hidden="true" />
+          <span>Leads Hub</span>
+          <span className="rg-ctx-sep" aria-hidden="true" />
+          <span>{plural(d?.total || 0, 'lead')}{kategori !== 'Semua' ? ` · ${kategoriLabel(kategori)}` : ''}</span>
+          <span className="rg-ctx-sep" aria-hidden="true" />
+          <span>{loading ? 'Refreshing…' : updatedAt ? `Updated ${fmtClock(updatedAt)}` : ''}</span>
+        </>);
 
-  /* ── Blok desktop G1 ── */
-
-  /* Sparkline harian (data real dari daily[]) */
-  function Spark({ daily }) {
-    if (!daily || daily.length < 2) return null;
-    const max = Math.max(...daily, 1);
-    const W = 100, H = 30;
-    const pts = daily.map((v, i) => `${(i / (daily.length - 1)) * W},${H - (v / max) * (H - 3) - 1}`);
-    return (
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{
-        position: 'absolute', right: '16px', bottom: '12px', width: '44%', height: '44px', pointerEvents: 'none',
-      }}>
-        <polygon points={`0,${H} ${pts.join(' ')} ${W},${H}`} fill="var(--cal-accent)" opacity="0.09" />
-        <polyline points={pts.join(' ')} fill="none" stroke="var(--cal-accent)" strokeWidth="1.6"
-          strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
-      </svg>
-    );
-  }
-
-  /* Meter "barcode" Follow-up */
-  function BarcodeMeter({ pct }) {
-    const stripe = c => `repeating-linear-gradient(90deg, ${c} 0 3px, transparent 3px 7px)`;
-    return (
-      <div style={{ height: '32px', width: '58%', minWidth: '160px', borderRadius: '8px', overflow: 'hidden', display: 'flex', marginTop: 'auto' }}>
-        <div style={{ width: `${Math.max(Math.min(pct, 100), 0)}%`, background: stripe('var(--cal-accent)') }} />
-        <div style={{ flex: 1, background: stripe('var(--br)') }} />
-      </div>
-    );
-  }
+  // Tombol refresh HP — dirender via portal ke top bar MobileNav (di luar skin),
+  // jadi tetap gaya lama 36px agar serasi dengan theme toggle top bar
+  const refreshBtnMobile = (
+    <button onClick={fetchData} title="Refresh" style={{
+      width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: 'var(--cd)', border: '1px solid var(--br)', borderRadius: '9px', cursor: 'pointer',
+      flexShrink: 0, transition: 'border-color 0.15s',
+    }}>
+      <RefreshCw size={14} color="var(--t2)" style={loading ? { animation: 'wdSpin 0.8s linear infinite' } : undefined} />
+    </button>
+  );
 
   return (
-    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', background: 'var(--bg)' }}>
+    <div className={`rg rg-page ${dashboardFontVars}${isMobile ? ' is-mobile' : ''}`}>
 
-      {/* ══ HEADER CARD ══ */}
-      <header style={isMobile ? {
-        display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: '12px',
-        padding: '14px 16px', flexShrink: 0, borderBottom: '1px solid var(--br)',
-      } : {
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '12px 20px', margin: '12px 16px 0', flexShrink: 0, ...card,
-      }}>
-        <div>
-          <h1 style={{ ...TYPE.h1, ...(isMobile ? { fontSize: '20px' } : null) }}>Dashboard</h1>
-          <p style={{ ...TYPE.small, marginTop: '3px' }}>
-            Leads Hub · {loading || !d ? 'Loading…' : `${d.total} leads · ${filterLabel()}`}
-          </p>
+      {/* ══ TOP BAR — judul + konteks (kiri) · filter & aksi (kanan) ══ */}
+      <header className="rg-top">
+        <div className="rg-top-title">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <h1 className="rg-h1">Dashboard</h1>
+            {/* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */}
+            {demo && <DemoChip />}
+            {/* ═══ END PREVIEW-ONLY ═══ */}
+          </div>
+          <div className="rg-ctx">{ctxLine}</div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '8px' : '10px', justifyContent: isMobile ? 'flex-end' : 'flex-start', flexWrap: 'wrap' }}>
-          {/* Chip Black Box (admin, desktop) — pengganti banner biar fit 1 layar */}
-          {!isMobile && !loading && d?.inboxCount > 0 && role === 'admin' && (
-            <Link href="/leads/list" style={{
-              display: 'inline-flex', alignItems: 'center', gap: '7px', textDecoration: 'none',
-              padding: '8px 13px', borderRadius: '999px', flexShrink: 0,
-              border: '1px solid rgba(245,158,11,0.4)', background: 'rgba(245,158,11,0.09)',
-            }}>
-              <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#F59E0B', animation: 'wdPulseDot 1.6s ease-in-out infinite' }} />
-              <span style={{ ...TYPE.small, fontWeight: 700, color: '#B45309' }}>{d.inboxCount} in Black Box</span>
+        <div className="rg-tools">
+          {/* Black Box (admin, desktop) — lead menunggu verifikasi */}
+          {!isMobile && showInbox && (
+            <Link href="/leads/list" className="rg-pill" title="Leads waiting for verification — open Black Box">
+              <span className="rgl-inbox-dot" aria-hidden="true" />
+              <span><span className="rgl-inbox-n rg-mono">{fmtInt(d.inboxCount)}</span> in Black Box</span>
             </Link>
           )}
 
           {/* Filter kategori promo (scope Dashboard saja — MASTER PLAN 3.3) */}
-          <Dropdown
-            label={kategori === 'Semua' ? 'All Categories' : kategoriLabel(kategori)}
-            value={kategori}
-            minWidth={220}
-            align="right"
-            buttonStyle={{ padding: '9px 12px', fontSize: '13px', fontWeight: 500 }}
-            options={[
-              { value: 'Semua', label: 'All Categories' },
-              ...CATEGORIES.map(c => ({ value: c.value, label: c.label })),
-            ]}
-            onSelect={setKategori}
-          />
+          <CategoryPill value={kategori} onChange={setKategori} />
 
-          {/* Date filter */}
-          <div style={{ position: 'relative' }} data-filter>
-            <button onClick={openFilter} style={{
-              display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 14px',
-              background: 'var(--cd)', border: `1px solid ${isCustom ? 'var(--cal-accent)' : 'var(--br)'}`,
-              borderRadius: '10px', fontSize: '13px', color: 'var(--t1)', cursor: 'pointer',
-            }}>
-              <Calendar size={14} color="var(--t2)" />
-              {filterLabel()}
-              <ChevronDown size={13} color="var(--t2)" />
+          <DatePill open={showDropdown} onToggle={openFilter} isMobile={isMobile} isCustom={isCustom}
+            presetLabel={dateOpt.label} mobileLabel={filterLabel()} rangeText={rangeText}>
+            <DateFilterPopup
+              presets={DATE_PRESETS_DASHBOARD}
+              dateOpt={dateOpt}
+              isCustom={isCustom}
+              customSince={localSince}
+              customUntil={localUntil}
+              calY={calY} calM={calM}
+              isMobile={isMobile}
+              onSelectPreset={handleSelectPreset}
+              onPickDay={pickDay}
+              onPickRange={pickRange}
+              onShiftCal={shiftCal}
+              onApply={applyCustomRange}
+              onClose={() => setShowDropdown(false)}
+            />
+          </DatePill>
+
+          {!isMobile && (<>
+            <span className="rg-vsep" aria-hidden="true" />
+            <button type="button" className="rg-pill rg-round" title="Refresh data" aria-label="Refresh data"
+              onClick={fetchData} disabled={loading}>
+              <RefreshCw size={15} style={loading ? { animation: 'wdSpin 0.8s linear infinite' } : undefined} />
             </button>
-            {showDropdown && (
-              <DateFilterPopup
-                presets={DATE_PRESETS_DASHBOARD}
-                dateOpt={dateOpt}
-                isCustom={isCustom}
-                customSince={localSince}
-                customUntil={localUntil}
-                calY={calY} calM={calM}
-                isMobile={isMobile}
-                onSelectPreset={handleSelectPreset}
-                onPickDay={pickDay}
-                onPickRange={pickRange}
-                onShiftCal={shiftCal}
-                onApply={applyCustomRange}
-                onClose={() => setShowDropdown(false)}
-              />
-            )}
-          </div>
-
-          {!isMobile && refreshButton}
-          {!isMobile && <ThemeToggle />}
-          {isMobile && topbarSlot && createPortal(refreshButton, topbarSlot)}
+            <ThemeToggle className="rg-pill rg-round" />
+          </>)}
+          {isMobile && topbarSlot && createPortal(refreshBtnMobile, topbarSlot)}
         </div>
       </header>
 
-      {/* ══ CONTENT ══ */}
-      <div style={{
-        flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden',
-        padding: isMobile ? '16px' : '12px 16px 16px',
-        display: 'flex', flexDirection: 'column', gap: '10px',
-      }}>
+      {/* ══ ISI ══ */}
+      <div className="rg-body">
         {error && (
-          <div style={{ ...card, padding: '20px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <CircleAlert size={18} color="#EF4444" />
-            <span style={{ ...TYPE.body }}>Failed to load data: {error}</span>
+          <div className="rg-error" role="alert">
+            <span className="rg-error-ico"><TriangleAlert size={20} /></span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="rg-error-title">Leads data couldn’t be loaded</div>
+              <div className="rg-error-msg">{error}</div>
+            </div>
+            <button type="button" className="rg-pill" onClick={fetchData}>
+              <RefreshCw size={15} />Try again
+            </button>
           </div>
         )}
 
-        {/* Info Inbox (admin, mobile — desktop pakai chip di header) */}
-        {isMobile && !loading && d?.inboxCount > 0 && role === 'admin' && (
-          <Link href="/leads/list" style={{
-            ...card, padding: '12px 18px', display: 'flex', alignItems: 'center', gap: '10px',
-            textDecoration: 'none', borderColor: 'var(--cal-accent)',
-          }}>
-            <Inbox size={16} color="var(--ac)" />
-            <span style={{ ...TYPE.body, fontWeight: 600 }}>{d.inboxCount} lead{d.inboxCount === 1 ? '' : 's'} awaiting verification in Inbox</span>
-            <span style={{ ...TYPE.small, marginLeft: 'auto', color: 'var(--ac)', fontWeight: 600 }}>Open Inbox →</span>
+        {/* Black Box (admin, HP — desktop pakai pil di top bar) */}
+        {isMobile && showInbox && (
+          <Link href="/leads/list" className="rgl-inbox-banner">
+            <Inbox size={16} />
+            <span><b className="rg-mono">{fmtInt(d.inboxCount)}</b> lead{d.inboxCount === 1 ? '' : 's'} waiting in Black Box</span>
+            <span>Open <ArrowRight size={13} style={{ verticalAlign: '-2px' }} /></span>
           </Link>
         )}
 
-        {isMobile ? (
-          /* ════════ MOBILE — layout lama (tidak diubah) ════════ */
-          <>
-            {/* ── KPI ROW ── */}
-            <div style={{ display: 'grid', gap: '10px', gridTemplateColumns: 'repeat(2, minmax(0,1fr))' }}>
-              <Kpi Icon={Users} label="Total Leads" value={d?.total || 0} display={(d?.total || 0).toLocaleString('id-ID')} sub={`period: ${filterLabel()}`} />
-              <Kpi Icon={PhoneCall} label="Follow-up" value={d?.fuRate || 0} display={fmtPct(d?.fuRate)} sub={`${d?.fuCount || 0} of ${d?.total || 0} followed up`} color="#3B82F6" />
-              <Kpi Icon={Wallet} label="Total Closing" value={d?.closing || 0} display={fmtRp(d?.closing)} sub={d?.spend ? `ROAS ${(d.roas).toFixed(2)}x on conversion spend` : 'conversion spend Rp 0'} color="#F59E0B" />
-            </div>
+        {initialLoading && (<>
+          <div className="rgl-row rgl-row-kpi"><SkelCard /><SkelCard /></div>
+          <div className="rgl-row-status"><SkelCard lines={1} /></div>
+          <div className="rgl-row rgl-row-split"><SkelCard lines={3} /><SkelCard lines={3} /></div>
+          <div className="rgl-row rgl-row-money"><SkelCard lines={1} /><SkelCard lines={1} /></div>
+        </>)}
 
-            {/* ── STATUS CARDS ── */}
-            <div style={{ display: 'grid', gap: '10px', gridTemplateColumns: 'repeat(2, minmax(0,1fr))' }}>
-              {STATUSES.map(s => {
-                const n = d?.statusCounts?.[s] || 0;
-                const pct = d?.total ? (n / d.total) * 100 : 0;
-                const c = STATUS_COLOR[s]?.fg;
-                return (
-                  <div key={s} style={{ ...card, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '8px', minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ width: '9px', height: '9px', borderRadius: '50%', background: c, flexShrink: 0 }} />
-                      <span style={{ ...TYPE.small, fontWeight: 600 }}>{s}</span>
-                    </div>
-                    <div style={{ ...TYPE.metricValueSm, fontSize: '19px', color: s === 'No Status' ? 'var(--t1)' : c }}>
-                      {loading || !d ? '—' : <CountUp value={n} display={n.toLocaleString('id-ID')} />}
-                    </div>
-                    <div style={{ ...TYPE.metricSub }}>{loading || !d ? '' : `${pct.toFixed(0)}% of leads`}</div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* ── ROW 2: donut · cost & roi · leads by sales ── */}
-            <div style={{ display: 'grid', gap: '10px', alignItems: 'stretch', gridTemplateColumns: '1fr' }}>
-              <div style={{ ...card, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <span style={{ ...TYPE.cardTitle }}>Status Distribution</span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '18px', flex: 1, flexWrap: 'wrap', justifyContent: 'center' }}>
-                  <Donut counts={d?.statusCounts} total={d?.total || 0} loading={loading} />
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '190px' }}>
-                    {STATUSES.map(s => {
-                      const n = d?.statusCounts?.[s] || 0;
-                      const pct = d?.total ? (n / d.total) * 100 : 0;
-                      return (
-                        <div key={s} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: STATUS_COLOR[s]?.fg, flexShrink: 0 }} />
-                          <span style={{ ...TYPE.small, flex: 1 }}>{s}</span>
-                          <span style={{ ...TYPE.tableCellStrong, width: '36px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
-                            {loading ? '—' : n.toLocaleString('id-ID')}
-                          </span>
-                          <span style={{ ...TYPE.caption, width: '42px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
-                            {loading ? '' : pct.toFixed(0) + '%'}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
+        {d && (<>
+          {/* ── 1 · KPI: Total Leads + Follow-up ── */}
+          <div className={`rgl-row rgl-row-kpi${busy}`} style={{ order: 1 }}>
+            <LeadsKpi label="Total Leads" icon={Users} tone={toneOf(d.pctLeads, 'up')} delay={0}
+              info="Approved leads that came in during this period, by the date the lead was created. Leads still waiting in Black Box are not counted."
+              footLabel="Previous" footVal={d.prev ? fmtInt(d.prev.total) : '—'}>
+              <div className="rg-kpi-value rg-mono">
+                <CountUp value={d.total} display={fmtInt(d.total)} delay={120} />
+                <span className="rg-unit">lead{d.total === 1 ? '' : 's'}</span>
               </div>
-
-              <div style={{ ...card, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <span style={{ ...TYPE.cardTitle }}>Cost &amp; ROI</span>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '11px', flex: 1, justifyContent: 'center' }}>
-                  {[
-                    { label: 'Conversion Spend', val: loading || !d ? '—' : fmtRp(d.spend) },
-                    { label: 'Cost per Deal',    val: loading || !d ? '—' : (d.deals ? fmtRp(d.cpd) : '—') },
-                    { label: 'Total Closing',    val: loading || !d ? '—' : fmtRp(d.closing), color: '#2FB673' },
-                    { label: 'ROAS',             val: loading || !d ? '—' : (d.spend ? d.roas.toFixed(2) + 'x' : '—'), color: d?.roas >= 1 ? '#2FB673' : '#EF4444', hint: 'closing ÷ spend' },
-                    { label: 'ROI',              val: loading || !d ? '—' : (d.spend ? (d.roi >= 0 ? '+' : '') + d.roi.toFixed(0) + '%' : '—'), color: d?.roi >= 0 ? '#2FB673' : '#EF4444', hint: '(closing − spend) ÷ spend' },
-                  ].map(r => (
-                    <div key={r.label} style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '10px' }}>
-                      <span style={{ ...TYPE.small }}>
-                        {r.label}
-                        {r.hint && <span style={{ ...TYPE.caption, marginLeft: '5px' }}>{r.hint}</span>}
-                      </span>
-                      <span style={{ ...TYPE.tableCellStrong, fontSize: '13px', color: (loading || !d || !d.spend) ? 'var(--t1)' : (r.color || 'var(--t1)') }}>{r.val}</span>
-                    </div>
-                  ))}
-                </div>
-                <div style={{ ...TYPE.caption, borderTop: '1px solid var(--br)', paddingTop: '9px' }}>
-                  Cohort attribution — closings are counted in the period the lead came in
-                </div>
+              <div className="rg-kpi-sub">
+                <Delta pct={d.pctLeads} good="up" />
+                <span>vs {prevLabel}</span>
               </div>
+              <KpiSpark data={d.daily} />
+            </LeadsKpi>
 
-              <div style={{ ...card, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <span style={{ ...TYPE.cardTitle }}>Leads by Sales</span>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '11px', flex: 1, justifyContent: 'center' }}>
-                  {[...SALES, '—'].map(s => {
-                    const row = d?.bySales?.[s] || { leads: 0, deals: 0 };
-                    const pct = d?.total ? (row.leads / d.total) * 100 : 0;
-                    if (s === '—' && row.leads === 0) return null;
-                    return (
-                      <div key={s} style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '10px' }}>
-                          <span style={{ ...TYPE.small, fontWeight: 600, color: s === '—' ? 'var(--t3)' : SALES_COLOR[s]?.fg || 'var(--t1)' }}>
-                            {s === '—' ? 'Unassigned' : s}
-                          </span>
-                          <span style={{ ...TYPE.tableCellStrong, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
-                            {loading ? '—' : row.leads}
-                            <span style={{ ...TYPE.caption }}> lead{row.leads === 1 ? '' : 's'}{row.deals ? ` · ${row.deals} deal${row.deals === 1 ? '' : 's'}` : ''}</span>
-                          </span>
-                        </div>
-                        <div style={{ height: '7px', borderRadius: '999px', background: 'var(--hover)', overflow: 'hidden' }}>
-                          <div style={{
-                            width: '100%', height: '100%', borderRadius: '999px',
-                            background: s === '—' ? 'var(--t3)' : SALES_COLOR[s]?.fg || 'var(--cal-accent)',
-                            transform: `scaleX(${pct / 100})`, transformOrigin: 'left',
-                            transition: 'transform 0.6s cubic-bezier(0.4,0,0.2,1)',
-                          }} />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            {/* ── ROW 3: by category ── */}
-            <div style={{ ...card, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <span style={{ ...TYPE.cardTitle }}>By Category</span>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {[...CATEGORIES.map(c => c.value), '—'].map(k => {
-                  const n = d?.byKategori?.[k] || 0;
-                  const pct = d?.total ? (n / d.total) * 100 : 0;
-                  if (k === '—' && n === 0) return null;
-                  return (
-                    <div key={k} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <span style={{ ...TYPE.small, width: '110px', flexShrink: 0, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {k === '—' ? 'Uncategorized' : kategoriLabel(k)}
-                      </span>
-                      <div style={{ flex: 1, height: '8px', borderRadius: '999px', background: 'var(--hover)', overflow: 'hidden' }}>
-                        <div style={{
-                          width: '100%', height: '100%', borderRadius: '999px',
-                          background: 'var(--cal-accent)',
-                          transform: `scaleX(${pct / 100})`, transformOrigin: 'left',
-                          transition: 'transform 0.6s cubic-bezier(0.4,0,0.2,1)',
-                        }} />
-                      </div>
-                      <span style={{ ...TYPE.tableCellStrong, width: '64px', textAlign: 'right', flexShrink: 0, whiteSpace: 'nowrap' }}>
-                        {loading ? '—' : n}<span style={{ ...TYPE.caption }}> · {pct.toFixed(0)}%</span>
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </>
-        ) : (
-          /* ════════ DESKTOP — redesain G1 (fit 1 layar) ════════ */
-          <>
-            {/* ── 1 · KPI PAIR: New Leads + Follow-up ──
-                Sisa tinggi layar dibagi proporsional ke semua baris (flex-grow kecil
-                per baris) supaya dashboard menyentuh dasar layar tanpa ada baris yang
-                menggelembung sendirian. */}
-            <div style={{ display: 'grid', gap: '10px', gridTemplateColumns: '1fr 1fr', flex: '0.6 0 auto', order: 1 }}>
-              {/* New Leads + sparkline harian */}
-              <div style={{ ...card, padding: '15px 18px', display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0, position: 'relative', overflow: 'hidden', minHeight: '118px', animation: 'wdFadeUp 0.4s cubic-bezier(0.4,0,0.2,1) 0ms backwards' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
-                    <div style={{ width: '30px', height: '30px', borderRadius: '50%', background: 'var(--hover)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <Users size={15} color="var(--cal-accent)" />
-                    </div>
-                    <span style={{ ...TYPE.small, fontWeight: 600 }}>Total Leads</span>
-                  </div>
-                </div>
-                <div style={{ ...TYPE.metricValueSm, fontSize: '28px', marginTop: '4px' }}>
-                  {loading || !d ? '—' : <CountUp value={d.total} display={d.total.toLocaleString('id-ID')} />}
-                </div>
-                <div style={{ ...TYPE.metricSub }}>{loading || !d ? '' : `period: ${filterLabel()}`}</div>
-                {!loading && d && <Spark daily={d.daily} />}
-              </div>
-
-              {/* Follow-up + meter barcode */}
-              <div style={{ ...card, padding: '15px 18px', display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0, minHeight: '118px', animation: 'wdFadeUp 0.4s cubic-bezier(0.4,0,0.2,1) 60ms backwards' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
-                  <div style={{ width: '30px', height: '30px', borderRadius: '50%', background: 'var(--hover)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <PhoneCall size={15} color="var(--cal-accent)" />
-                  </div>
-                  <span style={{ ...TYPE.small, fontWeight: 600 }}>Follow-up</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'flex-end', gap: '18px' }}>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ ...TYPE.metricValueSm, fontSize: '28px', marginTop: '4px' }}>
-                      {loading || !d ? '—' : <CountUp value={d.fuRate} display={fmtPct(d.fuRate)} />}
-                    </div>
-                    <div style={{ ...TYPE.metricSub, whiteSpace: 'nowrap' }}>{loading || !d ? '' : `${d.fuCount} of ${d.total} followed up`}</div>
-                  </div>
-                  {!loading && d && <BarcodeMeter pct={d.fuRate} />}
-                </div>
-              </div>
-            </div>
-
-            {/* ── 2 · PANEL FOREST: Leads by Status (tanpa donut — tile full width) ── */}
-            <div style={{
-              background: FOREST, border: `1px solid ${FOREST}`, borderRadius: '18px', boxShadow: 'var(--shadow)',
-              padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '12px',
-              flex: '1.2 0 auto', minWidth: 0, order: 2,
-              animation: 'wdFadeUp 0.4s cubic-bezier(0.4,0,0.2,1) 120ms backwards',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ ...TYPE.cardTitle, color: '#FFFFFF' }}>Leads by Status</span>
-                <span style={{
-                  ...TYPE.caption, fontWeight: 700, color: '#C8F169',
-                  background: 'rgba(200,241,105,0.16)', padding: '4px 11px', borderRadius: '999px',
-                }}>
-                  {loading || !d ? '…' : `${d.total.toLocaleString('id-ID')} total leads`}
+            <LeadsKpi label="Follow-up" icon={PhoneCall} tipAlign="end" delay={55}
+              tone={d.fuPts == null ? 'na' : Math.abs(d.fuPts) < 0.05 ? 'neu' : d.fuPts > 0 ? 'pos' : 'neg'}
+              info="Share of this period’s leads that sales have marked as followed up. The change is in percentage points."
+              footLabel="Followed up" footVal={`${fmtInt(d.fuCount)} of ${fmtInt(d.total)}`}>
+              <div className="rg-kpi-value rg-mono">
+                <span>
+                  <CountUp value={Math.round(d.fuRate)} display={fmtInt(d.fuRate)} delay={175} />
+                  <span className="rg-unit" style={{ marginLeft: 2 }}>%</span>
                 </span>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0,1fr))', gap: '12px', minWidth: 0, flex: 1 }}>
-                {STATUSES.map(s => {
-                  const n = d?.statusCounts?.[s] || 0;
-                  const pct = d?.total ? (n / d.total) * 100 : 0;
-                  const c = PANEL_STATUS_COLOR[s];
-                  return (
-                    <div key={s} style={{
-                      background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.09)',
-                      borderRadius: '15px', padding: '15px 17px', minWidth: 0, minHeight: '122px',
-                      display: 'flex', flexDirection: 'column', gap: '4px',
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
-                        <span style={{ width: '9px', height: '9px', borderRadius: '50%', background: c, flexShrink: 0 }} />
-                        <span style={{ ...TYPE.small, fontWeight: 700, color: '#BFD3C6', whiteSpace: 'nowrap' }}>{s}</span>
-                      </div>
-                      <div style={{ ...TYPE.metricValueSm, fontSize: '29px', color: '#FFFFFF', marginTop: '2px' }}>
-                        {loading || !d ? '—' : <CountUp value={n} display={n.toLocaleString('id-ID')} />}
-                      </div>
-                      <span style={{ ...TYPE.small, fontSize: '12px', fontWeight: 700, color: '#A8BCAF' }}>{loading || !d ? '' : `${pct.toFixed(0)}% of leads`}</span>
-                      <div style={{ height: '6px', borderRadius: '999px', background: 'rgba(255,255,255,0.1)', overflow: 'hidden', marginTop: 'auto' }}>
-                        <div style={{
-                          width: '100%', height: '100%', borderRadius: '999px', background: c,
-                          transform: `scaleX(${(d ? n / maxStatus : 0)})`, transformOrigin: 'left',
-                          transition: 'transform 0.6s cubic-bezier(0.4,0,0.2,1)',
-                        }} />
-                      </div>
-                    </div>
-                  );
-                })}
+              <div className="rg-kpi-sub">
+                <DeltaPts pts={d.fuPts} />
+                <span>vs {prevLabel}</span>
               </div>
-            </div>
+              <FollowTicks rate={d.fuRate} prevRate={d.prev && d.prev.total ? d.prev.fuRate : null} />
+            </LeadsKpi>
+          </div>
 
-            {/* ── LEADS BY SALES + BY CATEGORY (setengah–setengah; turun ke bawah money row saat ada Deal) ── */}
-            <div style={{ display: 'grid', gap: '10px', gridTemplateColumns: '1fr 1fr', flex: '1 0 auto', order: 4 }}>
-              {/* Leads by Sales — baris per sales (gaya G1) */}
-              <div style={{ ...card, padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0, animation: 'wdFadeUp 0.4s cubic-bezier(0.4,0,0.2,1) 200ms backwards' }}>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-                  <span style={{ ...TYPE.cardTitle }}>Leads by Sales</span>
-                  <span style={{ ...TYPE.caption }}>distribution of assigned leads</span>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  {(() => {
-                    const entries = [...SALES, '—'].filter(s => s !== '—' || (d?.bySales?.['—']?.leads || 0) > 0);
-                    const maxLeads = Math.max(...entries.map(s => d?.bySales?.[s]?.leads || 0), 1);
-                    return entries.map((s, i) => {
-                      const row = d?.bySales?.[s] || { leads: 0, deals: 0 };
-                      const pct = d?.total ? (row.leads / d.total) * 100 : 0;
-                      const fg = s === '—' ? 'var(--t3)' : SALES_COLOR[s]?.fg || 'var(--t1)';
-                      const bg = s === '—' ? 'var(--hover)' : SALES_COLOR[s]?.bg || 'var(--hover)';
-                      return (
-                        <div key={s} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '9px 0', borderTop: i === 0 ? 'none' : '1px solid var(--br)' }}>
-                          <span style={{
-                            width: '34px', height: '34px', borderRadius: '50%', flexShrink: 0,
-                            background: bg, color: fg, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: '13px', fontWeight: 800,
-                          }}>{s === '—' ? 'U' : s.charAt(0)}</span>
-                          <div style={{ minWidth: 0, width: '94px', flexShrink: 0 }}>
-                            <div style={{ ...TYPE.small, fontSize: '13px', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s === '—' ? 'Unassigned' : s}</div>
-                            <div style={{ ...TYPE.caption, whiteSpace: 'nowrap' }}>{loading ? '' : `${pct.toFixed(1)}% of leads${row.deals ? ` · ${row.deals} deal${row.deals === 1 ? '' : 's'}` : ''}`}</div>
-                          </div>
-                          <div style={{ flex: 1, height: '11px', borderRadius: '999px', background: 'var(--hover)', overflow: 'hidden', minWidth: '30px' }}>
-                            <div style={{
-                              width: '100%', height: '100%', borderRadius: '999px', background: fg,
-                              transform: `scaleX(${(row.leads / maxLeads) || 0})`, transformOrigin: 'left',
-                              transition: 'transform 0.6s cubic-bezier(0.4,0,0.2,1)',
-                            }} />
-                          </div>
-                          <span style={{ ...TYPE.tableCellStrong, fontSize: '16px', fontVariantNumeric: 'tabular-nums', flexShrink: 0, width: '36px', textAlign: 'right' }}>
-                            {loading ? '—' : row.leads}
-                          </span>
-                        </div>
-                      );
-                    });
-                  })()}
-                </div>
-              </div>
+          {/* ── 2 · Leads by Status ── */}
+          <div className={`rgl-row-status${busy}`} style={{ order: 2 }}>
+            <StatusCard d={d} delay={140} />
+          </div>
 
-              {/* By Category — baris per kategori (gaya G1) */}
-              <div style={{ ...card, padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0, animation: 'wdFadeUp 0.4s cubic-bezier(0.4,0,0.2,1) 260ms backwards' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-                  <span style={{ ...TYPE.cardTitle }}>By Category</span>
-                  <span style={{ ...TYPE.caption }}>from campaign name</span>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  {[...CATEGORIES.map(c => c.value), '—'].map((k, i) => {
-                    const n = d?.byKategori?.[k] || 0;
-                    const pct = d?.total ? (n / d.total) * 100 : 0;
-                    if (k === '—' && n === 0) return null;
-                    return (
-                      <div key={k} style={{ display: 'flex', flexDirection: 'column', gap: '7px', padding: '9px 0', borderTop: i === 0 ? 'none' : '1px solid var(--br)' }}>
-                        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '10px' }}>
-                          <span style={{ ...TYPE.small, fontSize: '12.5px', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {k === '—' ? 'Uncategorized' : kategoriLabel(k)}
-                          </span>
-                          <span style={{ ...TYPE.tableCellStrong, fontSize: '16px', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
-                            {loading ? '—' : n}
-                          </span>
-                        </div>
-                        <div style={{ height: '9px', borderRadius: '999px', background: 'var(--hover)', overflow: 'hidden' }}>
-                          <div style={{
-                            width: '100%', height: '100%', borderRadius: '999px',
-                            background: k === '—' ? 'var(--t3)' : 'var(--cal-accent)',
-                            transform: `scaleX(${pct / 100})`, transformOrigin: 'left',
-                            transition: 'transform 0.6s cubic-bezier(0.4,0,0.2,1)',
-                          }} />
-                        </div>
-                        <span style={{ ...TYPE.caption }}>{loading ? '' : `${pct.toFixed(0)}% of all leads`}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
+          {/* ── 3 · Leads by Sales + By Category (turun ke bawah baris uang saat ada Deal) ── */}
+          <div className={`rgl-row rgl-row-split${busy}`} style={{ order: hasDeal ? 4 : 3 }}>
+            <SalesCard d={d} delay={hasDeal ? 320 : 220} />
+            <CategoryCard d={d} delay={hasDeal ? 370 : 270} />
+          </div>
 
-            {/* ── MONEY ROW (dormant sampai ada Deal) ──
-                Saat ADA Deal, baris ini naik ke tepat bawah panel status (order 3),
-                baris Sales/Category turun ke bawahnya (order 4). Ukuran card tetap. */}
-            <div style={{ display: 'grid', gap: '10px', gridTemplateColumns: '1fr 1fr', flex: '0.6 0 auto', order: hasDeal ? 3 : 5 }}>
-              {/* Total Closing */}
-              <div style={{
-                ...(dormant ? dormCard : card), padding: '14px 18px', minWidth: 0, minHeight: '116px',
-                display: 'flex', flexDirection: dormant || loading || !d ? 'column' : 'row',
-                alignItems: dormant || loading || !d ? 'stretch' : 'center',
-                justifyContent: 'center', gap: dormant || loading || !d ? '4px' : '16px',
-                transition: 'background 0.3s, border-color 0.3s',
-                animation: 'wdFadeUp 0.4s cubic-bezier(0.4,0,0.2,1) 320ms backwards',
-              }}>
-                {hasDeal && (
-                  <div style={{ position: 'relative', width: '76px', height: '76px', flexShrink: 0 }}>
-                    <div style={{
-                      position: 'absolute', inset: 0, borderRadius: '50%',
-                      background: `conic-gradient(var(--cal-accent) ${Math.min((d.roas / 4) * 100, 100)}%, var(--hover) 0)`,
-                    }} />
-                    <div style={{ position: 'absolute', inset: '9px', borderRadius: '50%', background: 'var(--cd)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                      <span style={{ ...TYPE.tableCellStrong, fontSize: '14px', color: 'var(--cal-accent)' }}>{d.spend ? d.roas.toFixed(2) + 'x' : '—'}</span>
-                      <span style={{ ...TYPE.caption, fontSize: '8.5px' }}>ROAS</span>
-                    </div>
-                  </div>
-                )}
-                <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
-                    <span style={{ ...TYPE.cardTitle, color: dormant ? 'var(--t3)' : 'var(--t1)' }}>Total Closing</span>
-                    <span style={{
-                      ...TYPE.caption, fontWeight: 800, padding: '3px 10px', borderRadius: '999px',
-                      background: hasDeal ? 'var(--cal-accent)' : 'var(--br)',
-                      color: hasDeal ? 'var(--cal-accent-fg, #fff)' : 'var(--t3)',
-                    }}>
-                      {loading || !d ? '…' : `${d.deals} deal${d.deals === 1 ? '' : 's'}`}
-                    </span>
-                  </div>
-                  <div style={{ ...TYPE.metricValueSm, fontSize: '25px', color: dormant ? 'var(--t3)' : '#2FB673' }}>
-                    {loading || !d ? '—' : <CountUp value={d.closing} display={fmtRp(d.closing)} />}
-                  </div>
-                  <div style={{ ...TYPE.caption, color: dormant ? 'var(--t3)' : undefined }}>
-                    {loading || !d ? '' : dormant
-                      ? 'No closing in this period yet — this card lights up when the first deal lands'
-                      : `${filterLabel()} · cohort by created_at`}
-                  </div>
-                </div>
-              </div>
-
-              {/* Cost & ROI */}
-              <div style={{
-                ...(dormant ? dormCard : card), padding: '14px 18px', minWidth: 0, minHeight: '116px',
-                display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '10px',
-                transition: 'background 0.3s, border-color 0.3s',
-                animation: 'wdFadeUp 0.4s cubic-bezier(0.4,0,0.2,1) 380ms backwards',
-              }}>
-                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '10px' }}>
-                  <span style={{ ...TYPE.cardTitle, color: dormant ? 'var(--t3)' : 'var(--t1)' }}>Cost &amp; ROI</span>
-                  <span style={{ ...TYPE.caption, color: 'var(--t3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    cohort attribution — closings counted in the lead&apos;s period
-                  </span>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0,1fr))', gap: '10px' }}>
-                  {[
-                    { label: 'Conversion Spend', val: loading || !d ? '—' : fmtRp(d.spend) },
-                    { label: 'Cost per Deal',    val: loading || !d ? '—' : (d.deals ? fmtRp(d.cpd) : '—') },
-                    { label: 'Total Closing',    val: loading || !d ? '—' : fmtRp(d.closing), color: '#2FB673' },
-                    { label: 'ROAS',             val: loading || !d ? '—' : (d.spend && d.deals ? d.roas.toFixed(2) + 'x' : '—'), color: d?.roas >= 1 ? '#2FB673' : '#EF4444' },
-                    { label: 'ROI',              val: loading || !d ? '—' : (d.spend && d.deals ? (d.roi >= 0 ? '+' : '') + d.roi.toFixed(0) + '%' : '—'), color: d?.roi >= 0 ? '#2FB673' : '#EF4444' },
-                  ].map(r => (
-                    <div key={r.label} style={{ minWidth: 0 }}>
-                      <div style={{ ...TYPE.caption, fontWeight: 700, color: 'var(--t3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.label}</div>
-                      <div style={{
-                        ...TYPE.tableCellStrong, fontSize: '13px', marginTop: '3px', whiteSpace: 'nowrap',
-                        color: dormant || loading || !d ? 'var(--t3)' : (r.color && d.deals ? r.color : 'var(--t1)'),
-                      }}>{r.val}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </>
-        )}
+          {/* ── 4 · Baris uang — DORMANT s.d. ada Deal; saat ada Deal naik tepat di bawah status ── */}
+          <div className={`rgl-row rgl-row-money rgl-money${busy}`} style={{ order: hasDeal ? 3 : 4 }}>
+            <ClosingCard d={d} dormant={dormant} delay={hasDeal ? 220 : 320} />
+            <CostRoiCard d={d} dormant={dormant} delay={hasDeal ? 270 : 370} />
+          </div>
+        </>)}
       </div>
-    </div>
-  );
-}
 
-/* ─── Donut chart status (SVG, segmen per status) ───
-   Props opsional utk panel forest: colors (map status→warna),
-   baseStroke, centerColor, subColor. Default = tampilan lama. */
-function Donut({ counts, total, loading, colors, baseStroke, centerColor, subColor }) {
-  const R = 46, C = 2 * Math.PI * R;
-  let acc = 0;
-  const segments = STATUSES.map(s => {
-    const n = counts?.[s] || 0;
-    const frac = total ? n / total : 0;
-    const seg = { s, frac, start: acc };
-    acc += frac;
-    return seg;
-  }).filter(seg => seg.frac > 0);
-
-  return (
-    <div style={{ position: 'relative', width: '150px', height: '150px', flexShrink: 0 }}>
-      <svg viewBox="0 0 120 120" width="150" height="150" style={{ transform: 'rotate(-90deg)' }}>
-        <circle cx="60" cy="60" r={R} fill="none" stroke={baseStroke || 'var(--hover)'} strokeWidth="15" />
-        {segments.map(seg => (
-          <circle
-            key={seg.s}
-            cx="60" cy="60" r={R} fill="none"
-            stroke={(colors || {})[seg.s] || STATUS_COLOR[seg.s]?.fg} strokeWidth="15"
-            strokeDasharray={`${Math.max(seg.frac * C - 1.5, 0.5)} ${C}`}
-            strokeDashoffset={-seg.start * C}
-            style={{ transition: 'stroke-dasharray 0.6s cubic-bezier(0.4,0,0.2,1), stroke-dashoffset 0.6s cubic-bezier(0.4,0,0.2,1)' }}
-          />
-        ))}
-      </svg>
-      <div style={{
-        position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
-        alignItems: 'center', justifyContent: 'center', pointerEvents: 'none',
-      }}>
-        <span style={{ ...TYPE.metricValueSm, fontSize: '22px', fontVariantNumeric: 'tabular-nums', textAlign: 'center', color: centerColor || undefined }}>{loading ? '—' : total.toLocaleString('id-ID')}</span>
-        <span style={{ ...TYPE.caption, textAlign: 'center', color: subColor || undefined }}>leads</span>
-      </div>
+      {/* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */}
+      {DEMO_ALLOWED && role === 'admin' && !isMobile && (
+        <PreviewPanel note="Also applies here. Tip: pick “Last 7 days” to see the money row before the first deal (dormant)." />
+      )}
+      {/* ═══ END PREVIEW-ONLY ═══ */}
     </div>
   );
 }

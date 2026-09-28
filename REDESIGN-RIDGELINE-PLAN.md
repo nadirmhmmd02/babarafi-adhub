@@ -38,7 +38,8 @@ Sumber: sesi Claude Code 27 Sep 2026 — critique UI (skill impeccable) → refe
 | Sidebar desktop (semua halaman) | ✅ Preview selesai |
 | Campaigns, Calendar, Analytics & Insights (`/reports`) — desktop, HP, dua tema | ✅ Preview selesai (ronde 4) |
 | Laporan Export PDF/JPG | ✅ Diredesain (ronde 4) — font Geist, palet Ridgeline, ikut tema |
-| Leads Hub, Maps, Notes, Login | ⏳ Belum — di luar kategori Ads Hub, tetap versi lama |
+| Dashboard Leads Hub (`/leads`) — desktop, HP, dua tema | ✅ Preview selesai (ronde 5, Bagian 14) |
+| Leads List, Leads Analytics, Maps, Notes, Login | ⏳ Belum — tetap versi lama |
 | Menu HP (drawer + top bar `MobileNav`) | ⏳ Belum — masih desain lama (termasuk logo) |
 | Rumus metrik & logika fetch | TIDAK disentuh sama sekali |
 
@@ -134,7 +135,7 @@ SEMUA SUDAH DIJAWAB NADIR (28 Sep 2026):
 
 ## 7. ITEM PREVIEW-ONLY — WAJIB DIBUANG SEBELUM PUSH
 - Hapus file `app/components/demoDashboard.js` (data dummy semua halaman), `app/components/demoMode.js` (saklar bersama) dan `app/components/PreviewPanel.js` (panel preview).
-- Buang semua blok bertanda `PREVIEW-ONLY — JANGAN DI-PUSH` di: `app/page.js` (import, `useDemoMode`, cabang dummy di `fetchData`, chip, Export dimatikan saat demo, render `PreviewPanel`), `app/campaigns/page.js` (+ cabang Stop/Run & Edit Budget lokal), `app/calendar/page.js` (+ CRUD di memori), `app/reports/page.js` (+ `useAuth` khusus panel, teks chip "demo data"), `app/components/CompareModal.js`, `app/components/CampaignModal.js`. Cek: `grep -rn "PREVIEW-ONLY" app` harus kosong.
+- Buang semua blok bertanda `PREVIEW-ONLY — JANGAN DI-PUSH` di: `app/page.js` (import, `useDemoMode`, cabang dummy di `fetchData`, chip, Export dimatikan saat demo, render `PreviewPanel`), `app/campaigns/page.js` (+ cabang Stop/Run & Edit Budget lokal), `app/calendar/page.js` (+ CRUD di memori), `app/reports/page.js` (+ `useAuth` khusus panel, teks chip "demo data"), `app/components/CompareModal.js`, `app/components/CampaignModal.js`, `app/components/ExportMenu.js` (Export dari data dummy + nama file "DEMO-"), `app/leads/page.js`. Cek: `grep -rn "PREVIEW-ONLY" app` harus kosong.
 - ~~`app/components/Sidebar.js`: blok PREVIEW-ONLY pembaca `wd-preview-accent`~~ → ✅ sudah dihapus 28 Sep 2026.
 - ~~`app/sidebar-ridgeline.css`: hapus override `html[data-accent=…]`, tanam aksen terpilih di `:root`~~ → ✅ selesai 28 Sep 2026 (Saffron).
 - Pengaman: data dummy hanya hidup saat `NODE_ENV !== 'production'`; Export mati saat demo aktif.
@@ -202,4 +203,17 @@ Permintaan Nadir: fokus lokal, halaman Ads Hub pakai data dummy supaya bisa dili
 - **Calendar:** 14 jadwal relatif bulan berjalan (menyeberang ke bulan lalu/depan, 2 tanpa tanggal), status otomatis dari tanggal; tambah/edit/hapus/ganti status hanya di memori — Supabase tidak disentuh (tanpa demo, Calendar asli September memang kosong).
 - **Compare** ikut saklar (dua periode dari data dummy).
 - Diverifikasi di localhost (sesi login Nadir): 4 halaman terisi, popup detail + Stop + Compare + tambah/ganti status Calendar jalan, **0 request ke /api/ maupun Supabase REST**, console bersih, saklar on/off berpindah data asli↔dummy, `npm run build` lolos.
+
+## 14. RONDE 5 — EXPORT DEMO + DASHBOARD LEADS HUB GAYA RIDGELINE (28 Sep 2026)
+Permintaan Nadir: (1) Export jalan dengan data dummy, (2) redesain Dashboard Leads Hub dengan nuansa Dashboard Ads Hub.
+- **Export + Demo data:** tombol Export tidak lagi dimatikan saat demo; laporan (satu periode & pisah per bulan) dibangun dari data dummy, nama file diawali `DEMO-` supaya tidak tertukar dengan laporan asli (PREVIEW-ONLY di ExportMenu.js).
+- **Dashboard Leads Hub (`app/leads/page.js` + `app/leads-ridgeline.css`, prefix `.rgl-`):** skin `.rg` penuh (Geist, kartu cangkang+panel, pil, delta, chip). SUSUNAN INFORMASI TETAP keputusan Nadir Jul 2026: KPI pair → Leads by Status (5 sel, tanpa donut) → Leads by Sales + By Category → baris uang DORMANT (naik ke bawah status saat ada Deal). Rumus & query TIDAK diubah.
+  - Total Leads & Follow-up = anatomi KPI Ads Hub (kepala · panel bergradasi arah perubahan + tekstur titik · kaki). Total Leads: sparkline harian. Follow-up: meter "barcode" 60 batang (penerus meter barcode lama) + penanda "prev".
+  - Status: 5 sel sejajar dipisah garis, warna status dari palet skin (No Status abu · Cold biru · Warm amber · Hot merah · Deal hijau). Sales: avatar berwarna (Akmel biru · Hendra ungu · Dedik teal, hue sama dengan Leads List). Kategori: batang teal (entitas Conversion).
+  - Dormant = kartu garis putus-putus tanpa bayangan, teks redup, angka tetap tampil; menyala otomatis (cincin ROAS hijau) saat ada Deal.
+  - Top bar: pil "N in Black Box" (admin) · pil kategori (menu rata tengah) · pil tanggal | refresh · tema. HP: banner Black Box, sel status 2 kolom, keterangan kepala kartu panjang disembunyikan.
+  - **BARU (boleh dibuang):** delta vs periode sebelumnya di 2 KPI (query leads periode pembanding, aturan periode sama dgn Ads Hub → `previousRange` di rgKit), follow-up dalam poin persen ("pts"), rata-rata nilai per deal. **Dedup:** Total Closing & ROAS hanya di kartu Total Closing (dulu dobel di Cost & ROI → kini Conversion spend · Cost per deal · ROI).
+- Kode bersama: `KpiSpark` & `previousRange` pindah ke `app/components/rgKit.js` (dipakai Dashboard Ads Hub & Leads Hub).
+- Data dummy Leads (`buildDemoLeads` di demoDashboard.js): pola harian & faktor bulan sama dgn Ads Hub, status bergantung umur lead (Deal hanya lead ≥10 hari → "Last 7 days" = baris uang dormant), spend konversi = spend campaign PROSPEK/KONVERSI dummy (angkanya sama persis dengan Dashboard Ads Hub), 7 lead di Black Box.
+- Diverifikasi (localhost, sesi Nadir): 1920×1080 fit tanpa scroll; 1366×768 scroll ±120px (sama pola Ads Hub di layar pendek), tanpa daftar terpotong; dormant ("Last 7 days") & menyala ("This month"); tema terang & gelap; HP 375px tanpa scroll samping; console bersih; `npm run build` lolos. Export: tombol aktif saat demo (unduhan file tidak dicoba dari pane).
 

@@ -1,10 +1,11 @@
 'use client';
 
 /* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ (hapus seluruh file ini + pemakaiannya di halaman
-   Ads Hub: app/page.js, campaigns/page.js, calendar/page.js, reports/page.js)
+   Ads Hub: app/page.js, campaigns/page.js, calendar/page.js, reports/page.js + Dashboard
+   Leads Hub app/leads/page.js)
    Panel kecil pojok kanan-bawah halaman Ads Hub untuk review redesain di lokal:
    saklar DATA DUMMY bersama (demoMode.js) — satu saklar berlaku di Dashboard,
-   Campaigns, Calendar & Analytics sekaligus. Pilihan aksen sudah DIHAPUS —
+   Campaigns, Calendar, Analytics & Dashboard Leads Hub sekaligus. Pilihan aksen sudah DIHAPUS —
    aksen final Saffron ditanam di sidebar-ridgeline.css (keputusan Nadir 28 Sep 2026).
    Posisi buka/tutup panel disimpan di localStorage supaya tetap saat refresh. */
 
@@ -56,7 +57,7 @@ export default function PreviewPanel({ note }) {
           <span style={{ flex: 1 }}>
             <span style={{ display: 'block', fontSize: 13, color: 'var(--rg-t1)' }}>Demo data</span>
             <span style={{ display: 'block', fontSize: 11.5, color: 'var(--rg-t2)', marginTop: 2 }}>
-              {demo ? 'Made-up numbers on every Ads Hub page' : 'Showing real data'}
+              {demo ? 'Made-up numbers instead of live data' : 'Showing real data'}
             </span>
           </span>
           <input type="checkbox" checked={demo} onChange={e => onDemo(e.target.checked)}

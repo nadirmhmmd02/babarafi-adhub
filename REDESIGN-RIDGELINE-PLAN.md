@@ -133,12 +133,12 @@ SEMUA SUDAH DIJAWAB NADIR (28 Sep 2026):
 6. ~~Mode Presentasi~~ → Nadir mengartikannya sebagai **hasil tombol download laporan (Export)** → ✅ laporan diredesain (Bagian 12).
 
 ## 7. ITEM PREVIEW-ONLY — WAJIB DIBUANG SEBELUM PUSH
-- Hapus file `app/components/demoDashboard.js` (data dummy) dan `app/components/PreviewPanel.js` (panel preview, sekarang tinggal saklar Demo data).
-- `app/page.js`: semua blok bertanda `PREVIEW-ONLY — JANGAN DI-PUSH` (import, state `demo`, cabang data dummy di `fetchData`, chip "Demo data", Export dimatikan saat demo, render `PreviewPanel`).
+- Hapus file `app/components/demoDashboard.js` (data dummy semua halaman), `app/components/demoMode.js` (saklar bersama) dan `app/components/PreviewPanel.js` (panel preview).
+- Buang semua blok bertanda `PREVIEW-ONLY — JANGAN DI-PUSH` di: `app/page.js` (import, `useDemoMode`, cabang dummy di `fetchData`, chip, Export dimatikan saat demo, render `PreviewPanel`), `app/campaigns/page.js` (+ cabang Stop/Run & Edit Budget lokal), `app/calendar/page.js` (+ CRUD di memori), `app/reports/page.js` (+ `useAuth` khusus panel, teks chip "demo data"), `app/components/CompareModal.js`, `app/components/CampaignModal.js`. Cek: `grep -rn "PREVIEW-ONLY" app` harus kosong.
 - ~~`app/components/Sidebar.js`: blok PREVIEW-ONLY pembaca `wd-preview-accent`~~ → ✅ sudah dihapus 28 Sep 2026.
 - ~~`app/sidebar-ridgeline.css`: hapus override `html[data-accent=…]`, tanam aksen terpilih di `:root`~~ → ✅ selesai 28 Sep 2026 (Saffron).
 - Pengaman: data dummy hanya hidup saat `NODE_ENV !== 'production'`; Export mati saat demo aktif.
-- Yang DIPERTAHANKAN: penjaga `fetchToken` di `fetchData` (respons lama tidak menimpa hasil baru).
+- Yang DIPERTAHANKAN: penjaga `fetchToken` di `fetchData` Dashboard, Campaigns & Analytics (respons lama tidak menimpa hasil baru; di Analytics baru ditambahkan 28 Sep 2026).
 
 ## 8. CHECKLIST SEBELUM LIVE
 - [ ] Keputusan Bagian 6 dijawab & diterapkan
@@ -192,3 +192,14 @@ Jawaban Nadir atas 6 keputusan ada di Bagian 6. Yang dikerjakan:
 **Verifikasi ronde 4:** build lolos; Campaigns (sort 3 tahap, subtotal, pilih→bar melayang, dialog Edit Budget + Esc), Calendar (menu status, form + segmen, konfirmasi hapus — semua dibuka/ditutup tanpa mengubah data), Analytics (cincin, chip muat, 3 kartu), HP 375px, tema terang (kontras teks ≥4,5:1), laporan Export dirender dengan html2canvas asli project & dilihat gambarnya.
 **Catatan:** saat pengujian beruntun, API sempat membalas 401 (verifikasi token Supabase gagal saat lonjakan) dan Meta membatasi daftar campaign (daftar kosong diam-diam) — bukan akibat redesain; dicatat sebagai tugas terpisah.
 Verifikasi (pane browser tersembunyi, jadi ResizeObserver disimulasikan untuk pengecekan): 1920×953, 1920×1080, 1536×730, 1440×789, 1366×650 (+ sidebar terbuka), HP 375×812, tema gelap & terang. Scroll di layar pendek: 1366×650 = 156px, 1536×730 = 76px, 1440×789 = 17px, 1920 = 0.
+
+## 13. RONDE 4b — DATA DUMMY DI SEMUA HALAMAN ADS HUB (28 Sep 2026)
+Permintaan Nadir: fokus lokal, halaman Ads Hub pakai data dummy supaya bisa dilihat penuh tanpa menarik Meta (tarikan beruntun sempat membuat akun iklan dibatasi).
+- **Satu saklar untuk semua halaman** (`app/components/demoMode.js`): panel Preview controls kini muncul di Dashboard, Campaigns, Calendar & Analytics (admin, desktop); nilai di localStorage `wd-preview-demo` (default NYALA), dibaca saat state dibuat → permintaan PERTAMA halaman sudah dummy, nol tarikan Meta. Chip "Demo data" di samping judul tiap halaman.
+- **Data dihitung per hari** (`demoDashboard.js`): 12 campaign rekaan × tarif harian × pola mingguan × promo tgl 12–15 × faktor bulan × acak deterministik → rentang apa pun konsisten (Dashboard = Campaigns = Analytics = Compare; Compare "Sep vs Aug" sama persis dengan badge dashboard). Bulan ini vs bulan lalu = delta campur (6 kartu insight: Warning/Positive/Info, skor 84 "Good"); **"Last month" = bulan berat** (Leads −40%, CPL +62% → kartu Critical, skor 39).
+- Isi khusus: campaign Stop (berhenti N hari lalu → hilang di "Last 7 days"), campaign Ended, kasus nyata nama "TRAFFIC" ber-objective Awareness (hasil = Impressions), campaign Conversion boros (kartu "Needs attention").
+- **Campaigns:** Stop/Run & Edit Budget berjalan tapi hanya di memori (tidak ke Meta; bertahan saat pindah halaman, hilang saat refresh). Popup detail = poster iklan SVG rekaan bertanda DEMO (4:5 & 9:16, carousel 3 slide di campaign Conversion) + rincian Facebook/Instagram/Messenger/Audience Network.
+- **Calendar:** 14 jadwal relatif bulan berjalan (menyeberang ke bulan lalu/depan, 2 tanpa tanggal), status otomatis dari tanggal; tambah/edit/hapus/ganti status hanya di memori — Supabase tidak disentuh (tanpa demo, Calendar asli September memang kosong).
+- **Compare** ikut saklar (dua periode dari data dummy).
+- Diverifikasi di localhost (sesi login Nadir): 4 halaman terisi, popup detail + Stop + Compare + tambah/ganti status Calendar jalan, **0 request ke /api/ maupun Supabase REST**, console bersih, saklar on/off berpindah data asli↔dummy, `npm run build` lolos.
+

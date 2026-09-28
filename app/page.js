@@ -43,7 +43,7 @@ import { supabase, authFetch } from './supabase';
 import { Download } from 'lucide-react';
 import PreviewPanel from './components/PreviewPanel';
 import { buildDemoDashboard } from './components/demoDashboard';
-const DEMO_ALLOWED = process.env.NODE_ENV !== 'production';
+import { DEMO_ALLOWED, useDemoMode, DemoChip, demoDelay } from './components/demoMode';
 /* ═══ END PREVIEW-ONLY ═══ */
 
 /* ─── Token lama (masih dipakai tombol top bar mobile & popup Suggestions) ─── */
@@ -547,21 +547,14 @@ export default function DashboardPage() {
   // menimpa hasil yang lebih baru (mis. ganti filter cepat / saklar data preview)
   const fetchToken = useRef(0);
 
-  /* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */
-  const [demo, setDemo] = useState(false);
-  const demoReady = useRef(false);
+  /* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ (saklar Demo data bersama — app/components/demoMode.js) */
+  const demo = useDemoMode();
+  const prevDemo = useRef(demo);
   useEffect(() => {
-    if (!DEMO_ALLOWED) return;
-    try { if (localStorage.getItem('wd-preview-demo') !== '0') setDemo(true); } catch {}
-  }, []);
-  useEffect(() => {
-    if (!demoReady.current) { demoReady.current = true; return; }
+    if (prevDemo.current === demo) return;
+    prevDemo.current = demo;
     refresh();
   }, [demo]);
-  function toggleDemo(v) {
-    setDemo(v);
-    try { localStorage.setItem('wd-preview-demo', v ? '1' : '0'); } catch {}
-  }
   /* ═══ END PREVIEW-ONLY ═══ */
 
   // Slot aksi di top bar mobile (MobileNav) — diisi via portal.
@@ -627,7 +620,7 @@ export default function DashboardPage() {
       /* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */
       if (demo) {
         const r = since && until ? { since, until } : presetToRange(dateOpt.value);
-        await new Promise(res => setTimeout(res, 350));
+        await demoDelay();
         json = buildDemoDashboard({ ...r, isThisMonth: !(since && until) && dateOpt.value === 'this_month' });
       } else
       /* ═══ END PREVIEW-ONLY ═══ */
@@ -1085,12 +1078,7 @@ export default function DashboardPage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <h1 className="rg-h1">Dashboard</h1>
             {/* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */}
-            {demo && (
-              <span style={{
-                padding: '3px 9px', borderRadius: 999, fontSize: 11.5, fontWeight: 500, whiteSpace: 'nowrap',
-                background: 'rgba(233,160,52,0.16)', color: '#D98F1F',
-              }}>Demo data</span>
-            )}
+            {demo && <DemoChip />}
             {/* ═══ END PREVIEW-ONLY ═══ */}
           </div>
           <div className="rg-ctx">{ctxLine}</div>
@@ -1230,7 +1218,9 @@ export default function DashboardPage() {
       )}
 
       {/* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */}
-      {DEMO_ALLOWED && isAdmin && !isMobile && <PreviewPanel demo={demo} onDemo={toggleDemo} />}
+      {DEMO_ALLOWED && isAdmin && !isMobile && (
+        <PreviewPanel note="Applies to every Ads Hub page. Export is disabled while demo data is on." />
+      )}
       {/* ═══ END PREVIEW-ONLY ═══ */}
     </div>
   );

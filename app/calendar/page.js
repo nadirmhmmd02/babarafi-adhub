@@ -21,6 +21,12 @@ import { supabase } from '../supabase';
 import { useAuth } from '../components/AuthContext';
 import useIsMobile from '../components/useIsMobile';
 import { dashboardFontVars } from '../components/dashboardFonts';
+/* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */
+import PreviewPanel from '../components/PreviewPanel';
+import { demoCalendarList, demoCalendarSave, demoCalendarDelete, demoCalendarPatch } from '../components/demoDashboard';
+import { DEMO_ALLOWED, useDemoMode, DemoChip, demoDelay } from '../components/demoMode';
+const isDemoRow = id => String(id).startsWith('demo-');
+/* ═══ END PREVIEW-ONLY ═══ */
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const OBJ_ORDER = ['Awareness','Traffic','Conversion'];
@@ -130,11 +136,30 @@ export default function CalendarPage() {
       (OBJ_ORDER.indexOf(a.obj) - OBJ_ORDER.indexOf(b.obj)) ||
       (parseLocal(a.mulai) - parseLocal(b.mulai)));
 
+  /* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ (saklar Demo data bersama — app/components/demoMode.js;
+     jadwal dummy + tambah/edit/hapus hanya di memori, tabel Supabase tidak disentuh) */
+  const demo = useDemoMode();
+  const prevDemo = useRef(demo);
+  useEffect(() => {
+    if (prevDemo.current === demo) return;
+    prevDemo.current = demo;
+    loadCampaigns();
+  }, [demo]);
+  /* ═══ END PREVIEW-ONLY ═══ */
+
   useEffect(() => { loadCampaigns(); }, []);
 
   async function loadCampaigns() {
     setLoading(true);
     setError(null);
+    /* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */
+    if (demo) {
+      await demoDelay(300);
+      setCampaigns(demoCalendarList());
+      setLoading(false);
+      return;
+    }
+    /* ═══ END PREVIEW-ONLY ═══ */
     const { data, error: err } = await supabase.from('campaigns').select('*').order('created_at', { ascending: true });
     if (err) setError(err.message);
     else setCampaigns(data || []);
@@ -160,6 +185,9 @@ export default function CalendarPage() {
     if (!form.name || saving) return;
     setSaving(true);
     const payload = { name:form.name, obj:form.obj, konten:form.konten, bh:parseInt(form.bh)||0, mulai:form.mulai||null, selesai:form.selesai||null, status:form.status };
+    /* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */
+    if (demo || (editId && isDemoRow(editId))) { await demoDelay(300); demoCalendarSave(payload, editId); } else
+    /* ═══ END PREVIEW-ONLY ═══ */
     if (editId) { await supabase.from('campaigns').update(payload).eq('id', editId); }
     else         { await supabase.from('campaigns').insert([payload]); }
     setSaving(false);
@@ -169,6 +197,9 @@ export default function CalendarPage() {
 
   async function handleDelete(id) {
     setConfirmDel(null);
+    /* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */
+    if (isDemoRow(id)) { demoCalendarDelete(id); loadCampaigns(); return; }
+    /* ═══ END PREVIEW-ONLY ═══ */
     await supabase.from('campaigns').delete().eq('id', id);
     loadCampaigns();
   }
@@ -177,6 +208,9 @@ export default function CalendarPage() {
   async function changeStatus(id, status) {
     setStatusDrop(null);
     setCampaigns(prev => prev.map(c => c.id === id ? { ...c, status } : c));
+    /* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */
+    if (isDemoRow(id)) { demoCalendarPatch(id, { status }); return; }
+    /* ═══ END PREVIEW-ONLY ═══ */
     const { error: err } = await supabase.from('campaigns').update({ status }).eq('id', id);
     if (err) { setError(err.message); loadCampaigns(); }
   }
@@ -242,7 +276,12 @@ export default function CalendarPage() {
       {/* ══ TOP BAR — judul + konteks (kiri) · bulan & aksi (kanan) ══ */}
       <header className="rg-top">
         <div className="rg-top-title">
-          <h1 className="rg-h1">Calendar</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <h1 className="rg-h1">Calendar</h1>
+            {/* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */}
+            {demo && <DemoChip />}
+            {/* ═══ END PREVIEW-ONLY ═══ */}
+          </div>
           <div className="rg-ctx">{ctxLine}</div>
         </div>
 
@@ -652,6 +691,12 @@ export default function CalendarPage() {
           </div>
         </div>
       )}
+
+      {/* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */}
+      {DEMO_ALLOWED && isAdmin && !isMobile && (
+        <PreviewPanel note="Applies to every Ads Hub page. Adding, editing or deleting only changes the screen — nothing is saved." />
+      )}
+      {/* ═══ END PREVIEW-ONLY ═══ */}
     </div>
   );
 }

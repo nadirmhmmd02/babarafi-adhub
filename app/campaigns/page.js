@@ -26,6 +26,11 @@ import CombineModal from '../components/CombineModal';
 import { dashboardFontVars } from '../components/dashboardFonts';
 import { presetToRange, fmtRangeShort, fmtClock, DatePill } from '../components/rgKit';
 import { authFetch } from '../supabase';
+/* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */
+import PreviewPanel from '../components/PreviewPanel';
+import { buildDemoCampaigns, demoEditCampaign } from '../components/demoDashboard';
+import { DEMO_ALLOWED, useDemoMode, DemoChip, demoDelay } from '../components/demoMode';
+/* ═══ END PREVIEW-ONLY ═══ */
 
 /* ─── Format angka — PENUH gaya Indonesia (sama dengan Dashboard: Rp 1.440.076) ─── */
 function fmtRp(v) {
@@ -236,6 +241,17 @@ export default function CampaignsPage() {
   // hasil yang lebih baru (tabel lama tetap tampil diredupkan selama memuat ulang)
   const fetchToken = useRef(0);
 
+  /* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ (saklar Demo data bersama — app/components/demoMode.js) */
+  const demo = useDemoMode();
+  const prevDemo = useRef(demo);
+  useEffect(() => {
+    if (prevDemo.current === demo) return;
+    prevDemo.current = demo;
+    setSelectedIds([]);
+    refresh();
+  }, [demo]);
+  /* ═══ END PREVIEW-ONLY ═══ */
+
   // Aksi kontrol iklan (admin-only): stop/run + edit daily budget
   const [actionModal, setActionModal] = useState(null);  // { type:'status'|'budget', campaign, nextStatus }
   const [actionBusy, setActionBusy]   = useState(false);
@@ -304,8 +320,17 @@ export default function CampaignsPage() {
       const url = since && until
         ? `/api/meta?since=${since}&until=${until}`
         : `/api/meta?date_preset=${dateOpt.value}`;
-      const res  = await authFetch(url);
-      const json = await res.json();
+      let json;
+      /* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */
+      if (demo) {
+        await demoDelay();
+        json = buildDemoCampaigns(since && until ? { since, until } : presetToRange(dateOpt.value));
+      } else
+      /* ═══ END PREVIEW-ONLY ═══ */
+      {
+        const res = await authFetch(url);
+        json = await res.json();
+      }
       if (token !== fetchToken.current) return;
       if (json.error) throw new Error(json.error);
       setData(json);
@@ -404,13 +429,22 @@ export default function CampaignsPage() {
       const payload = type === 'status'
         ? { action: 'set_status', campaign_id: campaign.id, status: nextStatus }
         : { action: 'set_budget', campaign_id: campaign.id, daily_budget: parseInt(budgetInput || '0') };
-      const res  = await authFetch('/api/meta', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const json = await res.json();
-      if (json.error) throw new Error(json.error);
+      /* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ (campaign dummy: TIDAK dikirim ke Meta,
+         cuma disimpan di memori supaya tetap berubah saat pindah halaman) */
+      if (String(campaign.id).startsWith('demo-')) {
+        await demoDelay(500);
+        demoEditCampaign(campaign.id, type === 'status' ? { status: nextStatus } : { daily_budget: parseInt(budgetInput) });
+      } else
+      /* ═══ END PREVIEW-ONLY ═══ */
+      {
+        const res  = await authFetch('/api/meta', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const json = await res.json();
+        if (json.error) throw new Error(json.error);
+      }
 
       // Update lokal langsung tanpa reload penuh (Meta sudah konfirmasi sukses)
       setData(prev => prev ? {
@@ -678,7 +712,12 @@ export default function CampaignsPage() {
       {/* ══ TOP BAR — judul + konteks (kiri) · filter & aksi (kanan) ══ */}
       <header className="rg-top">
         <div className="rg-top-title">
-          <h1 className="rg-h1">Campaigns</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <h1 className="rg-h1">Campaigns</h1>
+            {/* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */}
+            {demo && <DemoChip />}
+            {/* ═══ END PREVIEW-ONLY ═══ */}
+          </div>
           <div className="rg-ctx">{ctxLine}</div>
         </div>
 
@@ -926,6 +965,12 @@ export default function CampaignsPage() {
           onClose={() => setSelectedCampaign(null)}
         />
       )}
+
+      {/* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */}
+      {DEMO_ALLOWED && isAdmin && !isMobile && (
+        <PreviewPanel note="Applies to every Ads Hub page. Stop/Run and Edit Budget only change the screen — nothing is sent to Meta." />
+      )}
+      {/* ═══ END PREVIEW-ONLY ═══ */}
     </div>
   );
 }

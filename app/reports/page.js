@@ -12,7 +12,7 @@
    ══════════════════════════════════════════════════════════════════════════ */
 
 import '../reports-ridgeline.css';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Sparkles, RefreshCw,
@@ -28,6 +28,12 @@ import { monotonePath } from '../components/AreaChart';
 import { dashboardFontVars } from '../components/dashboardFonts';
 import { presetToRange, fmtRangeShort, fmtClock, Delta, DatePill } from '../components/rgKit';
 import { authFetch } from '../supabase';
+/* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */
+import PreviewPanel from '../components/PreviewPanel';
+import { useAuth } from '../components/AuthContext';
+import { buildDemoDashboard } from '../components/demoDashboard';
+import { DEMO_ALLOWED, useDemoMode, DemoChip, demoDelay } from '../components/demoMode';
+/* ═══ END PREVIEW-ONLY ═══ */
 
 /* Tingkat insight → nada warna skin (critical merah · warning kuning tua · positive hijau ·
    info biru). Status color hanya untuk arti status, bukan dekorasi. */
@@ -168,6 +174,20 @@ export default function ReportsPage() {
     setTopbarSlot(isMobile ? document.getElementById('wd-topbar-actions') : null);
   }, [isMobile]);
 
+  /* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ (saklar Demo data bersama — app/components/demoMode.js) */
+  const { isAdmin } = useAuth();
+  const demo = useDemoMode();
+  const prevDemo = useRef(demo);
+  useEffect(() => {
+    if (prevDemo.current === demo) return;
+    prevDemo.current = demo;
+    refresh();
+  }, [demo]);
+  /* ═══ END PREVIEW-ONLY ═══ */
+  // Penanda permintaan terakhir: respons lama yang datang belakangan (mis. ganti filter
+  // cepat / saklar Demo data) tidak boleh menimpa hasil yang lebih baru
+  const fetchToken = useRef(0);
+
   useEffect(() => { if (!isCustom) fetchData(); }, [dateOpt, isCustom]);
   // Restore custom range yang persist di context saat balik ke tab ini
   useEffect(() => { if (isCustom && customSince && customUntil) fetchData(customSince, customUntil); }, []);
@@ -180,20 +200,32 @@ export default function ReportsPage() {
   }, [showDropdown]);
 
   async function fetchData(since = '', until = '') {
+    const token = ++fetchToken.current;
     setLoading(true); setError(null);
     try {
       const url = since && until
         ? `/api/meta?mode=dashboard&since=${since}&until=${until}`
         : `/api/meta?mode=dashboard&date_preset=${dateOpt.value}`;
-      const res  = await authFetch(url);
-      const json = await res.json();
+      let json;
+      /* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */
+      if (demo) {
+        await demoDelay();
+        json = buildDemoDashboard(since && until ? { since, until } : presetToRange(dateOpt.value));
+      } else
+      /* ═══ END PREVIEW-ONLY ═══ */
+      {
+        const res = await authFetch(url);
+        json = await res.json();
+      }
+      if (token !== fetchToken.current) return;
       if (json.error) throw new Error(json.error);
       setAnalysis(buildAnalysis(json));
       setUpdatedAt(new Date());
     } catch (err) {
+      if (token !== fetchToken.current) return;
       setError(err.message);
     }
-    setLoading(false);
+    if (token === fetchToken.current) setLoading(false);
   }
 
   function refresh() {
@@ -294,7 +326,12 @@ export default function ReportsPage() {
       {/* ══ TOP BAR ══ */}
       <header className="rg-top">
         <div className="rg-top-title">
-          <h1 className="rg-h1">Analytics &amp; Insights</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <h1 className="rg-h1">Analytics &amp; Insights</h1>
+            {/* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */}
+            {demo && <DemoChip />}
+            {/* ═══ END PREVIEW-ONLY ═══ */}
+          </div>
           <div className="rg-ctx">{ctxLine}</div>
         </div>
 
@@ -381,7 +418,7 @@ export default function ReportsPage() {
           {/* ══ INSIGHT CARDS ══ */}
           <div className="rgr-section">
             <span className="rgr-section-title">Generated insights</span>
-            <span className="rg-chip">{analysis.insights.length} from live Meta Ads data</span>
+            <span className="rg-chip">{analysis.insights.length} from {/* PREVIEW-ONLY: cabang demo */ demo ? 'demo data' : 'live Meta Ads data'}</span>
           </div>
 
           {analysis.insights.length === 0 ? (
@@ -402,6 +439,12 @@ export default function ReportsPage() {
           )}
         </>)}
       </div>
+
+      {/* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */}
+      {DEMO_ALLOWED && isAdmin && !isMobile && (
+        <PreviewPanel note="Applies to every Ads Hub page. Tip: pick “Last month” to see Critical insight cards." />
+      )}
+      {/* ═══ END PREVIEW-ONLY ═══ */}
     </div>
   );
 }

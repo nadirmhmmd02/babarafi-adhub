@@ -436,14 +436,30 @@ export function demoCalendarSave(payload, id) {
 }
 export function demoCalendarDelete(id) { calStore = store().filter(r => r.id !== id); }
 export function demoCalendarPatch(id, patch) { calStore = store().map(r => r.id === id ? { ...r, ...patch } : r); }
-/* ═══ Leads Hub — baris tabel `leads` (approved) + spend konversi + isi Black Box ═══
-   Lead per hari mengikuti pola mingguan & faktor bulan yang sama dengan Ads Hub (bulan ini
-   naik vs bulan lalu; bulan lalu "bulan berat"). Status bergantung umur lead: lead baru
-   kebanyakan belum diproses; Deal hanya dari lead ≥10 hari → "Last 7 days" = baris uang
-   dormant (tanpa closing), "This month" = baris uang menyala. Spend = spend campaign
-   PROSPEK/KONVERSI dummy periode yang sama (rumus sama dgn /api/leads?mode=spend). */
+/* ═══ Leads Hub — tabel `leads` rekaan di MEMORI (Dashboard Leads Hub + Leads List) ═══
+   Satu "gudang" lead dipakai dua halaman: ubah status/sales/follow-up di Leads List →
+   Dashboard Leads Hub ikut berubah (selama browser tidak di-refresh). Tidak ada yang
+   ditulis ke Supabase. Lead per hari mengikuti pola mingguan & faktor bulan Ads Hub
+   (bulan ini naik vs bulan lalu; bulan lalu "bulan berat"). Status bergantung umur lead:
+   lead baru kebanyakan belum diproses; Deal hanya dari lead ≥10 hari → "Last 7 days" =
+   baris uang dormant. Spend = spend campaign PROSPEK/KONVERSI dummy periode yang sama.
+   Nama, nomor (pola 081200000xxx) & email SEMUA REKAAN. */
 const LEAD_SALES = [['Akmel', 0.38], ['Hendra', 0.34], ['Dedik', 0.28]];
 const DEAL_SIZES = [35000000, 45000000, 55000000, 75000000];
+const FIRST = ['Andi', 'Budi', 'Citra', 'Dewi', 'Eko', 'Fajar', 'Gita', 'Hadi', 'Indah', 'Joko', 'Kartika', 'Lukman',
+  'Maya', 'Nanda', 'Oki', 'Putri', 'Rizky', 'Sari', 'Taufik', 'Wulan', 'Yoga', 'Zahra', 'Agus', 'Bayu', 'Dimas',
+  'Fitri', 'Hendro', 'Intan', 'Rina', 'Surya'];
+const LAST = ['Pratama', 'Saputra', 'Wijaya', 'Santoso', 'Hidayat', 'Kurniawan', 'Nugroho', 'Lestari', 'Permana',
+  'Siregar', 'Rahman', 'Setiawan', 'Utami', 'Halim', 'Gunawan', 'Firmansyah', 'Maharani', 'Susanto', 'Wibowo', 'Anggraini'];
+const CITIES = ['Jakarta Timur', 'Jakarta Selatan', 'Bekasi', 'Depok', 'Tangerang', 'Bogor', 'Bandung', 'Surabaya',
+  'Semarang', 'Yogyakarta', 'Malang', 'Medan', 'Palembang', 'Makassar', 'Denpasar', 'Balikpapan'];
+const LEAD_CAMPAIGN = {
+  Autopilot: 'KTBR PROSPEK - Franchise Package Autopilot',
+  other: ['KTBR PROSPEK - Franchise Proven Instant Form', 'KTBR PROSPEK - Franchise Suka-Suka Website Form'],
+};
+const NOTES = ['Minta proposal lengkap via WA', 'Tanya lokasi dekat kampus', 'Follow up lagi minggu depan',
+  'Sudah survei lokasi, tunggu keputusan', 'Budget masih kurang, tawarkan paket lebih kecil', 'Minta simulasi BEP',
+  'Mau datang ke kantor pusat', 'Bandingkan dengan brand lain'];
 
 function pickW(r, list) {
   let x = r;
@@ -451,44 +467,106 @@ function pickW(r, list) {
   return list[list.length - 1][0];
 }
 
-function leadRows(since, until, today) {
+/* Satu lead lengkap (kolom sama dengan tabel Supabase `leads` + join campaign_ref) */
+function makeLead(ds, i, today, { verification = 'approved', status: forced } = {}) {
+  const rnd = seeded(`lead|${ds}|${i}`);
+  const age = daysBetween(ds, today) - 1;
+  const r = rnd();
+  const status = forced || (age < 2
+    ? pickW(r, [['No Status', 0.7], ['Cold', 0.22], ['Warm', 0.08]])
+    : age < 10
+      ? pickW(r, [['No Status', 0.35], ['Cold', 0.3], ['Warm', 0.2], ['Hot', 0.15]])
+      : pickW(r, [['No Status', 0.24], ['Cold', 0.31], ['Warm', 0.22], ['Hot', 0.17], ['Deal', 0.06]]));
+  const fuChance = age < 1 ? 0.35 : age < 3 ? 0.7 : 0.9;
+  const followed_up = verification === 'approved' && (status !== 'No Status' || rnd() < fuChance * 0.6);
+  const sales = verification !== 'approved' || (age < 2 && rnd() < 0.45) ? null : pickW(rnd(), LEAD_SALES);
+  const kategori_promo = rnd() < 0.8 ? 'Autopilot' : null;
+  const hh = String(8 + Math.floor(rnd() * 14)).padStart(2, '0');
+  const mm = String(Math.floor(rnd() * 60)).padStart(2, '0');
+  const first = FIRST[Math.floor(rnd() * FIRST.length)];
+  const last = LAST[Math.floor(rnd() * LAST.length)];
+  const deal = status === 'Deal';
+  return {
+    id: `demo-lead-${ds}-${i}${verification === 'approved' ? '' : '-bb'}`,
+    meta_lead_id: null, campaign_id: null, assigned_to: null, source: 'meta_api', verification,
+    name: `${first} ${last}`,
+    phone: '081200' + String(Math.floor(rnd() * 1000000)).padStart(6, '0'),
+    email: rnd() < 0.62 ? `${first}.${last}${Math.floor(rnd() * 90) + 10}@gmail.com`.toLowerCase() : null,
+    domicile: rnd() < 0.86 ? CITIES[Math.floor(rnd() * CITIES.length)] : null,
+    kategori_promo,
+    campaign_ref: { name: kategori_promo ? LEAD_CAMPAIGN.Autopilot : LEAD_CAMPAIGN.other[Math.floor(rnd() * 2)] },
+    status, followed_up, sales,
+    notes: status !== 'No Status' && rnd() < 0.3 ? NOTES[Math.floor(rnd() * NOTES.length)] : null,
+    closing_amount: deal ? DEAL_SIZES[Math.floor(rnd() * DEAL_SIZES.length)] : null,
+    deal_date: deal ? addDays(ds, 7 + Math.floor(rnd() * 10)) : null,
+    deal_reason: null,
+    is_new: verification !== 'approved' || (age < 2 && !followed_up && status === 'No Status'),
+    status_updated_at: null,
+    created_at: `${ds}T${hh}:${mm}:00`,
+  };
+}
+
+let leadStore = null;
+let leadSeq = 0;
+const STORE_DAYS = 400;   // cukup untuk filter kuartal + periode pembandingnya
+
+function store2() {
+  if (leadStore) return leadStore;
+  const today = localToday();
   const rows = [];
-  for (const ds of datesOf(since, until, today)) {
+  for (const ds of datesOf(addDays(today, -STORE_DAYS), today, today)) {
     const rnd = seeded(`lead|${ds}`);
     const d = parse(ds);
     const fx = monthFx(monthOffset(ds, today));
     const n = Math.floor(7.2 * DOW[d.getUTCDay()] * fx.leads * (0.75 + rnd() * 0.5) + rnd());
-    const age = daysBetween(ds, today) - 1;
-    for (let i = 0; i < n; i++) {
-      const r = rnd();
-      const status = age < 2
-        ? pickW(r, [['No Status', 0.7], ['Cold', 0.22], ['Warm', 0.08]])
-        : age < 10
-          ? pickW(r, [['No Status', 0.35], ['Cold', 0.3], ['Warm', 0.2], ['Hot', 0.15]])
-          : pickW(r, [['No Status', 0.24], ['Cold', 0.31], ['Warm', 0.22], ['Hot', 0.17], ['Deal', 0.06]]);
-      const fuChance = age < 1 ? 0.35 : age < 3 ? 0.7 : 0.9;
-      const followed_up = status !== 'No Status' || rnd() < fuChance * 0.6;
-      const sales = age < 2 && rnd() < 0.45 ? null : pickW(rnd(), LEAD_SALES);
-      const kategori_promo = rnd() < 0.8 ? 'Autopilot' : null;
-      const hh = String(8 + Math.floor(rnd() * 14)).padStart(2, '0');
-      const mm = String(Math.floor(rnd() * 60)).padStart(2, '0');
-      rows.push({
-        status, followed_up, sales, kategori_promo,
-        closing_amount: status === 'Deal' ? DEAL_SIZES[Math.floor(rnd() * DEAL_SIZES.length)] : null,
-        created_at: `${ds}T${hh}:${mm}:00`,
-      });
-    }
+    for (let i = 0; i < n; i++) rows.push(makeLead(ds, i, today));
   }
+  // Black Box: 7 lead Meta yang belum diverifikasi (2 hari terakhir)
+  for (let i = 0; i < 7; i++) rows.push(makeLead(addDays(today, -(i % 2)), 100 + i, today, { verification: 'unverified', status: 'No Status' }));
+  leadStore = rows;
   return rows;
 }
 
-export function buildDemoLeads({ since, until }) {
+const byNewest = (a, b) => (a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0);
+
+/* Leads List — baris per status verifikasi, terbaru di atas (sama dgn query asli) */
+export function demoLeadsList(verification) {
+  return store2().filter(l => l.verification === verification).sort(byNewest).map(l => ({ ...l }));
+}
+export function demoLeadsInboxCount() {
+  return store2().filter(l => l.verification === 'unverified').length;
+}
+export function demoLeadsPatch(ids, patch) {
+  const set = new Set(ids);
+  leadStore = store2().map(l => (set.has(l.id) ? { ...l, ...patch } : l));
+}
+/* "Sync Meta Leads" versi demo: 2–4 lead baru masuk Black Box */
+export function demoLeadsSync() {
   const today = localToday();
+  const n = 2 + (leadSeq % 3);
+  const now = new Date();
+  const hh = String(now.getHours()).padStart(2, '0'), mm = String(now.getMinutes()).padStart(2, '0');
+  for (let i = 0; i < n; i++) {
+    const l = makeLead(today, 500 + leadSeq * 10 + i, today, { verification: 'unverified', status: 'No Status' });
+    l.id = `demo-lead-sync-${leadSeq}-${i}`;
+    l.created_at = `${today}T${hh}:${mm}:0${i}`;
+    leadStore = [...store2(), l];
+  }
+  leadSeq++;
+  return n;
+}
+
+/* Dashboard Leads Hub — lead approved dalam rentang + spend konversi + isi Black Box */
+export function buildDemoLeads({ since, until }) {
   const dash = buildDemoDashboard({ since, until });
   const spend = dash.campaigns.reduce((s, c) => {
     const n = (c.name || '').toUpperCase();
     return (n.includes('PROSPEK') || n.includes('KONVERSI')) ? s + parseFloat(c.insights?.data?.[0]?.spend || 0) : s;
   }, 0);
-  return { rows: leadRows(since, until, today), spend, inboxCount: 7 };
+  const rows = store2().filter(l => {
+    const day = l.created_at.slice(0, 10);
+    return l.verification === 'approved' && day >= since && day <= until;
+  });
+  return { rows, spend, inboxCount: demoLeadsInboxCount() };
 }
 /* ═══ END PREVIEW-ONLY ═══ */

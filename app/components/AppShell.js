@@ -7,7 +7,12 @@ import Sidebar, { USER_ALLOWED } from './Sidebar';
 import MobileNav from './MobileNav';
 import useIsMobile from './useIsMobile';
 import { useAuth, homeFor } from './AuthContext';
+import { dashboardFontVars } from './dashboardFonts';
 import { supabase } from '../supabase';
+
+// Halaman Ads Hub yang sudah memakai skin "Ridgeline" (.rg) — tombol Suggestions
+// melayang ikut skin di sini; halaman lain (Leads Hub dsb.) tetap tampilan lama.
+const RIDGELINE_ROUTES = ['/', '/campaigns', '/calendar', '/reports'];
 
 export default function AppShell({ children }) {
   const { user, role, ready } = useAuth();
@@ -92,7 +97,9 @@ export default function AppShell({ children }) {
 
       {/* Non-admin (user & marketing): Floating suggest button + popup */}
       {role !== 'admin' && (
-        <div ref={popupRef} style={{
+        <div ref={popupRef}
+          className={RIDGELINE_ROUTES.includes(pathname) ? `rg rg-bare ${dashboardFontVars}` : undefined}
+          style={{
           position: 'absolute', zIndex: 50,
           bottom: isMobile ? '16px' : '24px',
           right:  isMobile ? '16px' : '24px',

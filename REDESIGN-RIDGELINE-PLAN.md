@@ -1,7 +1,7 @@
 # REDESAIN 2 — GAYA "RIDGELINE" (Dashboard Ads Hub + Sidebar)
 
 Status: **🔄 DILANJUTKAN 28 Sep 2026 — preview LOKAL, BELUM LIVE.** Semua kode ada di branch lokal `redesign/dashboard-ridgeline` (tidak di-push; web live & branch `main` tidak tersentuh).
-Sumber: sesi Claude Code 27 Sep 2026 — critique UI (skill impeccable) → referensi baru dari Nadir → preview lokal ronde 1 (Dashboard) & ronde 2 (data dummy + Sidebar + eksplorasi warna). **Ronde 3 (28 Sep 2026)** — 5 permintaan Nadir dari screenshot, lihat Bagian 11.
+Sumber: sesi Claude Code 27 Sep 2026 — critique UI (skill impeccable) → referensi baru dari Nadir → preview lokal ronde 1 (Dashboard) & ronde 2 (data dummy + Sidebar + eksplorasi warna). **Ronde 3 (28 Sep 2026)** — 5 permintaan Nadir dari screenshot, lihat Bagian 11. **Ronde 4 (28 Sep 2026)** — semua keputusan dijawab + seluruh halaman Ads Hub & laporan Export diredesain, lihat Bagian 12.
 
 ---
 
@@ -36,15 +36,16 @@ Sumber: sesi Claude Code 27 Sep 2026 — critique UI (skill impeccable) → refe
 |---|---|
 | Dashboard Ads Hub (`/`) — desktop, HP, tema gelap & terang | ✅ Preview selesai |
 | Sidebar desktop (semua halaman) | ✅ Preview selesai |
-| Halaman lain (Campaigns, Calendar, Analytics, Leads Hub, Maps, Notes, Login) | ⏳ Belum — isi tetap versi lama |
-| Menu HP (drawer `MobileNav`) | ⏳ Belum |
-| Laporan Export PDF/JPG | Sengaja TIDAK diubah (font dikunci Plus Jakarta Sans) |
+| Campaigns, Calendar, Analytics & Insights (`/reports`) — desktop, HP, dua tema | ✅ Preview selesai (ronde 4) |
+| Laporan Export PDF/JPG | ✅ Diredesain (ronde 4) — font Geist, palet Ridgeline, ikut tema |
+| Leads Hub, Maps, Notes, Login | ⏳ Belum — di luar kategori Ads Hub, tetap versi lama |
+| Menu HP (drawer + top bar `MobileNav`) | ⏳ Belum — masih desain lama (termasuk logo) |
 | Rumus metrik & logika fetch | TIDAK disentuh sama sekali |
 
 ## 4. DESIGN SYSTEM (semua nilai sudah dipakai di kode)
 
 ### 4.1 Font
-- **Geist** (teks UI + angka besar KPI, tabular) & **Geist Mono** (semua angka data: delta, nilai, sumbu, tabel). Referensi tidak mencantumkan nama font; Geist paling mendekati. Dipasang lewat `app/components/dashboardFonts.js`, hanya di Dashboard & Sidebar.
+- **Geist** (teks UI + angka besar KPI, tabular) & **Geist Mono** (semua angka data: delta, nilai, sumbu, tabel). Referensi tidak mencantumkan nama font; Geist paling mendekati. Dipasang lewat `app/components/dashboardFonts.js` di akar semua halaman Ads Hub (`.rg`), Sidebar, dan laporan Export (sejak ronde 4 — dulu laporan dikunci Plus Jakarta Sans).
 - Skala: judul halaman 20/600 · judul kartu 14/500 · teks 13 · keterangan 12 · nilai KPI 27/500 (23 di kartu sempit) · nilai efisiensi 21 (19 sempit) · statistik grafik 18 · sumbu grafik 10,5 mono.
 
 ### 4.2 Netral Dashboard (`app/dashboard-ridgeline.css`, prefix `--rg-`)
@@ -123,12 +124,13 @@ Rel 64px (menu · ikon Ads Hub/Leads Hub/Maps Hub/Notes · logout) + panel 212px
 8. **Sparkline KPI digambar dalam piksel asli** (ResizeObserver): pita garis 10px dari atas s.d. 16px dari bawah, titik akhir 18px dari kanan → cincin titik tidak pernah terpotong (dulu pita ±20px di kotak 29px, titik rendah terpotong).
 
 ## 6. KEPUTUSAN YANG MENUNGGU NADIR
-1. ~~**Aksen final**~~ → ✅ **SAFFRON** (Nadir, 28 Sep 2026).
-2. **Delta Total Spend abu-abu netral** (dulu merah/hijau) — alasan: naik/turun budget bukan baik/buruk.
-3. **Tombol Compare & Export berlabel** seperti referensi (7 Agu 2026 Nadir minta icon-only).
-4. Format: desimal koma (4,52%); label "N campaigns with spend" (dulu "N active"); tab grafik "Awareness" → "Impressions".
-5. Gaya ini diteruskan ke halaman lain + menu HP? Urutan?
-6. (Ide dari critique, opsional) Mode Presentasi untuk atasan: angka utama besar + kalimat kesimpulan, tanpa tombol/suara.
+SEMUA SUDAH DIJAWAB NADIR (28 Sep 2026):
+1. ~~**Aksen final**~~ → ✅ **SAFFRON**.
+2. ~~Delta Total Spend abu-abu netral~~ → ✅ YA, "sementara" (berlaku juga di Analytics & laporan Export).
+3. ~~Tombol Compare & Export berlabel~~ → ❌ TIDAK — **icon saja** (bulat 40px, nama aksi di tooltip).
+4. ~~Desimal koma, "campaigns with spend", tab "Impressions"~~ → ✅ YA (Campaigns/Calendar juga pakai angka penuh gaya Indonesia).
+5. ~~Diteruskan ke halaman lain?~~ → ✅ SEMUA halaman kategori **Ads Hub** (Campaigns, Calendar, Analytics & Insights), nuansa font & warna dua tema sama dengan Dashboard. Tes lokal dulu.
+6. ~~Mode Presentasi~~ → Nadir mengartikannya sebagai **hasil tombol download laporan (Export)** → ✅ laporan diredesain (Bagian 12).
 
 ## 7. ITEM PREVIEW-ONLY — WAJIB DIBUANG SEBELUM PUSH
 - Hapus file `app/components/demoDashboard.js` (data dummy) dan `app/components/PreviewPanel.js` (panel preview, sekarang tinggal saklar Demo data).
@@ -152,7 +154,8 @@ Rel 64px (menu · ikon Ads Hub/Leads Hub/Maps Hub/Notes · logout) + panel 212px
 - Server lokal: `npm run dev` (port 3000). Dev Next.js 16 memakai folder `.next/dev`, jadi `npm run build` aman dijalankan bersamaan.
 
 ## 10. FILE YANG BERUBAH (branch `redesign/dashboard-ridgeline`)
-Baru: `app/dashboard-ridgeline.css`, `app/sidebar-ridgeline.css`, `app/components/dashboardFonts.js`, `docs/redesign-ridgeline/referensi-ridgeline.jpg`, `REDESIGN-RIDGELINE-PLAN.md`, + preview-only `app/components/demoDashboard.js`, `app/components/PreviewPanel.js`.
+Baru: `app/ridgeline.css` (skin bersama, ronde 4), `app/dashboard-ridgeline.css`, `app/campaigns-ridgeline.css`, `app/calendar-ridgeline.css`, `app/reports-ridgeline.css`, `app/sidebar-ridgeline.css`, `app/components/dashboardFonts.js`, `app/components/rgKit.js`, `docs/redesign-ridgeline/referensi-ridgeline.jpg`, `REDESIGN-RIDGELINE-PLAN.md`, + preview-only `app/components/demoDashboard.js`, `app/components/PreviewPanel.js`.
+Diubah ronde 4: `app/layout.js` (import ridgeline.css), `app/campaigns/page.js`, `app/calendar/page.js`, `app/reports/page.js`, `app/components/ExportMenu.js` (laporan baru + `iconOnly`), `app/components/reportData.js` (+prevRange/frac/count), `app/components/CampaignModal.js`, `CombineModal.js`, `CompareModal.js`, `LeadsBreakdownModal.js` (warna → token skin), `app/components/AppShell.js` (tombol Suggestions melayang ikut skin di rute Ads Hub).
 Diubah: `app/page.js` (tampilan Dashboard; logika data disalin utuh), `app/components/AreaChart.js` (grafik harian, dashboard-only), `app/components/Sidebar.js`, `app/components/PlatformSelector.js` (pil + tag Soon), `app/components/ExportMenu.js` (varian `pill` + atribut `data-export-report`), `app/components/ThemeToggle.js` (prop opsional `className`).
 
 ## 11. RONDE 3 — REVISI 28 SEP 2026 (5 permintaan Nadir dari screenshot)
@@ -165,4 +168,27 @@ Diubah: `app/page.js` (tampilan Dashboard; logika data disalin utuh), `app/compo
 | 5 | Tombol tambahan untuk menampilkan semua garis grafik sekaligus | Tombol "All" (lihat Bagian 5 no. 7) + biru Spend digeser (Bagian 4.3) |
 
 Ikut diperbaiki karena bersinggungan: angka tengah donut menabrak cincin, donut terpotong di layar pendek, grafik harian HP terpotong 36px di bagian sumbu tanggal.
+
+## 12. RONDE 4 — HALAMAN ADS HUB + LAPORAN EXPORT (28 Sep 2026)
+Jawaban Nadir atas 6 keputusan ada di Bagian 6. Yang dikerjakan:
+
+**Struktur baru (skin bersama):**
+- `app/ridgeline.css` (BARU, di-import sekali di `app/layout.js`) = token dua tema, pemetaan token lama → skin, top bar, pil, kartu cangkang+panel, delta, segmen, chip, menu, form, dialog, bar melayang/toast, state, tabel dasar, kerangka HP. Semua di-scope `.rg`.
+- `dashboard-ridgeline.css` dirampingkan jadi bagian khusus Dashboard; baru: `campaigns-ridgeline.css`, `calendar-ridgeline.css`, `reports-ridgeline.css`.
+- `app/components/rgKit.js` (BARU) = satu sumber `presetToRange`, `fmtRangeShort`, `fmtClock`, `fmtPct1`, `toneOf`, `Delta`, `InfoTip`, `DatePill` — dipakai Dashboard, Campaigns, Analytics.
+- Token lama yang dipetakan di `.rg` bertambah: `--ac`, `--accent-*`, `--pos/--neg(+soft)`, `--data-br` → popup bawaan (Compare, rincian Leads, detail campaign, hitung gabungan, filter tanggal) otomatis netral. Token baru: `--rg-warn`, `--rg-pos-fill/-tx`, `--rg-neg-fill/-tx`, `--rg-scrim`.
+
+**Dashboard:** Compare & Export = tombol ikon bulat 40px (ExportMenu prop `pill iconOnly`).
+
+**Campaigns:** top bar judul + konteks (Meta Ads · N campaigns · A active · N non-active · Updated) | pil tanggal · refresh · tema. Tabel di kartu "All campaigns": header kalimat biasa + tombol urut (aria-sort), baris grup = titik warna objektif (entitas dashboard, dulu biru/kuning/hijau lama), status = chip (Active hijau · Stop netral · Ended redup), aksi admin = tombol ikon bulat, angka Geist Mono PENUH (Rp 1.440.076 — dulu "Rp 1.2 jt"), subtotal + tombol pil. Bar melayang "Calculate Total", dialog Stop/Run & Edit Budget gaya baru + **Esc menutup**, toast, skeleton, error + "Try again", tabel lama diredupkan saat memuat ulang + penjaga respons usang (`fetchToken`). Chip objektif/status di popup detail & hitung gabungan disamakan.
+
+**Calendar:** top bar judul + konteks | pil bulan ‹ › · Add campaign. Gantt di kartu "Schedule" (legenda objektif di kepala), kolom info lebar px pas isi + kolom hari berbagi sisa (min tabel 1180px → digeser di layar sempit/HP, kolom Campaign menempel berlatar pekat), hari ini = pita netral, batang = warna entitas. Status chip + dropdown menu, aksi = ikon bulat (hapus merah). Kartu "Monthly budget" (total + per objektif + batang proporsi) & "Not scheduled yet". Form: Objective/Status = segmen (bukan `<select>`), budget ber-affix Rp, konfirmasi hapus = dialog bergaya (bukan `confirm()` browser), Esc menutup. Tanpa tombol tema (tidak pernah ada).
+
+**Analytics & Insights:** top bar judul + konteks | pil tanggal · refresh (tanpa tombol tema — sengaja, commit 821d8da). Hero "Performance score" = cincin tebal + "59/100" + chip status (ala panel "AI Search Visibility" referensi), kesimpulan, 6 angka ringkas + delta (Total Spend netral). Kartu insight: ikon tingkat berlatar + judul + chip tingkat (Critical merah · Warning kuning tua `--rg-warn` · Positive hijau · Info biru), isi, angka pendukung, tren.
+
+**Laporan Export (1280×720):** header = "Baba Rafi Ad Hub" + judul + pil periode ("This month │ 1–28 Sep 2026") + konteks; 5 KPI ala layar (gradasi arah perubahan, sparkline bertitik akhir, "vs 1–28 Aug"); Spend Breakdown (donut + meter) & Cost Efficiency 2×2 (delta + meter batang) sama lebar; "Daily Trends" 4 garis diindeks ke puncak masing-masing + legenda rata-rata/hari + label ujung. Ikut tema (palet literal di `REPORT_THEME`). Laporan per bulan ikut (`reportData` kini juga mengirim `prevRange`, `frac`, `count` — rumus tidak berubah).
+**⚠️ Jebakan html2canvas (terbukti saat verifikasi):** (1) `<svg>` ber-`position:absolute` TIDAK digambar → sparkline wajib di alur normal (pembungkus div relative); (2) `margin` pada `<svg>` dihitung dua kali → gambar turun & terpotong → margin di pembungkus; (3) fungsi warna modern (`color-mix`, `color()`, oklch) gagal di-parse → laporan pakai hex/rgba literal saja.
+
+**Verifikasi ronde 4:** build lolos; Campaigns (sort 3 tahap, subtotal, pilih→bar melayang, dialog Edit Budget + Esc), Calendar (menu status, form + segmen, konfirmasi hapus — semua dibuka/ditutup tanpa mengubah data), Analytics (cincin, chip muat, 3 kartu), HP 375px, tema terang (kontras teks ≥4,5:1), laporan Export dirender dengan html2canvas asli project & dilihat gambarnya.
+**Catatan:** saat pengujian beruntun, API sempat membalas 401 (verifikasi token Supabase gagal saat lonjakan) dan Meta membatasi daftar campaign (daftar kosong diam-diam) — bukan akibat redesain; dicatat sebagai tugas terpisah.
 Verifikasi (pane browser tersembunyi, jadi ResizeObserver disimulasikan untuk pengecekan): 1920×953, 1920×1080, 1536×730, 1440×789, 1366×650 (+ sidebar terbuka), HP 375×812, tema gelap & terang. Scroll di layar pendek: 1366×650 = 156px, 1536×730 = 76px, 1440×789 = 17px, 1920 = 0.

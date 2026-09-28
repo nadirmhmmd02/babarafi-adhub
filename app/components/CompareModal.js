@@ -152,7 +152,10 @@ const METRICS = [
   { key: 'ctr',         label: 'CTR',          fmt: fmtPct, dir: 'up' },
 ];
 
-const GREEN = '#2FB673', RED = '#EF4444';
+// Naik-bagus / turun-buruk = token redesain "Ridgeline" (popup dirender di dalam .rg Dashboard);
+// fallback = warna lama kalau suatu saat dipakai di luar skin
+const GREEN = 'var(--rg-pos, #2FB673)', RED = 'var(--rg-neg, #EF4444)';
+const mixTone = (c, pct) => `color-mix(in srgb, ${c} ${pct}%, transparent)`;
 
 export default function CompareModal({ initialSince, initialUntil, onClose }) {
   // Periode A default = rentang yang sedang dipakai dashboard
@@ -441,8 +444,8 @@ export default function CompareModal({ initialSince, initialUntil, onClose }) {
             {/* Status validasi */}
             <div style={{
               display: 'flex', alignItems: 'center', gap: '9px', padding: '11px 14px', borderRadius: '12px',
-              background: canCompare ? 'rgba(47,182,115,0.10)' : bothSet ? 'rgba(239,68,68,0.08)' : 'var(--hover)',
-              border: `1px solid ${canCompare ? 'rgba(47,182,115,0.30)' : bothSet ? 'rgba(239,68,68,0.28)' : 'var(--br)'}`,
+              background: canCompare ? mixTone(GREEN, 10) : bothSet ? mixTone(RED, 8) : 'var(--hover)',
+              border: `1px solid ${canCompare ? mixTone(GREEN, 30) : bothSet ? mixTone(RED, 28) : 'var(--br)'}`,
             }}>
               {canCompare
                 ? <Check size={15} color={GREEN} strokeWidth={3} />
@@ -544,7 +547,7 @@ function CompareResult({ a, b, aLabel, bLabel }) {
                 <span style={{
                   display: 'inline-flex', alignItems: 'center', gap: '3px',
                   padding: '2px 8px', borderRadius: '999px', fontSize: '10.5px', fontWeight: 800,
-                  background: r.good == null ? 'var(--hover)' : r.good ? 'rgba(47,182,115,0.13)' : 'rgba(239,68,68,0.11)',
+                  background: r.good == null ? 'var(--hover)' : r.good ? mixTone(GREEN, 13) : mixTone(RED, 11),
                   color,
                 }}>
                   <Icon size={11} strokeWidth={3} />
@@ -568,9 +571,10 @@ function CompareResult({ a, b, aLabel, bLabel }) {
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
           {chip('Total — Period A', <CountUp value={a.adsTotal} display={String(a.adsTotal)} duration={700} delay={520} />, 'var(--ac)', 0)}
           {chip('Total — Period B', `${b.adsTotal}`, undefined, 1)}
-          {chip('Awareness', `${a.adsAwareness} vs ${b.adsAwareness}`, '#8B5CF6', 2)}
-          {chip('Traffic', `${a.adsTraffic} vs ${b.adsTraffic}`, '#F59E0B', 3)}
-          {chip('Conversion', `${a.adsConversion} vs ${b.adsConversion}`, GREEN, 4)}
+          {/* Warna objektif = entitas yang sama dengan donut & grafik Dashboard */}
+          {chip('Awareness', `${a.adsAwareness} vs ${b.adsAwareness}`, 'var(--rg-aware, #8B5CF6)', 2)}
+          {chip('Traffic', `${a.adsTraffic} vs ${b.adsTraffic}`, 'var(--rg-traffic, #F59E0B)', 3)}
+          {chip('Conversion', `${a.adsConversion} vs ${b.adsConversion}`, 'var(--rg-conv, #2FB673)', 4)}
         </div>
       </div>
 

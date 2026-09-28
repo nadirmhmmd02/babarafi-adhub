@@ -3,7 +3,11 @@ import { useState, useEffect } from 'react';
 import { X, UserPlus, FileText, Globe, MessageCircle } from 'lucide-react';
 import CountUp from './CountUp';
 
-const GREEN = '#2FB673';
+// Leads = entitas Conversion → teal di Dashboard redesain "Ridgeline" (popup dirender di dalam
+// .rg); fallback = hijau lama kalau suatu saat dipakai di luar skin
+const GREEN = 'var(--rg-conv, #2FB673)';
+const GREEN_SOFT   = 'color-mix(in srgb, var(--rg-conv, #2FB673) 14%, transparent)';
+const GREEN_SOFTER = 'color-mix(in srgb, var(--rg-conv, #2FB673) 10%, transparent)';
 
 /* Popup rincian Leads — dibuka dari kartu KPI "Leads" di dashboard.
    Angka di sini SELALU berjumlah sama dengan angka di kartu (sumbernya
@@ -64,7 +68,7 @@ export default function LeadsBreakdownModal({ breakdown, periodLabel, onClose })
           <span style={{
             width: '36px', height: '36px', borderRadius: '11px', flexShrink: 0,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: GREEN + '22',
+            background: GREEN_SOFT,
           }}>
             <UserPlus size={18} color={GREEN} />
           </span>
@@ -110,7 +114,7 @@ export default function LeadsBreakdownModal({ breakdown, periodLabel, onClose })
                   <span style={{
                     width: '28px', height: '28px', borderRadius: '9px', flexShrink: 0,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    background: zero ? 'var(--sf)' : GREEN + '1A',
+                    background: zero ? 'var(--sf)' : GREEN_SOFTER,
                   }}>
                     <r.icon size={14} color={zero ? 'var(--t3)' : GREEN} />
                   </span>

@@ -1,0 +1,131 @@
+/* ══════════════════════════════════════════════════════════════════════
+   CAMPAIGNS — bagian KHUSUS halaman Campaigns (redesain "Ridgeline",
+   28 Sep 2026, PREVIEW LOKAL). Dasar (token, kartu, pil, chip, tabel, dialog,
+   bar melayang) di app/ridgeline.css. Semua aturan di-scope ke .rg / .rgc-.
+   ══════════════════════════════════════════════════════════════════════ */
+
+.rgc-card { flex-shrink: 0; }
+.rgc-well { overflow: hidden; }
+.rgc-scroll { overflow-x: auto; }
+.rgc-table { min-width: 100%; }
+
+/* ── Header kolom ── */
+.rgc-table thead th { height: 44px; background: var(--rg-well); }
+.rgc-table th:first-child, .rgc-table td:first-child { padding-left: 14px; }
+.rgc-table th:last-child,  .rgc-table td:last-child  { padding-right: 18px; }
+.rgc-th-check { width: 40px; padding-right: 0 !important; }
+.rgc-th-name, .rgc-th-left { text-align: left !important; }
+.rgc-th-name { position: relative; }
+
+.rgc-sortbtn {
+  display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 7px; margin: 0 -7px;
+  border: 0; border-radius: 8px; background: transparent; cursor: pointer; white-space: nowrap;
+  font-size: 12px; font-weight: 500; color: var(--rg-t2);
+  transition: color .15s ease, background-color .15s ease;
+}
+.rgc-sortbtn:hover { color: var(--rg-t1); background: var(--rg-hover); }
+.rgc-sortbtn.is-active { color: var(--rg-t1); }
+.rgc-sort-ico { opacity: 0; transition: opacity .15s ease; flex-shrink: 0; }
+.rgc-sortbtn:hover .rgc-sort-ico { opacity: .55; }
+.rgc-sortbtn.is-active .rgc-sort-ico, .rgc-sortbtn:focus-visible .rgc-sort-ico { opacity: 1; }
+
+/* Pegangan lebar kolom Campaign | Status */
+.rgc-colgrip {
+  position: absolute; top: 8px; bottom: 8px; right: -4px; width: 9px; z-index: 3;
+  cursor: col-resize; display: flex; justify-content: center;
+}
+.rgc-colgrip::before {
+  content: ''; width: 2px; height: 100%; border-radius: 2px;
+  background: var(--rg-pill-line); transition: background-color .15s ease;
+}
+.rgc-colgrip:hover::before, .rgc-colgrip.is-drag::before { background: var(--rg-t2); }
+.rgc-table.is-dragging .rgc-td-name { border-right: 1px dashed var(--rg-t3); }
+
+/* ── Baris grup objektif ── */
+.rgc-group td {
+  height: 42px; padding: 0 14px !important; text-align: left;
+  background: var(--rg-well-2); border-bottom: 1px solid var(--rg-line-soft);
+}
+.rgc-group:not(:first-child) td { border-top: 1px solid var(--rg-line-soft); }
+.rgc-group-in { display: flex; align-items: center; gap: 10px; }
+.rgc-obj { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--rg-t1); }
+.rgc-obj-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.rgc-group-count { font-size: 12px; color: var(--rg-t2); }
+.rgc-sortchip { margin-left: auto; height: 26px; color: var(--rg-t1); }
+.rgc-sortchip-x { opacity: .55; }
+
+/* ── Baris campaign ── */
+.rgc-row { cursor: pointer; animation: wdFadeUp .3s cubic-bezier(.22,1,.36,1) backwards; }
+.rgc-row:hover td { background: var(--rg-hover); }
+.rgc-row.is-picked td { background: var(--rg-range); }
+.rgc-td-check { width: 40px; padding-right: 0 !important; text-align: left !important; }
+.rgc-check {
+  width: 18px; height: 18px; border-radius: 6px; flex-shrink: 0; vertical-align: middle;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1.5px solid var(--rg-pill-line); background: var(--rg-well); color: var(--rg-well);
+  transition: background-color .15s ease, border-color .15s ease;
+}
+.rgc-row:hover .rgc-check { border-color: var(--rg-t3); }
+.rgc-check.is-on { background: var(--rg-t1); border-color: var(--rg-t1); }
+.rgc-td-name {
+  text-align: left !important; font-weight: 500; color: var(--rg-t1);
+  overflow: hidden; text-overflow: ellipsis; border-right: 1px solid transparent;
+}
+.rgc-td-status, .rgc-td-actions { text-align: left !important; }
+.rgc-sq { width: 7px; height: 7px; border-radius: 2px; background: currentColor; flex-shrink: 0; }
+.rgc-acts { display: inline-flex; gap: 6px; }
+.rgc-act { width: 28px; height: 28px; }
+.rgc-result { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; line-height: 1.15; }
+.rgc-result-label { font-size: 11px; color: var(--rg-t2); }
+.rgc-spend { font-weight: 600; }
+.rgc-table td.rg-num { color: var(--rg-t1); }
+
+/* ── Subtotal & tombol lipat ── */
+.rgc-sub td { background: var(--rg-well-2); font-weight: 500; }
+.rgc-sub .rgc-sub-label { text-align: left; font-size: 12.5px; font-weight: 600; color: var(--rg-t2); }
+.rgc-toggle td { height: 38px; padding: 0 !important; text-align: center; }
+.rgc-toggle-btn {
+  display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 12px;
+  border-radius: 999px; border: 1px solid var(--rg-pill-line); background: var(--rg-pill);
+  font-size: 12px; font-weight: 500; color: var(--rg-t2); cursor: pointer;
+  transition: background-color .15s ease, color .15s ease;
+}
+.rgc-toggle-btn:hover { background: var(--rg-pill-hover); color: var(--rg-t1); }
+.rgc-toggle-caret { transition: transform .2s ease; }
+.rgc-toggle-btn[aria-expanded="true"] .rgc-toggle-caret { transform: rotate(180deg); }
+.rgc-empty-row td { height: 160px; text-align: center; }
+
+/* ── Peringatan akun Meta ── */
+.rgc-alert { align-items: flex-start; flex-wrap: wrap; }
+.rgc-alert .rg-error-ico { margin-top: 1px; }
+.rgc-alert-title { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.rgc-alert .rg-btn { align-self: center; }
+
+/* ── Skeleton tabel ── */
+.rgc-skel { padding: 8px 16px; }
+.rgc-skel-row { display: flex; align-items: center; gap: 18px; height: 46px; border-bottom: 1px solid var(--rg-line-soft); }
+.rgc-skel-row:last-child { border-bottom: 0; }
+
+/* ── Bar melayang hitung gabungan ── */
+.rgc-float-count { font-size: 13px; color: var(--rg-t2); }
+.rgc-float-count b { font-weight: 600; color: var(--rg-t1); }
+.rgc-float-sep { width: 1px; height: 18px; background: var(--rg-pill-line); flex-shrink: 0; }
+.rgc-float-sum { font-size: 13.5px; font-weight: 500; color: var(--rg-t1); }
+.rgc-float-x { width: 34px; height: 34px; }
+
+/* ── Dialog aksi iklan ── */
+.rgc-dlg-name { display: block; font-size: 13.5px; line-height: 1.45; word-break: break-word; }
+.rgc-dlg-text { margin: 8px 0 0; }
+.rgc-dlg-current { margin: 10px 0 12px; font-size: 12.5px; color: var(--rg-t2); }
+.rgc-dlg-current .rg-num { color: var(--rg-t1); }
+.rgc-dlg-hint { margin-top: 8px; font-size: 12px; color: var(--rg-t3); }
+
+/* ── Tata letak lebar sempit ── */
+.rg:not(.is-mobile) .rgc-card .rg-head { container-type: inline-size; }
+@container (max-width: 560px) { .rgc-meta { display: none; } }
+
+/* ── MOBILE (≤767px) ── */
+.rg.is-mobile .rgc-meta { display: none; }
+.rg.is-mobile .rgc-alert .rg-btn { margin-left: 34px; }
+.rg.is-mobile .rgc-float-in { gap: 10px; padding-left: 14px; }
+.rg.is-mobile .rgc-float-sep, .rg.is-mobile .rgc-float-sum { display: none; }

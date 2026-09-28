@@ -171,12 +171,13 @@ export function buildReportData(json) {
 
   // Donut spend breakdown (dash/offset dihitung sama seperti dashboard)
   const total = totalSpend || 1;
+  // frac & count = struktur tampilan (meter & jumlah campaign di laporan), sama dgn dashboard
   const segs = [];
-  if (awareSpend > 0)   segs.push({ color: PURPLE, label: 'Awareness',  pct: Math.round(awareSpend / total * 100),   value: fmtSpendFull(awareSpend) });
-  if (trafficSpend > 0) segs.push({ color: ORANGE, label: 'Traffic',    pct: Math.round(trafficSpend / total * 100), value: fmtSpendFull(trafficSpend) });
-  if (convSpend > 0)    segs.push({ color: GREEN,  label: 'Conversion', pct: Math.round(convSpend / total * 100),    value: fmtSpendFull(convSpend) });
+  if (awareSpend > 0)   segs.push({ color: PURPLE, label: 'Awareness',  pct: Math.round(awareSpend / total * 100),   value: fmtSpendFull(awareSpend),   frac: awareSpend / total,   count: awareCamps.length });
+  if (trafficSpend > 0) segs.push({ color: ORANGE, label: 'Traffic',    pct: Math.round(trafficSpend / total * 100), value: fmtSpendFull(trafficSpend), frac: trafficSpend / total, count: trafficCamps.length });
+  if (convSpend > 0)    segs.push({ color: GREEN,  label: 'Conversion', pct: Math.round(convSpend / total * 100),    value: fmtSpendFull(convSpend),    frac: convSpend / total,    count: convCamps.length });
   const other = Math.max(0, totalSpend - awareSpend - trafficSpend - convSpend);
-  if (other > 0)        segs.push({ color: BLUE,   label: 'Other',      pct: Math.round(other / total * 100),        value: fmtSpendFull(other) });
+  if (other > 0)        segs.push({ color: BLUE,   label: 'Other',      pct: Math.round(other / total * 100),        value: fmtSpendFull(other),        frac: other / total,        count: null });
   let offset = 0;
   const donutSegs = segs.map(seg => {
     const dash = (seg.pct / 100) * CIRC;
@@ -191,6 +192,8 @@ export function buildReportData(json) {
     chartDates: built.dates,
     donut:      { segs: donutSegs, total: { value: fmtSpendFull(totalSpend), label: 'Total Spend' } },
     activeCount,
+    // Rentang periode pembanding (label "vs 1–31 Aug" di laporan) — bukan rumus metrik
+    prevRange:  json.prevRange || null,
   };
 }
 

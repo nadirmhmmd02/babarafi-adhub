@@ -17,12 +17,13 @@ import { useState, useEffect, useRef, useId } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import {
-  Calendar, ChevronDown, RefreshCw,
+  RefreshCw,
   Wallet, Users, Eye, MousePointerClick, UserPlus,
   MessageSquare, Trash2, GitCompareArrows,
-  ArrowUp, ArrowDown, ArrowRight, ArrowUpRight, Info,
+  ArrowRight, ArrowUpRight,
   ChartPie, Gauge, Trophy, TriangleAlert,
 } from 'lucide-react';
+import { ID, presetToRange, fmtRangeShort, fmtClock, toneOf, Delta, InfoTip, DatePill } from './components/rgKit';
 import CountUp from './components/CountUp';
 import AreaChart, { monotonePath } from './components/AreaChart';
 import CompareModal from './components/CompareModal';
@@ -52,8 +53,9 @@ const BORDER  = 'var(--br)';
 const TXT     = 'var(--t1)';
 const SUB     = 'var(--t2)';
 const MUTE    = 'var(--t3)';
-// Warna literal di bawah dipakai data Export (laporan PDF/JPG) — JANGAN diganti,
-// tampilan dashboard sendiri memakai token skin (--rg-*) lewat OBJ_VAR/TYPE_VAR.
+// Warna literal di bawah = field `color` lama di data donut/Top Campaigns. Sejak redesain
+// laporan (28 Sep 2026) Export memilih warna per LABEL dari palet laporannya sendiri, dan
+// layar memakai token skin (--rg-*) lewat OBJ_VAR/TYPE_VAR — literal ini tidak tampil lagi.
 const GREEN   = '#2FB673';
 const BLUE    = '#3B82F6';
 const PURPLE  = '#8B5CF6';
@@ -95,30 +97,8 @@ function getLeadBreakdown(actions) {
   return { instant, web: Math.max(0, form - instant), wa, total: form + wa };
 }
 
-/* Preset → rentang tanggal nyata (dipakai untuk mengisi Periode A di Compare).
-   Sama persis dengan perhitungan preset di server (app/api/meta/route.js). */
-function ymdLocal(d) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-function presetToRange(preset) {
-  const now = new Date();
-  const today = ymdLocal(now);
-  const add = n => { const d = new Date(now); d.setDate(d.getDate() + n); return ymdLocal(d); };
-  switch (preset) {
-    case 'today':      return { since: today,   until: today };
-    case 'yesterday':  return { since: add(-1), until: add(-1) };
-    case 'last_3d':    return { since: add(-3),  until: add(-1) };
-    case 'last_7d':    return { since: add(-7),  until: add(-1) };
-    case 'last_14d':   return { since: add(-14), until: add(-1) };
-    case 'last_30d':   return { since: add(-30), until: add(-1) };
-    case 'this_month': return { since: ymdLocal(new Date(now.getFullYear(), now.getMonth(), 1)), until: today };
-    case 'last_month': return {
-      since: ymdLocal(new Date(now.getFullYear(), now.getMonth() - 1, 1)),
-      until: ymdLocal(new Date(now.getFullYear(), now.getMonth(), 0)),
-    };
-    default:           return { since: add(-30), until: add(-1) };
-  }
-}
+/* Preset → rentang tanggal nyata (presetToRange), format rentang & delta: rgKit.js
+   (dipakai bersama Campaigns & Analytics). */
 
 function getCampaignType(name) {
   const n = name?.toUpperCase() || '';
@@ -166,10 +146,7 @@ function pctChange(cur, prev) {
   return ((cur - prev) / prev) * 100;
 }
 
-/* ─── Format angka gaya Indonesia (titik = ribuan, koma = desimal) ─── */
-const ID = 'id-ID';
-const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-function fmtPct1(v) { return Math.abs(v).toLocaleString(ID, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%'; }
+/* ─── Format angka gaya Indonesia (titik = ribuan, koma = desimal; ID dari rgKit) ─── */
 function fmtCtr(v)  { return v.toLocaleString(ID, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%'; }
 // Ruang sempit (baris Top Campaigns): Rp 1,24 jt · Rp 350 rb — satuan Indonesia, bukan K/M
 function fmtRpShort(n) {
@@ -183,20 +160,6 @@ function fmtNumShort(n) {
   if (n >= 1e6) return (n / 1e6).toLocaleString(ID, { maximumFractionDigits: 1 }) + ' jt';
   if (n >= 1e4) return (n / 1e3).toLocaleString(ID, { maximumFractionDigits: 1 }) + ' rb';
   return Math.round(n).toLocaleString(ID);
-}
-// "1–27 Sep", "28 Aug – 3 Sep", "1 Jan – 30 Apr 2026"
-function fmtRangeShort(since, until, withYear = false) {
-  if (!since || !until) return '';
-  const [y1, m1, d1] = since.split('-').map(Number);
-  const [y2, m2, d2] = until.split('-').map(Number);
-  const yr = withYear ? ` ${y2}` : '';
-  if (since === until)             return `${d1} ${MON[m1 - 1]}${yr}`;
-  if (y1 === y2 && m1 === m2)      return `${d1}–${d2} ${MON[m1 - 1]}${yr}`;
-  if (y1 === y2)                   return `${d1} ${MON[m1 - 1]} – ${d2} ${MON[m2 - 1]}${yr}`;
-  return `${d1} ${MON[m1 - 1]} ${y1} – ${d2} ${MON[m2 - 1]} ${y2}`;
-}
-function fmtClock(d) {
-  return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 }
 
 /* ─── Date helpers (untuk sumbu chart sebulan penuh) ─── */
@@ -255,37 +218,7 @@ function buildChartData(daily, range) {
   return { data, dates, todayIdx: (todayIdx >= 0 && todayIdx < n) ? todayIdx : -1 };
 }
 
-/* ─── Arah perubahan → nada warna ───
-   good: 'up' (naik = bagus), 'down' (biaya: turun = bagus), 'none' (Spend: naik/turun
-   adalah keputusan budget, bukan baik/buruk → abu-abu netral). */
-function toneOf(pct, good) {
-  if (pct == null || !isFinite(pct)) return 'na';
-  if (good === 'none') return 'neu';
-  return (pct >= 0) === (good === 'up') ? 'pos' : 'neg';
-}
-
-function Delta({ pct, good = 'up' }) {
-  const tone = toneOf(pct, good);
-  if (tone === 'na') return <span className="rg-delta is-na" title="No data in the comparison period">—</span>;
-  const Arrow = pct >= 0 ? ArrowUp : ArrowDown;
-  return (
-    <span className={`rg-delta is-${tone}`}>
-      <span className="rg-delta-ico" aria-hidden="true"><Arrow size={10} strokeWidth={3} /></span>
-      <span className="rg-sr">{pct >= 0 ? 'Up' : 'Down'} </span>
-      {fmtPct1(pct)}
-    </span>
-  );
-}
-
-// Ikon (i) — definisi metrik muncul saat hover/fokus (CSS murni, lihat .rg-info)
-function InfoTip({ text, align }) {
-  if (!text) return null;
-  return (
-    <button type="button" className="rg-info" data-tip={text} data-align={align} aria-label={text}>
-      <Info size={13} />
-    </button>
-  );
-}
+/* ─── Arah perubahan → nada (toneOf), Delta & InfoTip: rgKit.js ─── */
 
 /* ─── Sparkline kartu KPI: kurva + titik akhir bercincin + garis jatuh putus-putus ───
    Revisi 28 Sep 2026: dulu digambar dalam persen (viewBox 0–100) di pita ±29px, titik
@@ -1043,6 +976,11 @@ export default function DashboardPage() {
     summary, chartData, chartDates,
     donut: { segs: donutSegs, total: donutTotal },
     rangeLabel: filterLabel(),
+    // Header laporan = pil yang sama dengan layar: "This month │ 1–28 Sep 2026"
+    rangePreset: isCustom ? 'Custom range' : dateOpt.label,
+    rangeDetail: rangeText,
+    prevLabel,              // "vs 1–28 Aug" di kartu KPI & Cost Efficiency laporan
+    todayIdx,               // grafik harian laporan di-nol-kan s.d. hari ini, sama dengan layar
     activeCount: activeCampaignCount,
     since: isCustom ? customSince : '',
     until: isCustom ? customUntil : '',
@@ -1117,38 +1055,24 @@ export default function DashboardPage() {
           </>);
 
   const dateButton = (
-    <div style={{ position:'relative' }} data-filter>
-      <button type="button" className="rg-pill" aria-expanded={showDropdown} aria-haspopup="dialog"
-        title="Date range" onClick={openFilter}>
-        <Calendar size={15} />
-        {isMobile ? (
-          <span>{filterLabel()}</span>
-        ) : (<>
-          <span className="rg-date-preset rg-hide-narrow">{isCustom ? 'Custom range' : dateOpt.label}</span>
-          <span className="rg-date-sep rg-hide-narrow" aria-hidden="true" />
-          <span>{rangeText}</span>
-        </>)}
-        <ChevronDown size={14} className="rg-caret" />
-      </button>
-
-      {showDropdown && (
-        <DateFilterPopup
-          presets={DATE_PRESETS_DASHBOARD}
-          dateOpt={dateOpt}
-          isCustom={isCustom}
-          customSince={customSince}
-          customUntil={customUntil}
-          calY={calY} calM={calM}
-          isMobile={isMobile}
-          onSelectPreset={handleSelectPreset}
-          onPickDay={pickDay}
-          onPickRange={pickRange}
-          onShiftCal={shiftCal}
-          onApply={applyCustomRange}
-          onClose={() => setShowDropdown(false)}
-        />
-      )}
-    </div>
+    <DatePill open={showDropdown} onToggle={openFilter} isMobile={isMobile} isCustom={isCustom}
+      presetLabel={dateOpt.label} mobileLabel={filterLabel()} rangeText={rangeText}>
+      <DateFilterPopup
+        presets={DATE_PRESETS_DASHBOARD}
+        dateOpt={dateOpt}
+        isCustom={isCustom}
+        customSince={customSince}
+        customUntil={customUntil}
+        calY={calY} calM={calM}
+        isMobile={isMobile}
+        onSelectPreset={handleSelectPreset}
+        onPickDay={pickDay}
+        onPickRange={pickRange}
+        onShiftCal={shiftCal}
+        onApply={applyCustomRange}
+        onClose={() => setShowDropdown(false)}
+      />
+    </DatePill>
   );
 
   return (
@@ -1178,18 +1102,21 @@ export default function DashboardPage() {
 
           {!isMobile && (<>
             <span className="rg-vsep" aria-hidden="true" />
-            <button type="button" className="rg-pill" title="Compare two periods" onClick={() => setShowCompare(true)}>
+            {/* Compare & Export = tombol ikon bulat 40px (keputusan Nadir 28 Sep 2026, sama
+                dengan preferensi icon-only 7 Agu 2026) — nama aksi di tooltip */}
+            <button type="button" className="rg-pill rg-round" title="Compare two periods"
+              aria-label="Compare two periods" onClick={() => setShowCompare(true)}>
               <GitCompareArrows size={15} />
-              <span className="rg-hide-narrow">Compare</span>
             </button>
             {/* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ (saat data dummy: Export dimatikan
                 supaya laporan berisi angka rekaan tidak sampai tersebar) */}
             {isAdmin && demo && (
-              <button type="button" className="rg-pill" disabled title="Export is disabled while demo data is on">
-                <Download size={15} /><span className="rg-hide-narrow">Export</span>
+              <button type="button" className="rg-pill rg-round" disabled
+                title="Export is disabled while demo data is on" aria-label="Export report (disabled while demo data is on)">
+                <Download size={15} />
               </button>
             )}
-            {isAdmin && !demo && <ExportMenu {...exportProps} pill labelClassName="rg-hide-narrow" />}
+            {isAdmin && !demo && <ExportMenu {...exportProps} pill iconOnly />}
             {/* ═══ END PREVIEW-ONLY ═══ */}
             <span className="rg-vsep" aria-hidden="true" />
             <button type="button" className="rg-pill rg-round" title="Refresh data" aria-label="Refresh data"

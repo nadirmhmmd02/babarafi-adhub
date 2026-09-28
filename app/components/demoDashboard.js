@@ -453,10 +453,14 @@ const LAST = ['Pratama', 'Saputra', 'Wijaya', 'Santoso', 'Hidayat', 'Kurniawan',
   'Siregar', 'Rahman', 'Setiawan', 'Utami', 'Halim', 'Gunawan', 'Firmansyah', 'Maharani', 'Susanto', 'Wibowo', 'Anggraini'];
 const CITIES = ['Jakarta Timur', 'Jakarta Selatan', 'Bekasi', 'Depok', 'Tangerang', 'Bogor', 'Bandung', 'Surabaya',
   'Semarang', 'Yogyakarta', 'Malang', 'Medan', 'Palembang', 'Makassar', 'Denpasar', 'Balikpapan'];
+/* Sumber lead: 2 campaign Autopilot (instant form & website) + 2 form umum tanpa kata
+   kategori di nama (→ Uncategorized, sama seperti deteksi asli). Form website umum sengaja
+   berkualitas lebih rendah supaya insight "sumber lemah" di Leads Analytics terlihat. */
 const LEAD_CAMPAIGN = {
-  Autopilot: 'KTBR PROSPEK - Franchise Package Autopilot',
-  other: ['KTBR PROSPEK - Franchise Proven Instant Form', 'KTBR PROSPEK - Franchise Suka-Suka Website Form'],
+  Autopilot: ['KTBR PROSPEK - Franchise Autopilot Instant Form', 'KTBR KONVERSI - Franchise Autopilot Website'],
+  other: ['KTBR PROSPEK - Franchise Instant Form (General)', 'KTBR KONVERSI - Franchise Website Form (General)'],
 };
+const WEAK_SOURCE = LEAD_CAMPAIGN.other[1];
 const NOTES = ['Minta proposal lengkap via WA', 'Tanya lokasi dekat kampus', 'Follow up lagi minggu depan',
   'Sudah survei lokasi, tunggu keputusan', 'Budget masih kurang, tawarkan paket lebih kecil', 'Minta simulasi BEP',
   'Mau datang ke kantor pusat', 'Bandingkan dengan brand lain'];
@@ -486,7 +490,7 @@ function makeLead(ds, i, today, { verification = 'approved', status: forced } = 
   const first = FIRST[Math.floor(rnd() * FIRST.length)];
   const last = LAST[Math.floor(rnd() * LAST.length)];
   const deal = status === 'Deal';
-  return {
+  const lead = {
     id: `demo-lead-${ds}-${i}${verification === 'approved' ? '' : '-bb'}`,
     meta_lead_id: null, campaign_id: null, assigned_to: null, source: 'meta_api', verification,
     name: `${first} ${last}`,
@@ -494,7 +498,7 @@ function makeLead(ds, i, today, { verification = 'approved', status: forced } = 
     email: rnd() < 0.62 ? `${first}.${last}${Math.floor(rnd() * 90) + 10}@gmail.com`.toLowerCase() : null,
     domicile: rnd() < 0.86 ? CITIES[Math.floor(rnd() * CITIES.length)] : null,
     kategori_promo,
-    campaign_ref: { name: kategori_promo ? LEAD_CAMPAIGN.Autopilot : LEAD_CAMPAIGN.other[Math.floor(rnd() * 2)] },
+    campaign_ref: { name: kategori_promo ? LEAD_CAMPAIGN.Autopilot[i % 3 === 0 ? 1 : 0] : LEAD_CAMPAIGN.other[Math.floor(rnd() * 2)] },
     status, followed_up, sales,
     notes: status !== 'No Status' && rnd() < 0.3 ? NOTES[Math.floor(rnd() * NOTES.length)] : null,
     closing_amount: deal ? DEAL_SIZES[Math.floor(rnd() * DEAL_SIZES.length)] : null,
@@ -504,6 +508,9 @@ function makeLead(ds, i, today, { verification = 'approved', status: forced } = 
     status_updated_at: null,
     created_at: `${ds}T${hh}:${mm}:00`,
   };
+  // Sumber lemah: separuh Warm/Hot-nya turun jadi Cold (deterministik, tanpa acak baru)
+  if (lead.campaign_ref.name === WEAK_SOURCE && (status === 'Warm' || status === 'Hot') && i % 3 !== 0) lead.status = 'Cold';
+  return lead;
 }
 
 let leadStore = null;

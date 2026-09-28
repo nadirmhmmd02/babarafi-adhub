@@ -54,9 +54,10 @@ export function DateFilterProvider({ children }) {
   const campaigns = useFilterState();
   const reports   = useFilterState();
   const leads     = useFilterState(); // Leads Hub — state independen per Hub (MASTER PLAN 3.3)
+  const leadsInsights = useFilterState(); // Leads Hub → Analytics & Insights (terpisah, pola sama tiap halaman)
 
   return (
-    <DateFilterContext.Provider value={{ dashboard, campaigns, reports, leads }}>
+    <DateFilterContext.Provider value={{ dashboard, campaigns, reports, leads, leadsInsights }}>
       {children}
     </DateFilterContext.Provider>
   );
@@ -76,6 +77,10 @@ export function useReportsFilter() {
 
 export function useLeadsFilter() {
   return useContext(DateFilterContext).leads;
+}
+
+export function useLeadsInsightsFilter() {
+  return useContext(DateFilterContext).leadsInsights;
 }
 
 export { DATE_PRESETS_DASHBOARD, DATE_PRESETS_CAMPAIGNS };

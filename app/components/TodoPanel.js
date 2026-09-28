@@ -3,17 +3,18 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import {
   ListTodo, Sun, Star, CalendarDays, Inbox, Circle, CircleCheck, Plus,
-  ChevronRight, Check, X, Pencil, Trash2, CircleAlert, Minus, ChevronUp,
+  ChevronRight, Check, Pencil, Trash2, CircleAlert, Minus, ChevronUp,
 } from 'lucide-react';
-import Dropdown from './Dropdown';
-import { TYPE } from './typography';
+import { RgMenu, RgDialog } from './rgKit';
 import { TODO_LIST_COLORS, todayStr, dueLabel, isOverdue } from './useTodos';
 
 /* ─────────────────────────────────────────────────────────────
-   TODO PANEL — daftar tugas ala Microsoft To Do, menempel di bagian
-   bawah kolom daftar catatan (halaman Notes). Tampilan (view):
+   TODO PANEL — daftar tugas ala Microsoft To Do, kartu di bagian
+   bawah kolom kiri halaman Notes. Tampilan (view):
    My Day · Important · Planned · Tasks (bawaan) · daftar kustom.
    Klik tugas → detailnya tampil di panel kanan (TodoDetail).
+   Redesain "Ridgeline" (Sep 2026): kepala kartu (judul · jumlah · minimize ·
+   pil view) + panel dalam (tambah tugas · daftar). Styling di notes-ridgeline.css.
    ───────────────────────────────────────────────────────────── */
 
 export const BUILTIN_VIEWS = [
@@ -47,16 +48,9 @@ export function tasksForView(todos, view) {
   });
 }
 
-/* Titik warna sebagai "ikon" opsi dropdown (Dropdown mewarnai teks kalau pakai opt.color) */
-function dotIcon(color) {
-  return function Dot() {
-    return <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: color || 'var(--t3)', flexShrink: 0, display: 'inline-block' }} />;
-  };
-}
-
 export default function TodoPanel({
   td, view, setView, selectedId, onSelect, onRequestDeleteList, isMobile,
-  minimized = false, onToggleMinimize,
+  minimized = false, onToggleMinimize, compact = false,
 }) {
   const { lists, todos, error } = td;
   const [draft, setDraft] = useState('');
@@ -158,226 +152,200 @@ export default function TodoPanel({
   }
 
   const viewOptions = [
-    ...BUILTIN_VIEWS.map(v => ({ value: v.id, label: v.label, icon: v.Icon })),
-    ...lists.map(l => ({ value: listViewId(l.id), label: l.name, icon: dotIcon(l.color) })),
+    ...BUILTIN_VIEWS.map(v => ({ value: v.id, label: v.label, Icon: v.Icon })),
+    ...lists.map(l => ({ value: listViewId(l.id), label: l.name, dot: l.color || 'var(--rg-t3)' })),
   ];
 
-  const smallBtn = (onClick, title, child, extra = {}) => (
-    <button onClick={onClick} title={title} style={{
-      display: 'inline-flex', alignItems: 'center', gap: '5px', background: 'none', border: 'none',
-      cursor: 'pointer', color: 'var(--t2)', fontSize: '11.5px', fontWeight: 600, fontFamily: 'inherit',
-      padding: '4px 6px', borderRadius: '7px', ...extra,
-    }}
-      onMouseEnter={e => { e.currentTarget.style.background = 'var(--hover)'; }}
-      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
-    >{child}</button>
-  );
-
-  const ViewIcon = meta.Icon;
   const openCount = open.length;
+  const rowProps = (t) => ({
+    t, td, view, isSel: t.id === selectedId, onSelect: clickRow,
+    onPress: t.done ? null : pressRow, onEnter: t.done ? null : enterRow,
+    isDragging: dragId === t.id, canDrag: canDrag && !t.done,
+  });
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, height: '100%' }}>
-      {/* Header: judul + minimize + pilihan view — tinggi tetap 40px (= TODO_HEADER_H di notes/page.js saat minimized) */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px 4px', minHeight: '40px', boxSizing: 'border-box', flexShrink: 0 }}>
-        {listEdit ? (
-          /* Editor inline nama + warna daftar (buat baru / ganti nama) */
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '7px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <input
-                autoFocus
-                value={listEdit.name}
-                onChange={e => setListEdit(le => ({ ...le, name: e.target.value }))}
-                onKeyDown={e => { if (e.key === 'Enter') commitListEdit(); if (e.key === 'Escape') setListEdit(null); }}
-                placeholder={listEdit.mode === 'new' ? 'New list name' : 'List name'}
-                style={{
-                  flex: 1, minWidth: 0, padding: '6px 9px', borderRadius: '8px', border: '1px solid var(--br-strong)',
-                  background: 'var(--bg)', color: 'var(--t1)', fontSize: '12px', fontFamily: 'inherit', outline: 'none',
-                }}
-              />
-              <button onClick={commitListEdit} title="Save" style={{ display: 'flex', background: 'var(--cal-accent)', color: 'var(--cal-accent-fg)', border: 'none', borderRadius: '8px', padding: '6px', cursor: 'pointer' }}><Check size={13} strokeWidth={3} /></button>
-              <button onClick={() => setListEdit(null)} title="Cancel" style={{ display: 'flex', background: 'none', color: 'var(--t3)', border: '1px solid var(--br)', borderRadius: '8px', padding: '6px', cursor: 'pointer' }}><X size={13} /></button>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', paddingLeft: '2px' }}>
-              <span style={{ ...TYPE.caption, marginRight: '2px' }}>Color</span>
-              {TODO_LIST_COLORS.map(c => {
-                const on = listEdit.color === c;
-                return (
-                  <button key={c} onClick={() => setListEdit(le => ({ ...le, color: on ? null : c }))} title={c} style={{
-                    width: '16px', height: '16px', borderRadius: '50%', background: c, cursor: 'pointer',
-                    border: on ? '2px solid var(--t1)' : '2px solid transparent', boxShadow: on ? '0 0 0 2px var(--cd) inset' : 'none', padding: 0,
-                  }} />
-                );
-              })}
-            </div>
-          </div>
-        ) : (
-          <>
-            <ListTodo size={13} color="var(--t3)" />
-            <span style={{ ...TYPE.caption, fontWeight: 800, letterSpacing: '0.6px', textTransform: 'uppercase', color: 'var(--t3)' }}>To Do</span>
-            {todos !== null && !error && (
-              <span style={{ ...TYPE.caption, color: 'var(--t3)' }}>· {openCount} open</span>
-            )}
-            {/* Minimize / restore ala Windows — di antara judul dan pilihan view */}
-            {onToggleMinimize && (
-              <button
-                onClick={onToggleMinimize}
-                title={minimized ? 'Restore To Do' : 'Minimize To Do'}
-                style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  width: '22px', height: '20px', marginLeft: '2px', borderRadius: '6px',
-                  background: 'transparent', border: '1px solid transparent', cursor: 'pointer',
-                  color: 'var(--t3)', transition: 'background 0.12s, color 0.12s, border-color 0.12s',
-                }}
-                onMouseEnter={e => { e.currentTarget.style.background = 'var(--hover)'; e.currentTarget.style.borderColor = 'var(--br)'; e.currentTarget.style.color = 'var(--t1)'; }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'transparent'; e.currentTarget.style.color = 'var(--t3)'; }}
-              >
-                {minimized ? <ChevronUp size={13} strokeWidth={2.5} /> : <Minus size={13} strokeWidth={2.5} />}
+    <div className="rgn-todo-in">
+      {/* Kepala kartu — tinggi kartu saat minimized = kepala ini saja (TODO_HEADER_H di notes/page.js) */}
+      <div className="rg-head rgn-todo-head">
+        <span className="rg-head-ico"><ListTodo size={15} /></span>
+        <span className="rg-title">To Do</span>
+        {todos !== null && !error && !compact && <span className="rgn-count rg-mono">{openCount} open</span>}
+        {/* Minimize / restore ala Windows — di antara judul dan pilihan view */}
+        {onToggleMinimize && (
+          <button type="button" className="rg-iconbtn rgn-min" onClick={onToggleMinimize}
+            title={minimized ? 'Restore To Do' : 'Minimize To Do'} aria-label={minimized ? 'Restore To Do' : 'Minimize To Do'}
+            aria-expanded={!minimized}>
+            {minimized ? <ChevronUp size={14} strokeWidth={2.25} /> : <Minus size={14} strokeWidth={2.25} />}
+          </button>
+        )}
+        <span style={{ flex: 1 }} />
+        {/* Menu view membuka ke ATAS — kartu To Do ada di dasar layar */}
+        <RgMenu
+          className="rg-pill rgn-view"
+          label={meta.label}
+          icon={meta.Icon || undefined}
+          dot={meta.Icon ? undefined : (meta.color || 'var(--rg-t3)')}
+          options={viewOptions}
+          value={view}
+          onSelect={setView}
+          align="right"
+          direction="up"
+          minWidth={210}
+          title="Choose a view"
+          footer={(close) => (<>
+            <button type="button" className="rg-menu-item" onClick={() => { close(); setListEdit({ mode: 'new', id: null, name: '', color: TODO_LIST_COLORS[1] }); }}>
+              <Plus size={15} className="rg-menu-ico" /><span>New list</span>
+            </button>
+            {meta.list && (
+              <button type="button" className="rg-menu-item" onClick={() => { close(); setListEdit({ mode: 'rename', id: meta.list.id, name: meta.list.name, color: meta.list.color }); }}>
+                <Pencil size={15} className="rg-menu-ico" /><span>Rename list</span>
               </button>
             )}
-            <span style={{ flex: 1 }} />
-            <Dropdown
-              label={meta.label}
-              icon={ViewIcon || dotIcon(meta.color)}
-              options={viewOptions}
-              value={view}
-              onSelect={setView}
-              align="right"
-              minWidth={190}
-              buttonStyle={{ padding: '5px 9px', fontSize: '11.5px', borderRadius: '8px', gap: '6px', maxWidth: '170px' }}
-              footer={
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', margin: '0 -4px' }}>
-                  {smallBtn(() => setListEdit({ mode: 'new', id: null, name: '', color: TODO_LIST_COLORS[1] }), 'Create a new list', <><Plus size={12} /> New list</>)}
-                  {meta.list && smallBtn(() => setListEdit({ mode: 'rename', id: meta.list.id, name: meta.list.name, color: meta.list.color }), 'Rename this list', <><Pencil size={12} /> Rename list</>)}
-                  {meta.list && smallBtn(() => onRequestDeleteList(meta.list), 'Delete this list and its tasks', <><Trash2 size={12} /> Delete list</>, { color: '#EF4444' })}
-                </div>
-              }
-            />
-          </>
-        )}
+            {meta.list && (
+              <button type="button" className="rg-menu-item is-neg" onClick={() => { close(); onRequestDeleteList(meta.list); }}>
+                <Trash2 size={15} className="rg-menu-ico" /><span>Delete list</span>
+              </button>
+            )}
+          </>)}
+        />
       </div>
 
-      {/* Quick add (disembunyikan saat minimized — tinggal header yang tampak) */}
-      {!error && !minimized && (
-        <div style={{ padding: '0 10px 6px', flexShrink: 0 }}>
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: '7px', padding: '7px 10px',
-            background: 'var(--bg)', border: '1px solid var(--br)', borderRadius: '10px',
-          }}>
-            <Plus size={13} color="var(--t3)" />
+      <div className="rg-well rgn-todo-well">
+        {/* Tambah tugas cepat — konteks view ikut (My Day / Important / Planned / daftar) */}
+        {!error && (
+          <label className="rgn-field">
+            <Plus size={15} />
             <input
               value={draft}
               onChange={e => setDraft(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') quickAdd(); }}
               placeholder={`Add a task${meta.list ? ` to ${meta.label}` : view === 'myday' ? ' to My Day' : ''}…`}
-              style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', background: 'transparent', fontSize: '12.5px', color: 'var(--t1)', fontFamily: 'inherit' }}
+              aria-label="Add a task"
+              tabIndex={minimized ? -1 : undefined}
             />
             {draft.trim() && (
-              <button onClick={quickAdd} style={{ display: 'flex', background: 'var(--cal-accent)', color: 'var(--cal-accent-fg)', border: 'none', borderRadius: '6px', padding: '3px', cursor: 'pointer' }}><Check size={11} strokeWidth={3} /></button>
+              <button type="button" className="rgn-field-go" onClick={quickAdd} title="Add task" aria-label="Add task">
+                <Check size={13} strokeWidth={3} />
+              </button>
             )}
-          </div>
-        </div>
-      )}
+          </label>
+        )}
 
-      {/* Daftar tugas — saat minimized tetap dirender (ikut terpotong animasi tinggi) tapi tak bisa di-scroll */}
-      <div style={{ flex: 1, minHeight: 0, overflowY: minimized ? 'hidden' : 'auto', padding: '0 10px 10px', display: 'flex', flexDirection: 'column', gap: '1px', opacity: minimized ? 0 : 1, transition: 'opacity 0.22s ease' }}>
-        {error?.missing && (
-          <div style={{ ...TYPE.caption, padding: '8px 6px', lineHeight: 1.6, display: 'flex', gap: '7px' }}>
-            <CircleAlert size={13} color="var(--t3)" style={{ flexShrink: 0, marginTop: '2px' }} />
-            <span>To Do is not set up yet — run <strong>supabase-todo-setup.sql</strong> once in the Supabase SQL Editor, then refresh this page.</span>
-          </div>
-        )}
-        {error && !error.missing && (
-          <div style={{ ...TYPE.caption, padding: '8px 6px', color: '#EF4444', lineHeight: 1.5 }}>{error.message}</div>
-        )}
-        {!error && todos === null && <div style={{ ...TYPE.caption, padding: '8px 6px' }}>Loading…</div>}
-        {!error && todos !== null && open.length === 0 && done.length === 0 && (
-          <div style={{ ...TYPE.caption, padding: '10px 6px', lineHeight: 1.6 }}>
-            {view === 'myday' ? 'My Day is empty — add what you want to focus on today.' : 'No tasks here yet.'}
-          </div>
-        )}
-        {open.map(t => <TaskRow key={t.id} t={t} td={td} view={view} isSel={t.id === selectedId} onSelect={clickRow} onPress={t.done ? null : pressRow} onEnter={t.done ? null : enterRow} isDragging={dragId === t.id} dragMode={!!dragId} canDrag={canDrag && !t.done} />)}
-        {done.length > 0 && (
-          <>
-            <button onClick={() => setShowDone(v => !v)} style={{
-              display: 'flex', alignItems: 'center', gap: '5px', background: 'none', border: 'none', cursor: 'pointer',
-              padding: '8px 6px 4px', color: 'var(--t3)', fontFamily: 'inherit', ...TYPE.caption, fontWeight: 800, letterSpacing: '0.6px', textTransform: 'uppercase',
-            }}>
-              <ChevronRight size={11} style={{ transform: showDone ? 'rotate(90deg)' : 'none', transition: 'transform 0.18s' }} />
-              Completed <span style={{ fontWeight: 600, letterSpacing: 0, textTransform: 'none' }}>({done.length})</span>
-            </button>
-            {showDone && done.map(t => <TaskRow key={t.id} t={t} td={td} view={view} isSel={t.id === selectedId} onSelect={clickRow} onPress={t.done ? null : pressRow} onEnter={t.done ? null : enterRow} isDragging={dragId === t.id} dragMode={!!dragId} canDrag={canDrag && !t.done} />)}
-          </>
-        )}
+        {/* Daftar tugas — saat minimized tetap dirender (ikut terpotong animasi tinggi) tapi tak bisa di-scroll */}
+        <div className={`rgn-tasks${dragId ? ' is-dragmode' : ''}`} style={minimized ? { overflowY: 'hidden' } : undefined}>
+          {error?.missing && (
+            <div className="rgn-hint" style={{ display: 'flex', gap: 8 }}>
+              <CircleAlert size={14} style={{ flexShrink: 0, marginTop: 2 }} />
+              <span>To Do is not set up yet — run <strong>supabase-todo-setup.sql</strong> once in the Supabase SQL Editor, then refresh this page.</span>
+            </div>
+          )}
+          {error && !error.missing && <div className="rgn-hint" style={{ color: 'var(--rg-neg)' }}>{error.message}</div>}
+          {!error && todos === null && (
+            <div className="rgn-skel" aria-label="Loading tasks">
+              {[70, 52, 62].map((w, i) => <span key={i} className="rg-skel" style={{ height: 12, width: `${w}%` }} />)}
+            </div>
+          )}
+          {!error && todos !== null && open.length === 0 && done.length === 0 && (
+            <div className="rgn-hint">
+              {view === 'myday' ? 'My Day is empty — add what you want to focus on today.' : 'No tasks here yet.'}
+            </div>
+          )}
+          {open.map(t => <TaskRow key={t.id} {...rowProps(t)} />)}
+          {done.length > 0 && (
+            <>
+              <button type="button" className="rgn-done-toggle" aria-expanded={showDone} onClick={() => setShowDone(v => !v)}>
+                <ChevronRight size={13} />
+                Completed <span className="rgn-group-n rg-mono">{done.length}</span>
+              </button>
+              {showDone && done.map(t => <TaskRow key={t.id} {...rowProps(t)} />)}
+            </>
+          )}
+        </div>
       </div>
+
+      {/* Daftar baru / ganti nama — dialog skin */}
+      {listEdit && (
+        <RgDialog
+          icon={listEdit.mode === 'new' ? Plus : Pencil}
+          title={listEdit.mode === 'new' ? 'New list' : 'Rename list'}
+          sub="To Do"
+          onClose={() => setListEdit(null)}
+          width={380}
+          foot={<>
+            <button type="button" className="rg-btn rg-btn-ghost" onClick={() => setListEdit(null)}>Cancel</button>
+            <button type="button" className="rg-btn rg-btn-primary" disabled={!listEdit.name.trim()} onClick={commitListEdit}>
+              {listEdit.mode === 'new' ? 'Create list' : 'Save'}
+            </button>
+          </>}
+        >
+          <div className="rgn-dlg">
+            <div className="rg-field">
+              <label className="rg-label" htmlFor="rgn-list-name">Name</label>
+              <input id="rgn-list-name" className="rg-input" autoFocus value={listEdit.name}
+                onChange={e => setListEdit(le => ({ ...le, name: e.target.value }))}
+                onKeyDown={e => { if (e.key === 'Enter') commitListEdit(); }}
+                placeholder={listEdit.mode === 'new' ? 'e.g. Campaign ops' : 'List name'} />
+            </div>
+            <div className="rg-field">
+              <span className="rg-label">Color</span>
+              <div className="rgn-swatches">
+                {TODO_LIST_COLORS.map(c => {
+                  const on = listEdit.color === c;
+                  return (
+                    <button key={c} type="button" className={`rgn-swatch${on ? ' is-on' : ''}`} style={{ '--c': c }}
+                      aria-pressed={on} aria-label={`Color ${c}`} title={c}
+                      onClick={() => setListEdit(le => ({ ...le, color: on ? null : c }))} />
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </RgDialog>
+      )}
     </div>
   );
 }
 
 /* Baris tugas — di level modul supaya tidak di-remount tiap render panel */
-function TaskRow({ t, td, view, isSel, onSelect, onPress, onEnter, isDragging = false, dragMode = false, canDrag = false }) {
-    const steps = t.steps || [];
-    const stepsDone = steps.filter(s => s.done).length;
-    const inMyDay = t.my_day_date === todayStr();
-    const overdue = !t.done && isOverdue(t.due_date);
-    const dueIsToday = t.due_date === todayStr();
-    const hasMeta = (inMyDay && view !== 'myday') || t.due_date || steps.length > 0;
-    return (
-      <div
-        onClick={() => onSelect(t.id)}
-        onMouseDown={onPress ? (e) => onPress(t.id, e) : undefined}
-        onMouseEnter={e => { if (onEnter) onEnter(t.id); if (!isSel && !dragMode) e.currentTarget.style.background = 'var(--hover)'; }}
-        onMouseLeave={e => { if (!isSel && !isDragging) e.currentTarget.style.background = 'transparent'; }}
-        title={canDrag ? 'Click to open · press & drag to reorder' : undefined}
-        style={{
-          display: 'flex', alignItems: 'flex-start', gap: '8px',
-          padding: '8px 9px', borderRadius: '11px',
-          cursor: dragMode ? 'grabbing' : 'pointer',
-          background: isSel || isDragging ? 'var(--hover)' : 'transparent',
-          border: `1px solid ${isSel || isDragging ? 'var(--br)' : 'transparent'}`,
-          boxShadow: isDragging ? 'var(--pop-shadow)' : 'none',
-          opacity: isDragging ? 0.85 : 1,
-          transform: isDragging ? 'scale(1.02)' : 'none',
-          transition: 'background 0.12s, box-shadow 0.15s, transform 0.15s, opacity 0.15s',
-          animation: 'wdFadeUp 0.25s cubic-bezier(0.4,0,0.2,1) backwards',
-          position: 'relative', zIndex: isDragging ? 2 : 'auto',
-        }}
-      >
-        <button
-          onClick={e => { e.stopPropagation(); td.toggleDone(t); }}
-          title={t.done ? 'Mark as not done' : 'Mark as done'}
-          style={{ display: 'flex', background: 'none', border: 'none', cursor: 'pointer', padding: '1px', marginTop: '1px', color: t.done ? 'var(--ac)' : 'var(--t3)', flexShrink: 0, transition: 'color 0.15s, transform 0.15s' }}
-          onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.12)'; }}
-          onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; }}
-        >
-          {t.done ? <CircleCheck size={16} /> : <Circle size={16} />}
-        </button>
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '2px' }}>
-          <span style={{
-            ...TYPE.small, fontWeight: 600, color: t.done ? 'var(--t3)' : 'var(--t1)',
-            textDecoration: t.done ? 'line-through' : 'none',
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          }}>{t.title || 'Untitled task'}</span>
-          {hasMeta && (
-            <span style={{ ...TYPE.caption, display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-              {inMyDay && view !== 'myday' && (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}><Sun size={10} /> My Day</span>
-              )}
-              {t.due_date && (
-                <span style={{
-                  display: 'inline-flex', alignItems: 'center', gap: '3px',
-                  color: overdue ? '#EF4444' : dueIsToday ? 'var(--ac)' : 'inherit', fontWeight: overdue || dueIsToday ? 700 : 500,
-                }}><CalendarDays size={10} /> {dueLabel(t.due_date)}</span>
-              )}
-              {steps.length > 0 && <span>{stepsDone}/{steps.length} steps</span>}
-            </span>
-          )}
-        </div>
-        <button
-          onClick={e => { e.stopPropagation(); td.toggleStar(t); }}
-          title={t.starred ? 'Remove importance' : 'Mark as important'}
-          style={{ display: 'flex', background: 'none', border: 'none', cursor: 'pointer', padding: '2px', marginTop: '1px', color: t.starred ? 'var(--ac)' : 'var(--t3)', flexShrink: 0 }}
-        ><Star size={13} fill={t.starred ? 'currentColor' : 'none'} /></button>
+function TaskRow({ t, td, view, isSel, onSelect, onPress, onEnter, isDragging = false, canDrag = false }) {
+  const steps = t.steps || [];
+  const stepsDone = steps.filter(s => s.done).length;
+  const inMyDay = t.my_day_date === todayStr();
+  const overdue = !t.done && isOverdue(t.due_date);
+  const dueIsToday = t.due_date === todayStr();
+  const hasMeta = (inMyDay && view !== 'myday') || t.due_date || steps.length > 0;
+  return (
+    <div
+      className={`rgn-task${isSel ? ' is-sel' : ''}${isDragging ? ' is-drag' : ''}${t.done ? ' is-done' : ''}`}
+      onClick={() => onSelect(t.id)}
+      onMouseDown={onPress ? (e) => onPress(t.id, e) : undefined}
+      onMouseEnter={onEnter ? () => onEnter(t.id) : undefined}
+      title={canDrag ? 'Click to open · press & drag to reorder' : undefined}
+    >
+      <button type="button" className={`rgn-circle${t.done ? ' is-done' : ''}`}
+        onClick={e => { e.stopPropagation(); td.toggleDone(t); }}
+        title={t.done ? 'Mark as not done' : 'Mark as done'} aria-label={t.done ? 'Mark as not done' : 'Mark as done'}>
+        {t.done ? <CircleCheck size={17} /> : <Circle size={17} />}
+      </button>
+      <div className="rgn-task-main">
+        <span className="rgn-task-title">{t.title || 'Untitled task'}</span>
+        {hasMeta && (
+          <span className="rgn-task-meta">
+            {inMyDay && view !== 'myday' && <span><Sun size={11} /> My Day</span>}
+            {t.due_date && (
+              <span className={`rgn-due${overdue ? ' is-late' : dueIsToday ? ' is-today' : ''}`}>
+                <CalendarDays size={11} /> {dueLabel(t.due_date)}
+              </span>
+            )}
+            {steps.length > 0 && <span><span className="rg-mono">{stepsDone}/{steps.length}</span> steps</span>}
+          </span>
+        )}
       </div>
-    );
-  }
+      <button type="button" className={`rgn-star${t.starred ? ' is-on' : ''}`}
+        onClick={e => { e.stopPropagation(); td.toggleStar(t); }}
+        title={t.starred ? 'Remove importance' : 'Mark as important'} aria-label={t.starred ? 'Remove importance' : 'Mark as important'}>
+        <Star size={14} fill={t.starred ? 'currentColor' : 'none'} />
+      </button>
+    </div>
+  );
+}

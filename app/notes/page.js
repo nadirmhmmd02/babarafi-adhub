@@ -2,19 +2,21 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import '../notes-ridgeline.css';
 import {
   X, Plus, Search, Pin, Trash2, Copy, Check, ChevronLeft, ChevronDown,
-  Bold, Italic, Strikethrough, List, ListOrdered,
-  Highlighter, SquareCheck, Type, CircleAlert, RefreshCw, GripVertical,
+  Bold, Italic, Strikethrough, List, ListOrdered, NotebookPen, FileText,
+  Highlighter, SquareCheck, Heading, RemoveFormatting, CircleAlert, RefreshCw, GripVertical,
 } from 'lucide-react';
 import { useAuth, homeFor } from '../components/AuthContext';
 import { supabase } from '../supabase';
 import useIsMobile from '../components/useIsMobile';
 import ThemeToggle from '../components/ThemeToggle';
-import { TYPE } from '../components/typography';
 import useTodos from '../components/useTodos';
 import TodoPanel from '../components/TodoPanel';
 import TodoDetail from '../components/TodoDetail';
+import { dashboardFontVars } from '../components/dashboardFonts';
+import { RgDialog } from '../components/rgKit';
 
 /* ─────────────────────────────────────────────────────────────
    NOTES — catatan pribadi admin (halaman penuh, /notes)
@@ -26,6 +28,10 @@ import TodoDetail from '../components/TodoDetail';
    catatan kerja dan tidak menambah dependency baru. ATURAN PENTING —
    innerHTML editor HANYA di-set ulang saat catatan yang dibuka
    berganti, JANGAN saat mengetik, kalau tidak kursor melompat ke awal.
+
+   Redesain "Ridgeline" (LIVE 28 Sep 2026): skin .rg + notes-ridgeline.css
+   (prefix .rgn-). Kartu Notes & To Do di kolom kiri, kartu editor di kanan;
+   susunan, fitur & semua logika editor TIDAK berubah.
    ───────────────────────────────────────────────────────────── */
 
 const HIGHLIGHTS = [
@@ -39,13 +45,14 @@ const AUTOSAVE_MS = 700;
 
 /* Lebar kolom daftar bisa digeser (pola sama dengan drag handle Sidebar):
    garisnya transparan, hanya kursor yang berubah saat disentuh. */
-const LIST_MIN = 210, LIST_MAX = 520, LIST_DEFAULT = 286;
+const LIST_MIN = 240, LIST_MAX = 520, LIST_DEFAULT = 300;
 const LIST_W_KEY = 'wd-notes-list-w';
 /* Tinggi panel To Do di bawah daftar catatan — juga bisa digeser (row-resize) */
 const TODO_MIN = 150, TODO_MAX = 640, TODO_DEFAULT = 320;
 const TODO_H_KEY = 'wd-notes-todo-h';
 const TODO_MIN_KEY = 'wd-notes-todo-min';   // '1' = panel To Do di-minimize (tinggal header)
-const TODO_HEADER_H = 40;                   // tinggi header panel saat minimized
+const TODO_HEADER_H = 50;                   // tinggi kartu To Do saat minimized = kepala kartu (40) + cangkang (4+4) + garis (1+1)
+const NOTES_MIN_H = 150;                    // kartu Notes di atasnya tidak boleh tergencet lebih kecil dari ini
 const GROUPS_KEY = 'wd-notes-groups-min';   // grup daftar catatan yang dilipat { pinned, all }
 const ACTIVE_KEY = 'wd-notes-active-id';    // catatan terakhir dibuka — dibuka lagi setelah refresh
 
@@ -107,7 +114,7 @@ function plainText(html) {
   const el = document.createElement('div');
   el.innerHTML = html || '';
   el.querySelectorAll('br').forEach(b => b.replaceWith('\n'));
-  el.querySelectorAll('div,p,li').forEach(b => b.append('\n'));
+  el.querySelectorAll('div,p,li,h3').forEach(b => b.append('\n'));   // h3 (Heading) juga baris sendiri — dulu menempel ke baris berikutnya
   return (el.textContent || '').replace(/\n{3,}/g, '\n\n').trim();
 }
 
@@ -148,6 +155,7 @@ export default function NotesPage() {
   const [copied, setCopied] = useState(false);
   const [showHl, setShowHl] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
   const [mobileView, setMobileView] = useState('list'); // mobile: 'list' | 'editor'
 
   // Grup daftar catatan (PINNED / ALL NOTES) bisa dilipat — isi "tersedot" ke atas
@@ -167,8 +175,8 @@ export default function NotesPage() {
 
   // Lebar kolom daftar (drag) — diingat di localStorage supaya tidak reset tiap buka
   const [listWidth, setListWidth] = useState(LIST_DEFAULT);
-  const [dragHover, setDragHover] = useState(false);
-  const contentRef = useRef(null);
+  const [listDragging, setListDragging] = useState(false);
+  const sideRef = useRef(null);          // kolom kiri (kartu Notes + To Do)
   const draggingRef = useRef(false);
 
   /* ── To Do (ala Microsoft To Do) — data via useTodos, panel di bawah daftar catatan,
@@ -179,14 +187,13 @@ export default function NotesPage() {
   const [todoH, setTodoH] = useState(TODO_DEFAULT);
   const [todoMin, setTodoMin] = useState(false);
   const [todoDragging, setTodoDragging] = useState(false);   // matikan transisi tinggi saat digeser
-  const [todoDragHover, setTodoDragHover] = useState(false);
-  const leftCardRef = useRef(null);
   const draggingTodoRef = useRef(false);
   const selectedTask = useMemo(() => (td.todos || []).find(t => t.id === selectedTaskId) || null, [td.todos, selectedTaskId]);
 
   useEffect(() => {
     const saved = parseInt(localStorage.getItem(LIST_W_KEY) || '', 10);
-    if (saved >= LIST_MIN && saved <= LIST_MAX) setListWidth(saved);
+    // lebar lama di luar rentang baru (min naik 210→240) dijepit, bukan dibuang
+    if (saved > 0) setListWidth(Math.min(LIST_MAX, Math.max(LIST_MIN, saved)));
     const savedH = parseInt(localStorage.getItem(TODO_H_KEY) || '', 10);
     if (savedH >= TODO_MIN && savedH <= TODO_MAX) setTodoH(savedH);
     if (localStorage.getItem(TODO_MIN_KEY) === '1') setTodoMin(true);
@@ -222,17 +229,19 @@ export default function NotesPage() {
 
   useEffect(() => {
     function onMove(e) {
-      if (draggingTodoRef.current && leftCardRef.current) {
-        // Geser pembatas daftar catatan ↔ panel To Do (tinggi panel = jarak kursor ke dasar kartu)
-        const bottom = leftCardRef.current.getBoundingClientRect().bottom;
-        let h = bottom - e.clientY;
+      if (draggingTodoRef.current && sideRef.current) {
+        // Geser pembatas kartu Notes ↔ kartu To Do (tinggi To Do = jarak kursor ke dasar kolom);
+        // kartu Notes di atasnya disisakan minimal NOTES_MIN_H + celah 12px
+        const r = sideRef.current.getBoundingClientRect();
+        const max = Math.max(TODO_MIN, Math.min(TODO_MAX, r.height - NOTES_MIN_H - 12));
+        let h = r.bottom - e.clientY;
         if (h < TODO_MIN) h = TODO_MIN;
-        if (h > TODO_MAX) h = TODO_MAX;
+        if (h > max) h = max;
         setTodoH(h);
         return;
       }
-      if (!draggingRef.current || !contentRef.current) return;
-      const left = contentRef.current.getBoundingClientRect().left + 16; // padding kiri container
+      if (!draggingRef.current || !sideRef.current) return;
+      const left = sideRef.current.getBoundingClientRect().left;
       let w = e.clientX - left;
       if (w < LIST_MIN) w = LIST_MIN;
       if (w > LIST_MAX) w = LIST_MAX;
@@ -243,11 +252,14 @@ export default function NotesPage() {
         draggingTodoRef.current = false;
         setTodoDragging(false);
         document.body.style.userSelect = '';
+        document.body.style.cursor = '';
         setTodoH(h => { localStorage.setItem(TODO_H_KEY, String(Math.round(h))); return h; });
       }
       if (!draggingRef.current) return;
       draggingRef.current = false;
+      setListDragging(false);
       document.body.style.userSelect = '';
+      document.body.style.cursor = '';
       setListWidth(w => { localStorage.setItem(LIST_W_KEY, String(Math.round(w))); return w; });
     }
     window.addEventListener('mousemove', onMove);
@@ -258,9 +270,12 @@ export default function NotesPage() {
     };
   }, []);
 
+  // Kursor body ikut diganti selama menggeser supaya tidak berkedip saat keluar dari celah pembatas
   function startDrag(e) {
     draggingRef.current = true;
+    setListDragging(true);
     document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'col-resize';
     e.preventDefault();
   }
   function startTodoDrag(e) {
@@ -268,6 +283,7 @@ export default function NotesPage() {
     draggingTodoRef.current = true;
     setTodoDragging(true);
     document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'row-resize';
     e.preventDefault();
   }
 
@@ -415,17 +431,22 @@ export default function NotesPage() {
   /* Eksekusi konfirmasi hapus — confirmDelete = { kind: 'note'|'task'|'list', item } */
   async function confirmDeleteNow() {
     const c = confirmDelete;
-    if (!c) return;
-    if (c.kind === 'note') { await removeNote(c.item.id); return; }
-    if (c.kind === 'task') {
-      await td.removeTask(c.item.id);
-      if (selectedTaskId === c.item.id) { setSelectedTaskId(null); loadedIdRef.current = null; if (isMobile) setMobileView('list'); }
-    } else if (c.kind === 'list') {
-      await td.removeList(c.item.id);
-      if (todoView === `list:${c.item.id}`) setTodoView('tasks');
-      if (selectedTask && selectedTask.list_id === c.item.id) { setSelectedTaskId(null); loadedIdRef.current = null; }
+    if (!c || deleting) return;
+    setDeleting(true);   // tombol dialog terkunci selama proses (anti klik dobel)
+    try {
+      if (c.kind === 'note') { await removeNote(c.item.id); return; }
+      if (c.kind === 'task') {
+        await td.removeTask(c.item.id);
+        if (selectedTaskId === c.item.id) { setSelectedTaskId(null); loadedIdRef.current = null; if (isMobile) setMobileView('list'); }
+      } else if (c.kind === 'list') {
+        await td.removeList(c.item.id);
+        if (todoView === `list:${c.item.id}`) setTodoView('tasks');
+        if (selectedTask && selectedTask.list_id === c.item.id) { setSelectedTaskId(null); loadedIdRef.current = null; }
+      }
+      setConfirmDelete(null);
+    } finally {
+      setDeleting(false);
     }
-    setConfirmDelete(null);
   }
 
   async function togglePin(n) {
@@ -678,7 +699,7 @@ export default function NotesPage() {
         31 Agu 2026). "Gutter" = area padding kiri editor (22px): kursor di sana
         berubah jadi panah (class wd-gutter), klik memilih seluruh blok baris
         pada ketinggian klik. Baris = div/p/h3 anak langsung editor, atau li. ── */
-  const GUTTER_W = 22;   // = padding kiri editor
+  const GUTTER_W = isMobile ? 16 : 24;   // = padding kiri editor (notes-ridgeline.css .rgn-editor-body)
 
   function lineBlockFromPoint(x, y) {
     const ed = editorRef.current;
@@ -797,271 +818,236 @@ export default function NotesPage() {
   const pinned = visible.filter(n => n.pinned);
   const rest = visible.filter(n => !n.pinned);
 
+  /* Popover stabilo: tutup saat klik di luar (guard closest — lihat outside-click-listener-guard) / Esc */
+  useEffect(() => {
+    if (!showHl) return;
+    const onDown = (e) => { if (!e.target.closest?.('[data-hl]')) setShowHl(false); };
+    const onKey = (e) => { if (e.key === 'Escape') setShowHl(false); };
+    document.addEventListener('mousedown', onDown);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [showHl]);
+
   if (!role || role !== 'admin') return null;
 
-  const card = {
-    background: 'var(--cd)', border: '1px solid var(--br)',
-    borderRadius: '18px', boxShadow: 'var(--shadow)',
-  };
+  const showList   = !isMobile || mobileView === 'list';
+  const showEditor = !isMobile || mobileView === 'editor';
+  const openTasks  = td.todos && !td.error ? td.todos.filter(t => !t.done).length : null;
+  const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 
+  // Tutup detail tugas → kembali ke editor catatan (loadedIdRef di-reset supaya innerHTML diisi ulang)
+  function closeTask() {
+    setSelectedTaskId(null);
+    loadedIdRef.current = null;
+  }
+
+  const ctxLine = notes === null
+    ? <span>Loading notes…</span>
+    : (<>
+        {!isMobile && (<>
+          <span className="rg-live" aria-hidden="true" />
+          <span>Workspace</span>
+          <span className="rg-ctx-sep" aria-hidden="true" />
+        </>)}
+        <span>{plural(notes.length, 'note')}</span>
+        {openTasks !== null && (<>
+          <span className="rg-ctx-sep" aria-hidden="true" />
+          <span>{plural(openTasks, 'open task')}</span>
+        </>)}
+        {!isMobile && (<>
+          <span className="rg-ctx-sep" aria-hidden="true" />
+          <span>Synced across your devices</span>
+        </>)}
+      </>);
+
+  /* Tombol toolbar editor — onMouseDown preventDefault menjaga seleksi teks */
   const toolBtn = (onClick, title, children, extra) => (
-    <button
-      onMouseDown={e => e.preventDefault()}   // jaga seleksi teks
-      onClick={onClick}
-      title={title}
-      style={{
-        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-        width: '30px', height: '30px', borderRadius: '8px', flexShrink: 0,
-        background: 'transparent', border: '1px solid transparent',
-        color: 'var(--t2)', cursor: 'pointer', fontFamily: 'inherit',
-        transition: 'background 0.12s, color 0.12s', ...extra,
-      }}
-      onMouseEnter={e => { e.currentTarget.style.background = 'var(--hover)'; e.currentTarget.style.color = 'var(--t1)'; }}
-      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--t2)'; }}
-    >{children}</button>
+    <button type="button" className="rgn-tool" onMouseDown={e => e.preventDefault()} onClick={onClick}
+      title={title} aria-label={title} {...extra}>{children}</button>
   );
 
-  function NoteRow({ n }) {
+  /* Baris catatan — dirender lewat FUNGSI biasa (bukan komponen di dalam komponen):
+     komponen yang didefinisikan di dalam render di-remount tiap ketikan (animasi &
+     hover ikut reset). Pola sama dengan groupHeader/groupBody & TaskRow. */
+  const renderNoteRow = (n) => {
     const isActive = n.id === activeId && !selectedTaskId && (!isMobile || mobileView === 'editor');
-    const isDragging = dragId === n.id;
-    const preview = plainText(n.content).slice(0, 60);
+    const preview = plainText(n.content).slice(0, 90);
     const showHandle = !isMobile && canReorder;
     return (
       <div
+        key={n.id}
+        className={`rgn-note${isActive ? ' is-on' : ''}${dragId === n.id ? ' is-drag' : ''}`}
         onClick={() => selectNote(n.id)}
+        onKeyDown={e => { if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) { e.preventDefault(); selectNote(n.id); } }}
+        role="button"
+        tabIndex={0}
+        aria-current={isActive || undefined}
         onDragOver={e => {
           if (!dragIdRef.current || dragIdRef.current === n.id) return;
           e.preventDefault();
           moveNote(dragIdRef.current, n.id);
         }}
         onDrop={e => e.preventDefault()}
-        style={{
-          padding: '10px 11px', borderRadius: '11px', cursor: 'pointer',
-          background: isActive ? 'var(--hover)' : 'transparent',
-          border: `1px solid ${isActive ? 'var(--br)' : 'transparent'}`,
-          display: 'flex', flexDirection: 'column', gap: '3px',
-          transition: 'background 0.12s, opacity 0.12s',
-          opacity: isDragging ? 0.45 : 1,
-        }}
-        onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'var(--hover)'; }}
-        onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          {showHandle && (
-            <span
-              draggable
-              onClick={e => e.stopPropagation()}
-              onDragStart={e => {
-                dragIdRef.current = n.id;
-                setDragId(n.id);
-                e.dataTransfer.effectAllowed = 'move';
-              }}
-              onDragEnd={endReorder}
-              title="Geser ke atas / bawah untuk atur urutan"
-              style={{ display: 'flex', flexShrink: 0, cursor: 'grab', color: 'var(--t3)', margin: '0 -2px' }}
-            ><GripVertical size={12} /></span>
-          )}
-          <span style={{
-            ...TYPE.small, fontWeight: isActive ? 700 : 600, flex: 1, minWidth: 0,
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          }}>{n.title || 'Untitled note'}</span>
-          <button
-            onClick={e => { e.stopPropagation(); togglePin(n); }}
-            title={n.pinned ? 'Unpin' : 'Pin to top'}
-            style={{
-              display: 'flex', background: 'none', border: 'none', cursor: 'pointer', padding: '2px',
-              color: n.pinned ? 'var(--ac)' : 'var(--t3)', flexShrink: 0,
+        {showHandle && (
+          <span
+            className="rgn-grip"
+            draggable
+            onClick={e => e.stopPropagation()}
+            onDragStart={e => {
+              dragIdRef.current = n.id;
+              setDragId(n.id);
+              e.dataTransfer.effectAllowed = 'move';
             }}
-          ><Pin size={12} fill={n.pinned ? 'currentColor' : 'none'} /></button>
-          <button
+            onDragEnd={endReorder}
+            title="Drag to reorder"
+          ><GripVertical size={12} /></span>
+        )}
+        <div className="rgn-note-top">
+          <span className="rgn-note-title">{n.title || 'Untitled note'}</span>
+          <button type="button" className={`rgn-note-act${n.pinned ? ' is-on' : ''}`}
+            onClick={e => { e.stopPropagation(); togglePin(n); }}
+            title={n.pinned ? 'Unpin' : 'Pin to top'} aria-label={n.pinned ? 'Unpin note' : 'Pin note to top'}>
+            <Pin size={13} fill={n.pinned ? 'currentColor' : 'none'} />
+          </button>
+          <button type="button" className="rgn-note-act is-del"
             onClick={e => { e.stopPropagation(); setConfirmDelete({ kind: 'note', item: n }); }}
-            title="Delete note"
-            style={{ display: 'flex', background: 'none', border: 'none', cursor: 'pointer', padding: '2px', color: 'var(--t3)', flexShrink: 0 }}
-            onMouseEnter={e => e.currentTarget.style.color = '#EF4444'}
-            onMouseLeave={e => e.currentTarget.style.color = 'var(--t3)'}
-          ><Trash2 size={12} /></button>
+            title="Delete note" aria-label="Delete note">
+            <Trash2 size={13} />
+          </button>
         </div>
-        <span style={{ ...TYPE.caption, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {preview || 'Empty note'} · {relativeTime(n.updated_at)}
-        </span>
+        <div className="rgn-note-sub">
+          <span className="rgn-note-prev">{preview || 'Empty note'}</span>
+          <span className="rgn-note-time">{relativeTime(n.updated_at)}</span>
+        </div>
       </div>
     );
-  }
+  };
 
   /* ── Grup daftar yang bisa dilipat ──
      Dipanggil sebagai FUNGSI biasa (bukan komponen JSX) supaya elemennya tidak
-     di-remount tiap render — kalau remount, transisi lipatnya tidak jalan
-     (pelajaran yang sama dengan TaskRow di TodoPanel). Animasi tinggi pakai
-     grid-template-rows 1fr→0fr: isi grup "tersedot" ke atas masuk ke header
-     (kebalikan arah minimize To Do), keluar lagi ke bawah saat dibuka. */
+     di-remount tiap render — kalau remount, transisi lipatnya tidak jalan.
+     Animasi tinggi pakai grid-template-rows 1fr→0fr: isi grup "tersedot" ke atas
+     masuk ke header (kebalikan arah minimize To Do), keluar lagi ke bawah saat dibuka. */
   const groupHeader = (id, label, count) => {
     const min = isGroupMin(id);
     return (
-      <button
-        onClick={() => toggleGroup(id)}
-        title={min ? 'Show notes' : 'Hide notes'}
-        style={{
-          display: 'flex', alignItems: 'center', gap: '5px', width: '100%',
-          background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit',
-          textAlign: 'left', ...TYPE.caption, fontWeight: 800, letterSpacing: '0.6px',
-          textTransform: 'uppercase', padding: '8px 6px 4px', color: 'var(--t3)',
-          transition: 'color 0.12s',
-        }}
-        onMouseEnter={e => e.currentTarget.style.color = 'var(--t2)'}
-        onMouseLeave={e => e.currentTarget.style.color = 'var(--t3)'}
-      >
-        <ChevronDown size={12} strokeWidth={2.5} style={{
-          flexShrink: 0,
-          transition: 'transform 0.3s cubic-bezier(0.4,0,0.2,1)',
-          transform: min ? 'rotate(-90deg)' : 'none',
-        }} />
+      <button type="button" className={`rgn-group${min ? ' is-min' : ''}`} onClick={() => toggleGroup(id)}
+        aria-expanded={!min} title={min ? 'Show notes' : 'Hide notes'}>
+        <ChevronDown size={13} />
         <span>{label}</span>
-        <span style={{ fontWeight: 700, opacity: 0.85 }}>· {count}</span>
+        <span className="rgn-group-n rg-mono">{count}</span>
       </button>
     );
   };
-  const groupBody = (id, children) => {
-    const min = isGroupMin(id);
-    return (
-      <div style={{
-        display: 'grid', gridTemplateRows: min ? '0fr' : '1fr',
-        transition: 'grid-template-rows 0.34s cubic-bezier(0.4,0,0.2,1)',
-      }}>
-        <div style={{
-          overflow: 'hidden', minHeight: 0,
-          display: 'flex', flexDirection: 'column', gap: '2px',
-          opacity: min ? 0 : 1,
-          transform: min ? 'translateY(-8px)' : 'none',
-          transition: 'opacity 0.26s ease, transform 0.34s cubic-bezier(0.4,0,0.2,1)',
-        }}>
-          {children}
-        </div>
-      </div>
-    );
-  };
+  const groupBody = (id, children) => (
+    <div className={`rgn-group-body${isGroupMin(id) ? ' is-min' : ''}`}>
+      <div className="rgn-group-in">{children}</div>
+    </div>
+  );
 
-  const showList   = !isMobile || mobileView === 'list';
-  const showEditor = !isMobile || mobileView === 'editor';
+  const deleteTitle = confirmDelete?.kind === 'task' ? 'Delete this task?'
+    : confirmDelete?.kind === 'list' ? 'Delete this list?' : 'Delete this note?';
+  const deleteName = !confirmDelete ? ''
+    : confirmDelete.kind === 'list' ? confirmDelete.item.name
+    : (confirmDelete.item.title || (confirmDelete.kind === 'task' ? 'Untitled task' : 'Untitled note'));
 
   return (
-    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', background: 'var(--bg)' }}>
+    <div className={`rg rg-page rgn ${dashboardFontVars}${isMobile ? ' is-mobile' : ''}`}>
 
-      {/* ══ HEADER CARD ══ */}
-      <header style={isMobile ? {
-        display: 'flex', alignItems: 'center', gap: '12px',
-        padding: '14px 16px', flexShrink: 0, borderBottom: '1px solid var(--br)',
-      } : {
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '12px 20px', margin: '12px 16px 0', flexShrink: 0, ...card,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+      {/* ══ TOP BAR — judul + konteks (kiri) · aksi (kanan) ══ */}
+      <header className="rg-top">
+        <div className="rg-top-title" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           {isMobile && mobileView === 'editor' && (
-            <button onClick={() => setMobileView('list')} title="Back to list" style={{
-              display: 'flex', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t2)', padding: '4px',
-            }}><ChevronLeft size={20} /></button>
+            <button type="button" className="rg-iconbtn rgn-back" onClick={() => setMobileView('list')}
+              title="Back to list" aria-label="Back to list"><ChevronLeft size={18} /></button>
           )}
           <div style={{ minWidth: 0 }}>
-            <h1 style={{ ...TYPE.h1, ...(isMobile ? { fontSize: '20px' } : null) }}>Notes</h1>
-            <p style={{ ...TYPE.small, marginTop: '3px' }}>
-              {notes === null ? 'Loading…' : `${notes.length} note${notes.length === 1 ? '' : 's'}${td.todos && !td.error ? ` · ${td.todos.filter(t => !t.done).length} open task${td.todos.filter(t => !t.done).length === 1 ? '' : 's'}` : ''} · synced across your devices`}
-            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <h1 className="rg-h1">Notes</h1>
+            </div>
+            <div className="rg-ctx">{ctxLine}</div>
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <button onClick={createNote} style={{
-            display: 'inline-flex', alignItems: 'center', gap: '6px',
-            padding: '9px 14px', borderRadius: '10px', border: 'none',
-            background: 'var(--cal-accent)', color: 'var(--cal-accent-fg)',
-            fontSize: '13px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0,
-          }}><Plus size={14} strokeWidth={3} /> New note</button>
-          {!isMobile && <ThemeToggle />}
+        <div className="rg-tools">
+          <button type="button" className="rg-pill is-primary" onClick={createNote}>
+            <Plus size={15} />New note
+          </button>
+          {!isMobile && (<>
+            <span className="rg-vsep" aria-hidden="true" />
+            <ThemeToggle className="rg-pill rg-round" />
+          </>)}
         </div>
       </header>
 
-      {/* ══ CONTENT ══ */}
-      <div ref={contentRef} style={{
-        flex: 1, minHeight: 0, display: 'flex', gap: '10px',
-        padding: isMobile ? '12px 16px 16px' : '10px 16px 16px',
-      }}>
+      {/* ══ ISI ══ */}
+      <div className="rgn-body">
 
-        {/* ── Daftar catatan ── */}
+        {/* ── Kolom kiri: kartu Notes + kartu To Do ── */}
         {showList && (
-          <div ref={leftCardRef} style={{
-            ...card, width: isMobile ? '100%' : `${listWidth}px`, flexShrink: 0,
-            display: 'flex', flexDirection: 'column', overflow: 'hidden',
-            animation: 'wdFadeUp 0.4s cubic-bezier(0.4,0,0.2,1) backwards',
-          }}>
-            <div style={{ padding: '12px 12px 10px' }}>
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: '7px', padding: '8px 11px',
-                background: 'var(--bg)', border: '1px solid var(--br)', borderRadius: '10px',
-              }}>
-                <Search size={13} color="var(--t3)" />
-                <input
-                  value={q}
-                  onChange={e => setQ(e.target.value)}
-                  placeholder="Search notes…"
-                  style={{
-                    flex: 1, minWidth: 0, border: 'none', outline: 'none', background: 'transparent',
-                    fontSize: '12.5px', color: 'var(--t1)', fontFamily: 'inherit',
-                  }}
-                />
-                {q && (
-                  <button onClick={() => setQ('')} style={{ display: 'flex', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t3)', padding: 0 }}>
-                    <X size={12} />
-                  </button>
-                )}
+          <div ref={sideRef} className="rgn-side" style={isMobile ? undefined : { width: `${listWidth}px` }}>
+            <section className="rg-card rgn-notes rg-rise" aria-label="Notes">
+              <div className="rg-head">
+                <span className="rg-head-ico"><FileText size={15} /></span>
+                <span className="rg-title">Notes</span>
+                {notes !== null && <span className="rgn-count rg-mono">{notes.length}</span>}
               </div>
-            </div>
-
-            <div style={{ flex: 1, overflowY: 'auto', padding: '0 10px 12px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              {notes === null && <div style={{ ...TYPE.caption, padding: '10px 6px' }}>Loading…</div>}
-              {notes !== null && visible.length === 0 && (
-                <div style={{ ...TYPE.caption, padding: '10px 6px', lineHeight: 1.6 }}>
-                  {q ? 'No note matches your search.' : 'No notes yet — hit New note to write your first one.'}
+              <div className="rg-well rgn-list-well">
+                <label className="rgn-field">
+                  <Search size={15} />
+                  <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search notes…" aria-label="Search notes" />
+                  {q && (
+                    <button type="button" className="rgn-field-x" onClick={() => setQ('')} title="Clear search" aria-label="Clear search">
+                      <X size={13} />
+                    </button>
+                  )}
+                </label>
+                <div className="rgn-list">
+                  {notes === null && (
+                    <div className="rgn-skel" aria-label="Loading notes">
+                      {[62, 78, 55, 70].map((w, i) => (
+                        <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 7, padding: '7px 0' }}>
+                          <span className="rg-skel" style={{ height: 12, width: `${w}%` }} />
+                          <span className="rg-skel" style={{ height: 10, width: '88%' }} />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {notes !== null && visible.length === 0 && (
+                    <div className="rgn-hint">
+                      {q ? 'No note matches your search.' : 'No notes yet — hit New note to write your first one.'}
+                    </div>
+                  )}
+                  {pinned.length > 0 && groupHeader('pinned', 'Pinned', pinned.length)}
+                  {pinned.length > 0 && groupBody('pinned', pinned.map(renderNoteRow))}
+                  {rest.length > 0 && groupHeader('all', 'All notes', rest.length)}
+                  {rest.length > 0 && groupBody('all', rest.map(renderNoteRow))}
+                  {notes !== null && notes.length > 1 && !canReorder && !isMobile && (
+                    <div className="rgn-hint">
+                      Mau geser urutan catatan? Jalankan <strong>supabase-notes-update-1.sql</strong> sekali di Supabase SQL Editor, lalu refresh halaman ini.
+                    </div>
+                  )}
                 </div>
-              )}
-              {pinned.length > 0 && groupHeader('pinned', 'Pinned', pinned.length)}
-              {pinned.length > 0 && groupBody('pinned', pinned.map(n => <NoteRow key={n.id} n={n} />))}
-              {rest.length > 0 && groupHeader('all', 'All notes', rest.length)}
-              {rest.length > 0 && groupBody('all', rest.map(n => <NoteRow key={n.id} n={n} />))}
-              {notes !== null && notes.length > 1 && !canReorder && !isMobile && (
-                <div style={{ ...TYPE.caption, padding: '10px 6px 2px', lineHeight: 1.5 }}>
-                  Mau geser urutan catatan? Jalankan <strong>supabase-notes-update-1.sql</strong> sekali di Supabase SQL Editor, lalu refresh halaman ini.
-                </div>
-              )}
-            </div>
+              </div>
+            </section>
 
-            {/* ── Pembatas daftar ↔ To Do (desktop: bisa digeser atas-bawah) ── */}
-            <div
-              onMouseDown={isMobile ? undefined : startTodoDrag}
-              onMouseEnter={() => setTodoDragHover(true)}
-              onMouseLeave={() => setTodoDragHover(false)}
-              title={isMobile ? undefined : 'Drag to resize'}
-              style={{
-                height: '1px', flexShrink: 0, position: 'relative',
-                background: 'var(--br)',
-                cursor: isMobile || todoMin ? 'default' : 'row-resize',
-              }}
+            {/* Pembatas kartu Notes ↔ To Do (desktop: geser atas-bawah) */}
+            {!isMobile && (
+              <div className={`rgn-hsplit${todoMin ? ' is-off' : ''}${todoDragging ? ' is-drag' : ''}`}
+                onMouseDown={startTodoDrag} title={todoMin ? undefined : 'Drag to resize'} aria-hidden="true" />
+            )}
+
+            {/* Kartu To Do (ala Microsoft To Do) — minimize ala Windows: tinggi menyusut ke
+                kepala kartu (menempel di dasar kolom → tampak turun & mengecil ke bawah) */}
+            <section
+              className={`rg-card rgn-todo rg-rise${todoMin ? ' is-min' : ''}${todoDragging ? ' is-dragging' : ''}`}
+              style={{ height: todoMin ? `${TODO_HEADER_H}px` : isMobile ? '44%' : `${todoH}px`, animationDelay: '40ms' }}
+              aria-label="To Do"
             >
-              {!isMobile && !todoMin && (
-                <div style={{
-                  position: 'absolute', left: 0, right: 0, top: '-3px', height: '7px', zIndex: 5,
-                  background: todoDragHover || todoDragging ? 'var(--br-strong)' : 'transparent',
-                  transition: 'background 0.15s', borderRadius: '999px',
-                }} />
-              )}
-            </div>
-
-            {/* ── Panel To Do (ala Microsoft To Do) ──
-                Minimize ala Windows: tinggi menyusut ke header saja (panel menempel di dasar
-                kartu, jadi tampak "turun & mengecil ke bawah"); transisi dimatikan saat digeser. */}
-            <div style={{
-              height: todoMin ? `${TODO_HEADER_H}px` : isMobile ? '44%' : `${todoH}px`,
-              flexShrink: 0, minHeight: 0, background: 'var(--cd)', overflow: 'hidden',
-              transition: todoDragging ? 'none' : 'height 0.34s cubic-bezier(0.4,0,0.2,1)',
-            }}>
               <TodoPanel
                 td={td}
                 view={todoView}
@@ -1072,205 +1058,165 @@ export default function NotesPage() {
                 isMobile={isMobile}
                 minimized={todoMin}
                 onToggleMinimize={toggleTodoMin}
+                compact={!isMobile && listWidth < 272}
               />
-            </div>
+            </section>
           </div>
         )}
 
-        {/* ── Pembatas geser (desktop) — tak terlihat, hanya kursor yang berubah ── */}
+        {/* ── Pembatas geser kolom kiri ↔ editor (desktop) ── */}
         {!isMobile && showList && showEditor && (
-          <div
-            onMouseDown={startDrag}
-            onMouseEnter={() => setDragHover(true)}
-            onMouseLeave={() => setDragHover(false)}
-            title="Drag to resize"
-            style={{
-              width: '6px', margin: '0 -8px', flexShrink: 0, zIndex: 5,
-              cursor: 'col-resize', borderRadius: '999px',
-              background: dragHover || draggingRef.current ? 'var(--br-strong)' : 'transparent',
-              transition: 'background 0.15s',
-            }}
-          />
+          <div className={`rgn-vsplit${listDragging ? ' is-drag' : ''}`} onMouseDown={startDrag}
+            title="Drag to resize" aria-hidden="true" />
         )}
 
-        {/* ── Editor ── */}
+        {/* ── Kartu kanan: editor catatan / detail tugas ── */}
         {showEditor && (
-          <div style={{
-            ...card, flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden',
-            animation: 'wdFadeUp 0.4s cubic-bezier(0.4,0,0.2,1) 60ms backwards',
-          }}>
+          <section className="rg-card rgn-editor rg-rise" style={{ animationDelay: '80ms' }}
+            aria-label={selectedTask ? 'Task details' : 'Note editor'}>
             {selectedTask ? (
               <TodoDetail
                 key={selectedTask.id}
                 task={selectedTask}
                 td={td}
                 onRequestDelete={(t) => setConfirmDelete({ kind: 'task', item: t })}
+                onClose={closeTask}
                 isMobile={isMobile}
               />
             ) : active ? (
               <>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '13px 16px', borderBottom: '1px solid var(--br)' }}>
-                  <input
-                    ref={titleRef}
-                    value={active.title || ''}
-                    onChange={e => queueSave({ title: e.target.value })}
-                    placeholder="Note title"
-                    style={{
-                      flex: 1, minWidth: 0, border: 'none', outline: 'none', background: 'transparent',
-                      ...TYPE.h4, color: 'var(--t1)', fontFamily: 'inherit',
-                    }}
-                  />
-                  <span style={{ ...TYPE.caption, whiteSpace: 'nowrap', color: status === 'saving' ? 'var(--t3)' : 'var(--ac)' }}>
-                    {status === 'saving' ? 'Saving…' : status === 'saved' ? 'Saved' : `Edited ${relativeTime(active.updated_at)}`}
-                  </span>
-                </div>
-
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: '2px', flexWrap: 'wrap',
-                  padding: '8px 12px', borderBottom: '1px solid var(--br)', position: 'relative',
-                }}>
-                  {toolBtn(() => exec('bold'), 'Bold', <Bold size={15} />)}
-                  {toolBtn(() => exec('italic'), 'Italic', <Italic size={15} />)}
-                  {toolBtn(() => exec('strikeThrough'), 'Strikethrough', <Strikethrough size={15} />)}
-                  {toolBtn(() => exec('formatBlock', '<h3>'), 'Heading', <Type size={15} />)}
-                  <span style={{ width: '1px', height: '18px', background: 'var(--br)', margin: '0 6px' }} />
-                  {toolBtn(() => exec('insertUnorderedList'), 'Bullet list', <List size={15} />)}
-                  {toolBtn(() => exec('insertOrderedList'), 'Numbered list', <ListOrdered size={15} />)}
-                  {toolBtn(insertCheckbox, 'Checklist item', <SquareCheck size={15} />)}
-                  <span style={{ width: '1px', height: '18px', background: 'var(--br)', margin: '0 6px' }} />
-                  <div style={{ position: 'relative', display: 'inline-flex' }}>
-                    {toolBtn(() => setShowHl(v => !v), 'Highlight', <Highlighter size={15} />,
-                      showHl ? { background: 'var(--hover)', color: 'var(--t1)' } : undefined)}
-                    {showHl && (
-                      <div style={{
-                        position: 'absolute', top: '36px', left: 0, zIndex: 5,
-                        display: 'flex', gap: '5px', padding: '7px',
-                        background: 'var(--cd)', border: '1px solid var(--br)', borderRadius: '10px',
-                        boxShadow: 'var(--pop-shadow)', animation: 'wdScaleIn 0.14s cubic-bezier(0.4,0,0.2,1)',
-                      }}>
-                        {HIGHLIGHTS.map(h => (
-                          <button
-                            key={h.value}
-                            title={h.name}
-                            onMouseDown={e => e.preventDefault()}
-                            onClick={() => { exec('hiliteColor', h.value); setShowHl(false); }}
-                            style={{
-                              width: '22px', height: '22px', borderRadius: '7px', cursor: 'pointer',
-                              background: h.value, border: '1px solid rgba(0,0,0,0.12)',
-                            }}
-                          />
-                        ))}
-                        <button
-                          title="Remove highlight"
-                          onMouseDown={e => e.preventDefault()}
-                          onClick={() => { exec('hiliteColor', 'transparent'); setShowHl(false); }}
-                          style={{
-                            width: '22px', height: '22px', borderRadius: '7px', cursor: 'pointer',
-                            background: 'var(--hover)', border: '1px solid var(--br)',
-                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: 'var(--t3)',
-                          }}
-                        ><X size={12} /></button>
-                      </div>
-                    )}
+                <div className="rg-head rgn-ed-head">
+                  <div className="rgn-toolbar" role="toolbar" aria-label="Formatting">
+                    {toolBtn(() => exec('bold'), 'Bold', <Bold size={15} />)}
+                    {toolBtn(() => exec('italic'), 'Italic', <Italic size={15} />)}
+                    {toolBtn(() => exec('strikeThrough'), 'Strikethrough', <Strikethrough size={15} />)}
+                    {toolBtn(() => exec('formatBlock', '<h3>'), 'Heading', <Heading size={15} />)}
+                    <span className="rgn-tsep" aria-hidden="true" />
+                    {toolBtn(() => exec('insertUnorderedList'), 'Bullet list', <List size={15} />)}
+                    {toolBtn(() => exec('insertOrderedList'), 'Numbered list', <ListOrdered size={15} />)}
+                    {toolBtn(insertCheckbox, 'Checklist item', <SquareCheck size={15} />)}
+                    <span className="rgn-tsep" aria-hidden="true" />
+                    <div className="rgn-hl-wrap" data-hl>
+                      {toolBtn(() => setShowHl(v => !v), 'Highlight', <Highlighter size={15} />,
+                        { 'aria-expanded': showHl, 'aria-haspopup': 'true' })}
+                      {showHl && (
+                        <div className="rgn-hl-pos">{/* lapisan posisi — tidak dianimasikan */}
+                          <div className="rgn-hl" role="group" aria-label="Highlight color">
+                            {HIGHLIGHTS.map(h => (
+                              <button key={h.value} type="button" className="rgn-hl-sw" title={h.name} aria-label={`${h.name} highlight`}
+                                style={{ background: h.value }}
+                                onMouseDown={e => e.preventDefault()}
+                                onClick={() => { exec('hiliteColor', h.value); setShowHl(false); }} />
+                            ))}
+                            <button type="button" className="rgn-hl-sw is-none" title="Remove highlight" aria-label="Remove highlight"
+                              onMouseDown={e => e.preventDefault()}
+                              onClick={() => { exec('hiliteColor', 'transparent'); setShowHl(false); }}><X size={13} /></button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    {toolBtn(() => exec('removeFormat'), 'Clear formatting', <RemoveFormatting size={15} />)}
                   </div>
-                  {toolBtn(() => exec('removeFormat'), 'Clear formatting', <span style={{ fontSize: '11px', fontWeight: 800 }}>Tx</span>)}
-                  <span style={{ flex: 1 }} />
-                  {toolBtn(copyNote, 'Copy note as plain text',
-                    copied ? <Check size={15} color="var(--ac)" strokeWidth={3} /> : <Copy size={15} />)}
+                  {toolBtn(copyNote, copied ? 'Copied' : 'Copy note as plain text',
+                    copied ? <Check size={15} strokeWidth={2.5} /> : <Copy size={15} />,
+                    copied ? { className: 'rgn-tool rgn-copied' } : undefined)}
                 </div>
 
-                <div
-                  ref={editorRef}
-                  contentEditable
-                  suppressContentEditableWarning
-                  onInput={() => queueSave({ content: editorRef.current.innerHTML })}
-                  onClick={onEditorClick}
-                  onKeyDown={onEditorKeyDown}
-                  onPaste={onEditorPaste}
-                  onMouseDown={onEditorMouseDown}
-                  onMouseMove={onEditorMouseMove}
-                  onDragStart={e => e.preventDefault()}
-                  onDrop={e => e.preventDefault()}
-                  className="wd-note-editor"
-                  style={{
-                    flex: 1, overflowY: 'auto', padding: '18px 22px', outline: 'none',
-                    fontSize: '14px', lineHeight: 1.7, color: 'var(--t1)',
-                  }}
-                />
-              </>
-            ) : (
-              <div style={{
-                flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
-                justifyContent: 'center', gap: '10px', padding: '30px', textAlign: 'center',
-              }}>
-                <div style={{ ...TYPE.body, fontWeight: 700 }}>Nothing open</div>
-                <div style={{ ...TYPE.caption, maxWidth: '300px', lineHeight: 1.6 }}>
-                  Create a note to jot down campaign ideas, follow-up scripts, or anything you need on hand from any device.
+                <div className="rg-well rgn-doc">
+                  <div className="rgn-doc-head">
+                    <input
+                      ref={titleRef}
+                      className="rgn-doc-title"
+                      value={active.title || ''}
+                      onChange={e => queueSave({ title: e.target.value })}
+                      placeholder="Note title"
+                      aria-label="Note title"
+                    />
+                    <div className="rgn-doc-meta">
+                      {active.pinned && <span className="rg-chip"><Pin size={11} fill="currentColor" />Pinned</span>}
+                      <span className={`rgn-status${status === 'saving' ? ' is-saving' : status === 'saved' ? ' is-saved' : ''}`}>
+                        {status === 'saving' ? 'Saving…'
+                          : status === 'saved' ? <><Check size={13} strokeWidth={2.5} />Saved</>
+                          : `Edited ${relativeTime(active.updated_at)}`}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="rgn-rule" aria-hidden="true" />
+                  <div
+                    ref={editorRef}
+                    contentEditable
+                    suppressContentEditableWarning
+                    onInput={() => queueSave({ content: editorRef.current.innerHTML })}
+                    onClick={onEditorClick}
+                    onKeyDown={onEditorKeyDown}
+                    onPaste={onEditorPaste}
+                    onMouseDown={onEditorMouseDown}
+                    onMouseMove={onEditorMouseMove}
+                    onDragStart={e => e.preventDefault()}
+                    onDrop={e => e.preventDefault()}
+                    className="wd-note-editor rgn-editor-body"
+                    role="textbox"
+                    aria-multiline="true"
+                    aria-label="Note content"
+                  />
                 </div>
-                <button onClick={createNote} style={{
-                  marginTop: '4px', display: 'inline-flex', alignItems: 'center', gap: '6px',
-                  padding: '9px 16px', borderRadius: '10px', border: 'none',
-                  background: 'var(--cal-accent)', color: 'var(--cal-accent-fg)',
-                  fontSize: '13px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-                }}><Plus size={14} strokeWidth={3} /> New note</button>
+              </>
+            ) : notes === null ? (
+              <div className="rg-well rgn-doc" aria-label="Loading note">
+                <div className="rgn-doc-head">
+                  <span className="rg-skel" style={{ height: 22, width: '42%' }} />
+                  <span className="rg-skel" style={{ height: 11, width: 120, marginTop: 12 }} />
+                </div>
+                <div className="rgn-rule" aria-hidden="true" />
+                <div className="rgn-skel" style={{ padding: '20px 24px', gap: 12 }}>
+                  {[92, 78, 86, 58].map((w, i) => <span key={i} className="rg-skel" style={{ height: 12, width: `${w}%` }} />)}
+                </div>
+              </div>
+            ) : (
+              <div className="rg-well rgn-doc">
+                <div className="rg-empty rgn-empty">
+                  <span className="rgn-empty-ico"><NotebookPen size={20} /></span>
+                  <strong>Nothing open</strong>
+                  <span>Create a note to jot down campaign ideas, follow-up scripts, or anything you need on hand from any device.</span>
+                  <button type="button" className="rg-btn rg-btn-primary" onClick={createNote}><Plus size={15} />New note</button>
+                </div>
               </div>
             )}
 
             {error && (
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px',
-                borderTop: '1px solid var(--br)', background: 'rgba(239,68,68,0.08)',
-              }}>
-                <CircleAlert size={14} color="#EF4444" style={{ flexShrink: 0 }} />
-                <span style={{ ...TYPE.caption, color: '#EF4444' }}>{error}</span>
-                <button onClick={() => { setError(null); load(); }} style={{
-                  marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: '5px',
-                  background: 'none', border: 'none', cursor: 'pointer', color: '#EF4444',
-                  fontSize: '11px', fontWeight: 700, fontFamily: 'inherit', flexShrink: 0,
-                }}><RefreshCw size={12} /> Retry</button>
+              <div className="rgn-err" role="alert">
+                <CircleAlert size={15} />
+                <span>{error}</span>
+                <button type="button" className="rg-btn" onClick={() => { setError(null); load(); }}>
+                  <RefreshCw size={13} />Retry
+                </button>
               </div>
             )}
-          </div>
+          </section>
         )}
       </div>
 
-      {/* ══ KONFIRMASI HAPUS ══ */}
+      {/* ══ KONFIRMASI HAPUS (catatan / tugas / daftar) — Esc & klik latar menutup ══ */}
       {confirmDelete && (
-        <div
-          onClick={() => setConfirmDelete(null)}
-          style={{
-            position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,0.45)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px',
-            animation: 'wdFadeIn 0.15s ease',
-          }}
+        <RgDialog
+          icon={Trash2}
+          tone="neg"
+          title={deleteTitle}
+          sub={deleteName}
+          onClose={() => setConfirmDelete(null)}
+          busy={deleting}
+          width={400}
+          foot={<>
+            <button type="button" className="rg-btn rg-btn-ghost" onClick={() => setConfirmDelete(null)} disabled={deleting}>Cancel</button>
+            <button type="button" className={`rg-btn rg-btn-danger${deleting ? ' is-busy' : ''}`} onClick={confirmDeleteNow} disabled={deleting}>
+              {deleting ? 'Deleting…' : 'Delete'}
+            </button>
+          </>}
         >
-          <div onClick={e => e.stopPropagation()} style={{
-            width: '100%', maxWidth: '340px', padding: '18px 20px',
-            background: 'var(--cd)', border: '1px solid var(--br)', borderRadius: '16px',
-            boxShadow: 'var(--pop-shadow)', animation: 'wdScaleIn 0.16s cubic-bezier(0.4,0,0.2,1)',
-          }}>
-            <div style={{ ...TYPE.h4 }}>
-              {confirmDelete.kind === 'task' ? 'Delete this task?' : confirmDelete.kind === 'list' ? 'Delete this list?' : 'Delete this note?'}
-            </div>
-            <div style={{ ...TYPE.small, marginTop: '7px', lineHeight: 1.6 }}>
-              {confirmDelete.kind === 'task' && <>“{confirmDelete.item.title || 'Untitled task'}” will be removed from every device. This can’t be undone.</>}
-              {confirmDelete.kind === 'list' && <>“{confirmDelete.item.name}” and <strong>all tasks inside it</strong> will be removed from every device. This can’t be undone.</>}
-              {confirmDelete.kind === 'note' && <>“{confirmDelete.item.title || 'Untitled note'}” will be removed from every device. This can’t be undone.</>}
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '9px', marginTop: '16px' }}>
-              <button onClick={() => setConfirmDelete(null)} style={{
-                padding: '9px 15px', borderRadius: '9px', border: '1px solid var(--br)',
-                background: 'var(--cd)', color: 'var(--t1)', fontSize: '12.5px', fontWeight: 600,
-                cursor: 'pointer', fontFamily: 'inherit',
-              }}>Cancel</button>
-              <button onClick={confirmDeleteNow} style={{
-                padding: '9px 15px', borderRadius: '9px', border: 'none',
-                background: '#EF4444', color: '#fff', fontSize: '12.5px', fontWeight: 700,
-                cursor: 'pointer', fontFamily: 'inherit',
-              }}>Delete</button>
-            </div>
-          </div>
-        </div>
+          {confirmDelete.kind === 'list'
+            ? <>The list and <strong>all tasks inside it</strong> will be removed from every device. This can’t be undone.</>
+            : <>It will be removed from every device. This can’t be undone.</>}
+        </RgDialog>
       )}
     </div>
   );

@@ -1,0 +1,120 @@
+/* ══════════════════════════════════════════════════════════════════════
+   LOGIN — redesain "Ridgeline" (LIVE 28 Sep 2026). Dasar skin di
+   app/ridgeline.css (.rg). Prefix khusus: .rgin-
+   Keputusan Nadir 28 Sep 2026: kartu di tengah (susunan lama), tema IKUT tema
+   terakhir di perangkat itu (data-theme dari skrip no-flash di layout.js — tidak
+   lagi dikunci terang), logo mark di lingkaran Saffron + "Baba Rafi Ad Hub".
+   Saffron (--sb-acc*, ditanam di :root oleh sidebar-ridgeline.css) hanya di logo;
+   isi kartu tetap netral seperti seluruh skin.
+   ══════════════════════════════════════════════════════════════════════ */
+
+.rgin {
+  position: fixed; inset: 0; z-index: 150; overflow-y: auto;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 32px 16px; background: var(--rg-bg);
+  animation: wdFadeIn .5s ease;
+}
+/* Tekstur titik halus (sama dengan panel KPI) yang memudar ke tepi layar */
+.rgin::before {
+  content: ''; position: fixed; inset: 0; pointer-events: none;
+  background-image: radial-gradient(var(--rg-dots) 1px, transparent 1.3px);
+  background-size: 18px 18px;
+  -webkit-mask-image: radial-gradient(ellipse 58% 52% at 50% 46%, #000 15%, transparent 72%);
+          mask-image: radial-gradient(ellipse 58% 52% at 50% 46%, #000 15%, transparent 72%);
+}
+
+.rgin-card { position: relative; width: 100%; max-width: 420px; border-radius: 24px; }
+
+/* Kepala kartu: logo mark (Saffron) + nama produk — gaya sama dengan kepala sidebar */
+.rgin-brand { display: flex; align-items: center; gap: 11px; padding: 12px 14px 14px; }
+.rgin-mark {
+  width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--sb-acc); color: var(--sb-acc-fg);
+  box-shadow: 0 0 0 4px var(--sb-acc-soft);
+}
+.rgin-name { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; color: var(--rg-t1); white-space: nowrap; }
+.rgin-name > span { color: var(--rg-t2); }
+
+/* Panel dalam: form */
+.rgin-well { padding: 26px 24px 24px; border-radius: 18px; }
+.rgin-title { margin: 0; font-size: 22px; font-weight: 600; line-height: 1.2; letter-spacing: -0.025em; color: var(--rg-t1); }
+.rgin-sub { margin: 6px 0 22px; font-size: 13px; line-height: 1.5; color: var(--rg-t2); }
+.rgin-form { display: flex; flex-direction: column; gap: 16px; }
+
+.rgin-input {
+  display: flex; align-items: center; gap: 10px; height: 46px; padding: 0 6px 0 14px; border-radius: 14px;
+  border: 1px solid var(--rg-pill-line); background: var(--rg-well);
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.rgin-input:hover { border-color: var(--rg-t3); }
+.rgin-input:focus-within { border-color: var(--rg-t2); box-shadow: 0 0 0 3px var(--rg-range); }
+.rgin-input.is-err { border-color: color-mix(in srgb, var(--rg-neg) 60%, var(--rg-pill-line)); }
+.rgin-input > svg { color: var(--rg-t3); flex-shrink: 0; }
+.rgin-input input {
+  flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; outline: none; background: transparent;
+  font-family: inherit; font-size: 14px; color: var(--rg-t1);
+}
+.rg .rgin-input input:focus-visible { outline: none; }
+.rgin-input input::placeholder { color: var(--rg-t3); }
+/* Autofill browser jangan mengecat kotak kuning/biru — ikut warna panel */
+.rgin-input input:-webkit-autofill {
+  -webkit-text-fill-color: var(--rg-t1);
+  -webkit-box-shadow: 0 0 0 1000px var(--rg-well) inset;
+  caret-color: var(--rg-t1);
+}
+.rgin-eye {
+  width: 34px; height: 34px; padding: 0; border: 0; border-radius: 50%; flex-shrink: 0; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; background: transparent; color: var(--rg-t3);
+  transition: background-color .15s ease, color .15s ease;
+}
+.rgin-eye:hover { background: var(--rg-hover); color: var(--rg-t1); }
+.rgin-caps { display: flex; align-items: center; gap: 6px; margin-top: 7px; font-size: 12px; color: var(--rg-warn); }
+
+.rgin-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.rgin-check { position: relative; display: inline-flex; align-items: center; gap: 9px; font-size: 13px; color: var(--rg-t2); cursor: pointer; user-select: none; }
+.rgin-check input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; }
+.rgin-box {
+  width: 18px; height: 18px; border-radius: 6px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1.5px solid var(--rg-pill-line); background: var(--rg-well); color: transparent;
+  transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+}
+.rgin-check:hover .rgin-box { border-color: var(--rg-t3); }
+.rgin-check input:checked + .rgin-box { background: var(--rg-t1); border-color: var(--rg-t1); color: var(--rg-well); }
+.rgin-check input:focus-visible + .rgin-box { outline: 2px solid var(--rg-focus); outline-offset: 2px; }
+.rgin-link {
+  padding: 0; border: 0; background: transparent; cursor: pointer;
+  font-family: inherit; font-size: 13px; font-weight: 500; color: var(--rg-t1);
+  text-decoration: underline; text-decoration-color: var(--rg-pill-line); text-underline-offset: 3px;
+  transition: text-decoration-color .15s ease;
+}
+.rgin-link:hover { text-decoration-color: var(--rg-t1); }
+
+.rgin-note {
+  display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; border-radius: 12px;
+  font-size: 12.5px; line-height: 1.5; color: var(--rg-t1);
+  animation: wdFadeUp .25s cubic-bezier(.22,1,.36,1);
+}
+.rgin-note > svg { flex-shrink: 0; margin-top: 1px; }
+.rgin-note.is-err { background: color-mix(in srgb, var(--rg-neg) 9%, transparent); border: 1px solid color-mix(in srgb, var(--rg-neg) 26%, transparent); }
+.rgin-note.is-err > svg { color: var(--rg-neg); }
+.rgin-note.is-info { background: color-mix(in srgb, var(--rg-spend) 8%, transparent); border: 1px solid color-mix(in srgb, var(--rg-spend) 24%, transparent); }
+.rgin-note.is-info > svg { color: var(--rg-spend); }
+
+.rgin-submit { width: 100%; height: 46px; margin-top: 4px; font-size: 14px; font-weight: 600; }
+.rgin-submit.is-busy { cursor: wait; }
+.rgin-spin { animation: wdSpin .8s linear infinite; }
+
+/* Kaki kartu (di cangkang) */
+.rgin-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px 10px; font-size: 12px; color: var(--rg-t2); }
+.rgin-foot > span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.rgin-foot svg { color: var(--rg-t3); }
+
+@media (max-width: 480px) {
+  .rgin { justify-content: flex-start; padding-top: 48px; }
+  /* iPhone meng-zoom halaman saat kolom < 16px diketuk — isian dibuat 16px di HP */
+  .rgin-input input { font-size: 16px; }
+  .rgin-well { padding: 22px 18px 20px; }
+  .rgin-foot { flex-direction: column; align-items: flex-start; gap: 4px; }
+}

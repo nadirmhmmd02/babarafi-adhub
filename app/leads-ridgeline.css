@@ -1,0 +1,190 @@
+/* ══════════════════════════════════════════════════════════════════════
+   DASHBOARD LEADS HUB — redesain "Ridgeline" (LIVE 28 Sep 2026).
+   Nuansa sama dengan Dashboard Ads Hub: token, kartu cangkang + panel dalam,
+   pil, delta, chip, state → app/ridgeline.css; anatomi kartu KPI & sparkline
+   (.rg-kpi-well, .rg-spark, .rg-tone-*) → app/dashboard-ridgeline.css.
+   File ini = bagian KHUSUS Leads (prefix .rgl-), semua di-scope ke .rg.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* Warna status (arti: dingin → panas → deal) & sales (identitas orang, hue sama dengan
+   Leads List: Akmel biru · Hendra ungu · Dedik teal). Diambil dari palet data skin. */
+.rg {
+  --lh-none: var(--rg-other);
+  --lh-cold: var(--rg-spend);
+  --lh-warm: #B7791F;
+  --lh-hot: var(--rg-neg);
+  --lh-deal: var(--rg-pos);
+  --lh-akmel: var(--rg-spend);
+  --lh-hendra: var(--rg-aware);
+  --lh-dedik: var(--rg-conv);
+}
+html[data-theme="dark"] .rg { --lh-warm: #E3A33B; }
+
+/* ══ Chip Black Box (admin) — pil dengan titik amber berdenyut ══ */
+.rgl-inbox-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--lh-warm);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--lh-warm) 22%, transparent);
+  animation: wdPulseDot 1.6s ease-in-out infinite;
+}
+.rgl-inbox-n { font-weight: 600; }
+
+/* ══ Follow-up: meter "barcode" (penerus meter barcode lama) + penanda periode lalu ══ */
+.rgl-ticks {
+  position: relative; flex: 1; min-height: 40px; margin: 16px 0 14px;
+  display: flex; align-items: flex-end; gap: 3px;
+}
+.rgl-ticks > i {
+  flex: 1; min-width: 2px; height: 26px; border-radius: 2px;
+  background: var(--rg-track); transform-origin: bottom;
+  animation: rgGrowY .5s cubic-bezier(.22,1,.36,1) backwards;
+}
+.rgl-ticks > i.is-on { background: var(--rg-tone); }
+.rgl-ticks-prev {
+  position: absolute; height: 34px; bottom: -4px; width: 0; pointer-events: none;
+  border-left: 1px dashed var(--rg-t2);
+  animation: wdFadeIn .3s ease .6s backwards;
+}
+.rgl-ticks-prev > span {
+  position: absolute; bottom: calc(100% + 2px); left: 0; transform: translateX(-50%);
+  padding: 1px 6px; border-radius: 999px; white-space: nowrap;
+  font-size: 10.5px; color: var(--rg-t2); background: var(--rg-well); border: 1px solid var(--rg-line-soft);
+}
+
+/* ══ Lead Quality: batang bertumpuk Warm · Hot · Deal + legenda mini di kepala kartu ══ */
+.rgl-qual { position: relative; flex: 1; min-height: 40px; margin: 16px 0 14px; display: flex; align-items: flex-end; }
+.rgl-qual-bar { display: flex; gap: 3px; width: 100%; height: 26px; }
+.rgl-qual-bar > i {
+  height: 100%; border-radius: 3px; flex-shrink: 0; transform-origin: left;
+  animation: wdGrowX .8s cubic-bezier(.22,1,.36,1) backwards;
+}
+.rgl-qual-bar > i.is-rest { flex: 1 1 0; min-width: 0; background: var(--rg-track); animation: none; }
+.rgl-legend-mini {
+  margin-left: auto; display: flex; align-items: center; gap: 10px; padding-right: 4px;
+  font-size: 12px; color: var(--rg-t2); white-space: nowrap;
+}
+.rgl-legend-mini > span { display: inline-flex; align-items: center; gap: 5px; }
+.rgl-legend-mini .rgl-dot { width: 7px; height: 7px; }
+/* Kartu KPI sempit (layar kecil / sidebar terbuka): legenda disembunyikan, judul tidak boleh terpotong */
+@media (max-width: 1180px) { .rg:not(.is-mobile) .rgl-legend-mini { display: none; } }
+
+/* ══ Leads by Status: 5 sel sejajar dipisah garis (ala "SEO Overview") ══ */
+.rgl-status { flex: 1; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); padding: 0 4px; }
+.rgl-st { display: flex; flex-direction: column; min-width: 0; min-height: 0; padding: 14px 16px; }
+.rgl-st + .rgl-st { border-left: 1px solid var(--rg-line-soft); }
+.rgl-st-name { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--rg-t1); white-space: nowrap; }
+.rgl-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.rgl-st-num {
+  margin-top: 10px; font-size: 26px; font-weight: 500; line-height: 1.05; letter-spacing: -0.035em;
+  color: var(--rg-t1); white-space: nowrap;
+}
+.rgl-st-pct { margin-top: 5px; margin-bottom: 12px; font-size: 12px; color: var(--rg-t2); white-space: nowrap; }
+.rgl-bar { height: 6px; border-radius: 3px; background: var(--rg-track); overflow: hidden; flex-shrink: 0; }
+.rgl-bar > i {
+  display: block; height: 100%; border-radius: 3px; transform-origin: left;
+  animation: wdGrowX .8s cubic-bezier(.22,1,.36,1) backwards;
+}
+.rgl-st > .rgl-bar { margin-top: auto; }
+
+/* ══ Leads by Sales: baris avatar · nama · meter · jumlah ══ */
+.rgl-list { flex: 1; min-height: 0; overflow-y: auto; padding: 2px 16px; display: flex; flex-direction: column; }
+.rgl-sales {
+  display: grid; grid-template-columns: 32px minmax(96px, 150px) minmax(0, 1fr) 44px;
+  align-items: center; column-gap: 14px; padding: 9px 0;
+}
+.rgl-sales + .rgl-sales, .rgl-cat + .rgl-cat { border-top: 1px solid var(--rg-line-soft); }
+.rgl-avatar {
+  width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 600; color: var(--c);
+  background: color-mix(in srgb, var(--c) 15%, transparent);
+}
+.rgl-who { min-width: 0; }
+.rgl-who b { display: block; font-size: 13px; font-weight: 500; color: var(--rg-t1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rgl-who span { display: block; margin-top: 3px; font-size: 12px; color: var(--rg-t2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rgl-count { text-align: right; font-size: 16px; color: var(--rg-t1); }
+.rgl-sales .rgl-bar { height: 8px; border-radius: 4px; }
+.rgl-sales .rgl-bar > i { border-radius: 4px; }
+
+/* ══ By Category ══ */
+.rgl-cat { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; column-gap: 12px; row-gap: 9px; padding: 13px 0; }
+.rgl-cat-name { font-size: 13px; color: var(--rg-t1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rgl-cat-vals { display: flex; align-items: baseline; gap: 10px; font-size: 13px; color: var(--rg-t1); white-space: nowrap; }
+.rgl-cat-vals > span:last-child { min-width: 38px; text-align: right; color: var(--rg-t2); }
+.rgl-cat > .rgl-bar { grid-column: 1 / -1; height: 8px; border-radius: 4px; }
+
+/* ══ Baris uang: Total Closing (cincin ROAS) + Cost & ROI ══ */
+.rgl-close { flex: 1; display: flex; align-items: center; gap: 18px; padding: 12px 18px; min-height: 0; }
+.rgl-ring {
+  position: relative; width: 76px; height: 76px; border-radius: 50%; flex-shrink: 0;
+  background: conic-gradient(var(--rg-pos) calc(var(--p) * 1%), var(--rg-track) 0);
+  animation: rgDonutIn .8s cubic-bezier(.22,1,.36,1) backwards;
+}
+.rgl-ring::after { content: ''; position: absolute; inset: 8px; border-radius: 50%; background: var(--rg-well); }
+.rgl-ring-in {
+  position: absolute; inset: 0; z-index: 1;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+.rgl-ring-val { font-size: 14px; font-weight: 500; color: var(--rg-t1); }
+.rgl-ring-lbl { margin-top: 2px; font-size: 10.5px; color: var(--rg-t2); }
+.rgl-close-val {
+  font-size: 26px; font-weight: 500; line-height: 1.05; letter-spacing: -0.035em;
+  color: var(--rg-t1); white-space: nowrap; display: flex; align-items: baseline; gap: 5px;
+}
+.rgl-close-sub { margin-top: 7px; font-size: 12px; line-height: 1.45; color: var(--rg-t2); }
+.rgl-roi { flex: 1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 0 4px; min-height: 0; }
+.rgl-roi-cell { display: flex; flex-direction: column; justify-content: center; min-width: 0; padding: 12px 16px; }
+.rgl-roi-cell + .rgl-roi-cell { border-left: 1px solid var(--rg-line-soft); }
+.rgl-roi-label { display: flex; align-items: center; gap: 5px; font-size: 12.5px; color: var(--rg-t2); white-space: nowrap; }
+.rgl-roi-val { margin-top: 8px; font-size: 19px; font-weight: 500; line-height: 1.1; color: var(--rg-t1); white-space: nowrap; }
+.rgl-roi-val.is-pos { color: var(--rg-pos); }
+.rgl-roi-val.is-neg { color: var(--rg-neg); }
+.rgl-roi-note { margin-top: 5px; font-size: 11.5px; color: var(--rg-t3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* DORMANT — belum ada Deal: kartu "mati" (garis putus-putus, tanpa bayangan, teks redup),
+   angka tetap tampil. Menyala otomatis begitu Deal pertama masuk (keputusan Nadir Jul 2026). */
+.rgl-money .rg-card, .rgl-money .rg-well, .rgl-money .rg-title, .rgl-money .rg-head-ico {
+  transition: background-color .3s ease, border-color .3s ease, box-shadow .3s ease, color .3s ease;
+}
+.rgl-dormant.rg-card { background: transparent; border-style: dashed; box-shadow: none; }
+.rgl-dormant .rg-well { background: transparent; border: 1px dashed var(--rg-line); }
+.rgl-dormant .rg-title, .rgl-dormant .rg-head-ico,
+.rgl-dormant .rgl-close-val, .rgl-dormant .rgl-roi-val, .rgl-dormant .rgl-roi-label { color: var(--rg-t3); }
+.rgl-dormant .rgl-roi-cell + .rgl-roi-cell { border-left-style: dashed; }
+
+/* ══ Tata letak desktop: fit 1 layar (boleh scroll sedikit di layar pendek) ══
+   Sisa tinggi dibagi proporsional; tiap baris punya batas min/max supaya tidak ada
+   yang menggelembung sendirian (pelajaran Leads v3.1 & Dashboard Ads Hub). */
+.rgl-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; flex-shrink: 0; }
+.rgl-row.rgl-row-kpi { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.rg:not(.is-mobile) .rgl-row-kpi    { flex: 1 1 0; min-height: 200px; max-height: 250px; }
+.rg:not(.is-mobile) .rgl-row-status { flex: 0.85 1 0; min-height: 156px; max-height: 200px; display: flex; }
+.rg:not(.is-mobile) .rgl-row-split  { flex: 1.2 1 0; min-height: 278px; max-height: 340px; }
+.rg:not(.is-mobile) .rgl-row-money  { flex: 0.7 1 0; min-height: 138px; max-height: 172px; }
+.rgl-row > .rg-card, .rgl-row-status > .rg-card { height: 100%; width: 100%; }
+
+/* ══ MOBILE (≤767px) ══ */
+/* Keterangan kepala kartu yang panjang disembunyikan — judul kartu tidak boleh terpotong */
+.rg.is-mobile .rgl-meta-long { display: none; }
+.rg.is-mobile .rgl-meta-long + .rg-iconbtn { margin-left: auto; }
+.rg.is-mobile .rgl-row { grid-template-columns: 1fr; }
+.rg.is-mobile .rgl-row-kpi > .rg-card { height: 212px; }
+.rg.is-mobile .rgl-status { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.rg.is-mobile .rgl-st { border-left: 0; border-bottom: 1px solid var(--rg-line-soft); padding: 14px; }
+.rg.is-mobile .rgl-st:nth-child(even) { border-left: 1px solid var(--rg-line-soft); }
+.rg.is-mobile .rgl-st:last-child { grid-column: 1 / -1; border-bottom: 0; }
+.rg.is-mobile .rgl-list { padding: 2px 14px; }
+.rg.is-mobile .rgl-sales { grid-template-columns: 32px minmax(0, 1fr) 40px; row-gap: 9px; }
+.rg.is-mobile .rgl-sales > .rgl-bar { grid-column: 2 / -1; grid-row: 2; }
+.rg.is-mobile .rgl-close { padding: 16px; }
+.rg.is-mobile .rgl-roi { grid-template-columns: 1fr; padding: 0 14px; }
+.rg.is-mobile .rgl-roi-cell { padding: 12px 0; }
+.rg.is-mobile .rgl-roi-cell + .rgl-roi-cell { border-left: 0; border-top: 1px solid var(--rg-line-soft); }
+.rg.is-mobile .rgl-dormant .rgl-roi-cell + .rgl-roi-cell { border-top-style: dashed; }
+.rgl-inbox-banner {
+  display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-radius: 16px; flex-shrink: 0;
+  text-decoration: none; font-size: 13px; color: var(--rg-t1);
+  background: color-mix(in srgb, var(--lh-warm) 9%, var(--rg-well));
+  border: 1px solid color-mix(in srgb, var(--lh-warm) 30%, transparent);
+}
+.rgl-inbox-banner > svg:first-child { color: var(--lh-warm); flex-shrink: 0; }
+.rgl-inbox-banner > span:last-child { margin-left: auto; color: var(--rg-t2); white-space: nowrap; }

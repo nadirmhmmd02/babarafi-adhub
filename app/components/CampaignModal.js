@@ -52,10 +52,12 @@ const OBJ_GROUP = {
   OUTCOME_ENGAGEMENT: 'Traffic',
   LINK_CLICKS: 'Traffic',
 };
+// Warna objektif = entitas dashboard redesain "Ridgeline" (token --rg-* dari halaman
+// Campaigns yang merender popup ini); fallback = warna lama kalau dipakai di luar .rg
 const OBJ_STYLE = {
-  Awareness:  { bg: 'rgba(91,127,212,0.14)', color: '#5b8fd4' },
-  Traffic:    { bg: 'rgba(245,158,11,0.14)', color: '#f59e0b' },
-  Conversion: { bg: 'rgba(16,185,129,0.14)', color: '#10b981' },
+  Awareness:  { dot: 'var(--rg-aware, #8B5CF6)' },
+  Traffic:    { dot: 'var(--rg-traffic, #F59E0B)' },
+  Conversion: { dot: 'var(--rg-conv, #10b981)' },
 };
 
 /* ─── Ikon brand kecil (lucide versi ini tidak punya Instagram/Facebook) ─── */
@@ -378,11 +380,16 @@ export default function CampaignModal({ campaign, query, periodLabel, onClose })
               {campaign.name}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
-              <span style={{ padding: '2px 9px', borderRadius: '20px', fontSize: '10px', fontWeight: 500, background: grpStyle.bg, color: grpStyle.color }}>{grp}</span>
+              {/* Chip gaya Ridgeline (.rg-chip di app/ridgeline.css): titik warna objektif + teks netral */}
+              <span className="rg-chip" style={{ color: 'var(--t1)' }}>
+                <span className="rg-chip-dot" style={{ background: grpStyle.dot }} />{grp}
+              </span>
               {isActive ? (
-                <span style={{ padding: '2px 8px', borderRadius: '20px', fontSize: '10px', background: 'rgba(16,185,129,0.14)', color: '#10b981', fontWeight: 600 }}>▶ Active</span>
+                <span className="rg-chip is-pos"><span className="rg-chip-dot" />Active</span>
+              ) : campaign.status === 'PAUSED' ? (
+                <span className="rg-chip"><span style={{ width: 7, height: 7, borderRadius: 2, background: 'currentColor' }} />Stop</span>
               ) : (
-                <span style={{ padding: '2px 8px', borderRadius: '20px', fontSize: '10px', background: 'rgba(115,115,115,0.12)', color: 'var(--t3)', fontWeight: 600 }}>■ {campaign.status === 'PAUSED' ? 'Stop' : 'Ended'}</span>
+                <span className="rg-chip is-muted">Ended</span>
               )}
               <span style={{ fontSize: '11px', color: 'var(--t3)' }}>{periodLabel}</span>
             </div>

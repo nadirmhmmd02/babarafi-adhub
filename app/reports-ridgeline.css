@@ -1,0 +1,85 @@
+/* ══════════════════════════════════════════════════════════════════════
+   ANALYTICS & INSIGHTS — bagian KHUSUS halaman /reports (redesain "Ridgeline",
+   28 Sep 2026, LIVE). Dasar (token, kartu, pil, chip, delta, state)
+   di app/ridgeline.css. Semua aturan di-scope ke .rg / .rgr-.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* ── Hero: skor + kesimpulan + angka ringkas ── */
+.rgr-hero { flex-shrink: 0; }
+.rgr-hero-well { display: flex; align-items: center; gap: 32px; padding: 22px 26px; }
+
+.rgr-ring { position: relative; flex-shrink: 0; container-type: inline-size; }
+.rgr-ring svg { display: block; width: 100%; height: 100%; transform: rotate(-90deg); }
+.rgr-ring-center {
+  position: absolute; inset: 0; pointer-events: none; text-align: center;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+/* Teks tengah ikut skala lebar cincin (cqi) — label terpanjang "Needs attention" tetap
+   muat di lubang cincin (±67% lebarnya) */
+.rgr-ring-label { font-size: min(12px, 7.2cqi); color: var(--rg-t2); }
+.rgr-ring-value { margin-top: 3px; font-size: min(26px, 15cqi); font-weight: 500; line-height: 1.05; color: var(--rg-t1); }
+.rgr-ring-max { margin-left: 1px; font-size: .58em; color: var(--rg-t2); }
+.rgr-ring-chip { margin-top: 8px; height: min(22px, 13cqi); padding: 0 min(9px, 5cqi); font-size: min(11.5px, 6.8cqi); }
+
+.rgr-verdict { flex: 1 1 280px; min-width: 0; max-width: 540px; }
+.rgr-verdict-text { font-size: 16px; font-weight: 500; line-height: 1.45; letter-spacing: -0.01em; color: var(--rg-t1); }
+.rgr-verdict-note { margin-top: 8px; font-size: 12.5px; line-height: 1.55; color: var(--rg-t2); }
+
+.rgr-stats {
+  display: grid; grid-template-columns: repeat(3, minmax(128px, 1fr)); gap: 18px 28px;
+  margin-left: auto; padding-left: 32px; border-left: 1px solid var(--rg-line-soft); flex-shrink: 0;
+}
+.rgr-stat { min-width: 0; }
+.rgr-stat-label { font-size: 12px; color: var(--rg-t2); }
+.rgr-stat-value { margin: 4px 0 6px; font-size: 17px; font-weight: 500; color: var(--rg-t1); white-space: nowrap; }
+
+/* Kartu hero sempit (layar kecil / sidebar dibuka): angka ringkas turun ke baris sendiri */
+.rg:not(.is-mobile) .rgr-hero { container: rgr-hero / inline-size; }
+@container rgr-hero (max-width: 1060px) {
+  .rgr-hero-well { flex-wrap: wrap; row-gap: 20px; }
+  .rgr-stats { flex: 1 1 100%; margin-left: 0; padding: 18px 0 0; border-left: 0; border-top: 1px solid var(--rg-line-soft); }
+}
+
+/* ── Judul bagian insight ── */
+.rgr-section { display: flex; align-items: center; gap: 10px; padding: 4px 4px 0; flex-shrink: 0; }
+.rgr-section-title { font-size: 14px; font-weight: 500; letter-spacing: -0.01em; color: var(--rg-t1); }
+
+/* ── Kartu insight ── */
+/* auto-fit: sedikit insight → kartu melebar mengisi baris (bukan menyisakan kolom kosong) */
+.rgr-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 12px; flex-shrink: 0; }
+.rgr-card { min-height: 0; }
+.rgr-card-head { gap: 10px; min-height: 46px; padding-top: 6px; padding-bottom: 6px; }
+.rgr-sev-ico {
+  width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.rgr-sev-ico.is-neg  { background: color-mix(in srgb, var(--rg-neg) 14%, transparent);   color: var(--rg-neg); }
+.rgr-sev-ico.is-warn { background: color-mix(in srgb, var(--rg-warn) 16%, transparent);  color: var(--rg-warn); }
+.rgr-sev-ico.is-pos  { background: color-mix(in srgb, var(--rg-pos) 14%, transparent);   color: var(--rg-pos); }
+.rgr-sev-ico.is-info { background: color-mix(in srgb, var(--rg-spend) 14%, transparent); color: var(--rg-spend); }
+.rgr-card-title { flex: 1; min-width: 0; font-size: 13.5px; font-weight: 500; line-height: 1.3; letter-spacing: -0.01em; color: var(--rg-t1); }
+.rgr-sev-chip { height: 22px; padding: 0 9px; font-size: 11px; }
+.rgr-card-well { flex: 1; display: flex; flex-direction: column; gap: 12px; padding: 14px 16px 12px; }
+.rgr-card-body { margin: 0; font-size: 13px; line-height: 1.6; color: var(--rg-t2); }
+.rgr-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.rgr-datum {
+  display: flex; align-items: baseline; gap: 7px; padding: 6px 10px; border-radius: 10px;
+  background: var(--rg-well-2); border: 1px solid var(--rg-line-soft);
+}
+.rgr-datum-label { font-size: 11.5px; color: var(--rg-t2); }
+.rgr-datum-value { font-size: 13px; font-weight: 500; color: var(--rg-t1); }
+.rgr-datum-value.is-pos { color: var(--rg-pos); }
+.rgr-datum-value.is-neg { color: var(--rg-neg); }
+.rgr-spark { display: block; width: 100%; height: 34px; margin-top: auto; }
+.rgr-quiet { padding: 28px; }
+
+/* ── MOBILE (≤767px) ── */
+.rg.is-mobile .rgr-hero-well { flex-direction: column; align-items: stretch; gap: 18px; padding: 20px 16px; }
+.rg.is-mobile .rgr-ring { align-self: center; }
+.rg.is-mobile .rgr-verdict { flex: none; max-width: none; text-align: center; }
+.rg.is-mobile .rgr-stats {
+  grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px 10px; margin-left: 0;
+  padding: 16px 0 0; border-left: 0; border-top: 1px solid var(--rg-line-soft);
+}
+.rg.is-mobile .rgr-stat-value { font-size: 14.5px; }
+.rg.is-mobile .rgr-grid { grid-template-columns: 1fr; }

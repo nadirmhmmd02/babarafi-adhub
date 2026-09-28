@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet.markercluster/dist/MarkerCluster.css';
 import { TILE, MAP_CENTER, MAP_ZOOM, statusColor, STATUS_LABEL } from './mapsConfig';
@@ -10,8 +10,11 @@ import { TILE, MAP_CENTER, MAP_ZOOM, statusColor, STATUS_LABEL } from './mapsCon
    di-init sekali di useEffect (SSR aman karena 'use client' +
    dynamic import), marker di-rebuild tiap daftar outlet berubah.
    Clustering: leaflet.markercluster (wajib — 500+ marker).
-   Tile CARTO light/dark ikut tema; styling popup/cluster ada di
-   globals.css (.wd-map, .wd-cluster, .wd-dot).
+   Tile OpenStreetMap (sejak Sep 2026 — CARTO minta API key), diwarnai
+   abu-abu per tema lewat CSS filter di app/maps-ridgeline.css; styling
+   popup/cluster di globals.css (.wd-map, .wd-cluster, .wd-dot) + override
+   skin di maps-ridgeline.css. Tile gagal dimuat → pesan kecil di pojok peta
+   (outlet tetap tampil), bukan latar kosong tanpa penjelasan.
 
    Props:
    - outlets  : outlet TERFILTER yang punya lat/lng valid
@@ -35,7 +38,7 @@ function popupHtml(o) {
       <div class="wd-pop-meta">${esc(o.depo || '—')}${o.kota && o.kota !== '-' ? ' · ' + esc(o.kota) : ''}</div>
       <div class="wd-pop-addr">${esc(o.alamat || '—')}</div>
       <div class="wd-pop-row">
-        <span class="wd-pop-pill" style="color:${color};border-color:${color}40;background:${color}14">
+        <span class="wd-pop-pill" style="color:${color};border-color:color-mix(in srgb, ${color} 30%, transparent);background:color-mix(in srgb, ${color} 12%, transparent)">
           <span class="wd-pop-dot" style="background:${color}"></span>${esc(label)}
         </span>
         ${o.nama_gmaps ? `<span class="wd-pop-gm" title="Nama listing Google Maps">${esc(o.nama_gmaps)}</span>` : ''}
@@ -56,6 +59,8 @@ export default function MapView({ outlets, theme, focus }) {
   // rebuild selalu membaca outlet TERBARU dari ref, bukan closure lama
   const outletsRef = useRef(outlets);
   outletsRef.current = outlets;
+  // Peta dasar tidak bisa dimuat (jaringan / penyedia tile menolak) → tampilkan pesan
+  const [tileDown, setTileDown] = useState(false);
 
   // Init sekali (guard StrictMode double-mount via cleanup remove())
   useEffect(() => {
@@ -74,8 +79,12 @@ export default function MapView({ outlets, theme, focus }) {
       mapRef.current = map;
 
       tileRef.current = L.tileLayer(TILE[theme === 'dark' ? 'dark' : 'light'], {
-        attribution: TILE.attribution, maxZoom: 19, subdomains: 'abcd',
+        attribution: TILE.attribution, maxZoom: 19,
       }).addTo(map);
+      // Hitung tile gagal vs berhasil: banyak gagal & nol berhasil = peta dasar mati
+      let okTiles = 0, badTiles = 0;
+      tileRef.current.on('tileload', () => { okTiles++; if (badTiles) setTileDown(false); });
+      tileRef.current.on('tileerror', () => { badTiles++; if (badTiles >= 6 && okTiles === 0) setTileDown(true); });
 
       // Kontainer berubah ukuran (sidebar collapse/expand, resize window):
       // Leaflet TIDAK auto-resize — panggil invalidateSize sekali di akhir
@@ -170,6 +179,13 @@ export default function MapView({ outlets, theme, focus }) {
   }, [focus]);
 
   return (
-    <div ref={boxRef} className="wd-map" style={{ width: '100%', height: '100%', minHeight: '280px' }} />
+    <div style={{ position: 'relative', width: '100%', height: '100%', minHeight: '280px' }}>
+      <div ref={boxRef} className="wd-map" style={{ width: '100%', height: '100%', minHeight: '280px' }} />
+      {tileDown && (
+        <div className="wd-map-note" role="status">
+          Base map couldn&apos;t load — outlet dots are still accurate. Check the internet connection, then refresh.
+        </div>
+      )}
+    </div>
   );
 }

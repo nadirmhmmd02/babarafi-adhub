@@ -1,0 +1,145 @@
+/* ══════════════════════════════════════════════════════════════════════
+   LEADS HUB → ANALYTICS & INSIGHTS — gaya "Ridgeline" (dibangun 28 Sep 2026,
+   LIVE). Dasar skin di app/ridgeline.css; kartu insight dipinjam dari
+   app/reports-ridgeline.css (.rgr-*, sama persis dengan Analytics Ads Hub); warna
+   status & sales (--lh-*) dari app/leads-ridgeline.css. Prefix khusus: .rgi-
+   Halaman BOLEH scroll (analitik, bukan dashboard fit 1 layar).
+   ══════════════════════════════════════════════════════════════════════ */
+
+.rgi .rg-body > * { flex-shrink: 0; }
+
+/* ══ Grid 3 kolom: kartu lebar = 2 kolom ══ */
+.rgi-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.rgi-span2 { grid-column: span 2; }
+.rgi-row-a > .rg-card { height: 372px; }
+.rgi-row-c > .rg-card { height: 400px; }
+.rgi-count { font-size: 12px; color: var(--rg-t2); white-space: nowrap; }
+.rgi-legend { margin-left: auto; display: flex; align-items: center; gap: 12px; padding-right: 6px; font-size: 12px; color: var(--rg-t2); white-space: nowrap; overflow: hidden; }
+.rgi-legend > span { display: inline-flex; align-items: center; gap: 6px; }
+.rgi-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.rgi-legend .rg-mono { color: var(--rg-t1); }
+
+/* ══ Leads over time — batang bertumpuk per kategori (HTML, tanpa ukur piksel) ══ */
+.rgi-chart { flex: 1; min-height: 0; display: grid; grid-template-columns: 40px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) 24px; padding: 16px 16px 8px 8px; }
+.rgi-yaxis { position: relative; }
+.rgi-yaxis > span {
+  position: absolute; right: 8px; transform: translateY(50%);
+  font-family: var(--font-geist-mono), ui-monospace, monospace; font-size: 10.5px; color: var(--rg-t3);
+}
+.rgi-plot { position: relative; min-height: 0; }
+.rgi-gridline { position: absolute; left: 0; right: 0; height: 0; border-top: 1px dashed var(--rg-grid); }
+.rgi-gridline.is-base { border-top-style: solid; border-color: var(--rg-line-soft); }
+.rgi-cols { position: absolute; inset: 0; display: flex; align-items: stretch; gap: var(--gap, 3px); }
+.rgi-col { position: relative; flex: 1; min-width: 0; display: flex; align-items: flex-end; border-radius: 6px; cursor: default; }
+.rgi-col:hover, .rgi-col.is-on { background: var(--rg-hover); }
+.rgi-stack {
+  width: 100%; display: flex; flex-direction: column-reverse; border-radius: 4px 4px 1px 1px; overflow: hidden;
+  transform-origin: bottom; animation: rgiGrowY .55s cubic-bezier(.22,1,.36,1) backwards;
+}
+.rgi-stack > i { display: block; width: 100%; flex-shrink: 0; }
+.rgi-stack > i + i { box-shadow: 0 1px 0 var(--rg-well); }
+.rgi-xaxis { grid-column: 2; display: flex; gap: var(--gap, 3px); padding-top: 7px; }
+.rgi-xaxis > span {
+  flex: 1; min-width: 0; text-align: center; white-space: nowrap; overflow: visible;
+  font-family: var(--font-geist-mono), ui-monospace, monospace; font-size: 10.5px; color: var(--rg-t3);
+}
+.rgi-tip {
+  position: absolute; bottom: calc(100% + 8px); z-index: 5; pointer-events: none; min-width: 150px;
+  border-radius: 12px; overflow: hidden; background: var(--rg-tip-bg); border: 1px solid var(--rg-tip-line);
+  box-shadow: var(--rg-pop); color: var(--rg-tip-tx); font-size: 12px;
+}
+.rgi-tip-head { padding: 7px 11px; background: var(--rg-tip-head); font-weight: 500; white-space: nowrap; }
+.rgi-tip-body { padding: 7px 11px 8px; display: flex; flex-direction: column; gap: 4px; }
+.rgi-tip-row { display: flex; align-items: center; gap: 8px; white-space: nowrap; color: var(--rg-tip-sub); }
+.rgi-tip-row > b { margin-left: auto; padding-left: 14px; font-weight: 500; color: var(--rg-tip-tx); font-family: var(--font-geist-mono), ui-monospace, monospace; }
+@keyframes rgiGrowY { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+
+/* ══ Lead funnel ══ */
+.rgi-funnel { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: space-between; padding: 14px 16px; }
+.rgi-fn-top { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--rg-t1); white-space: nowrap; }
+.rgi-fn-n { margin-left: auto; font-size: 15px; font-weight: 500; color: var(--rg-t1); }
+.rgi-fn-track { margin-top: 7px; height: 8px; border-radius: 4px; background: var(--rg-track); overflow: hidden; }
+.rgi-fn-track > i { display: block; height: 100%; border-radius: 4px; transform-origin: left; animation: wdGrowX .8s cubic-bezier(.22,1,.36,1) backwards; }
+.rgi-fn-sub { margin-top: 5px; font-size: 11.5px; color: var(--rg-t2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rgi-fn-sub .rg-mono { color: var(--rg-t1); }
+
+/* ══ Time to deal ══ */
+.rgi-speed { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 16px 18px 14px; }
+.rgi-big { display: flex; align-items: baseline; gap: 6px; font-size: 32px; font-weight: 500; line-height: 1; letter-spacing: -0.04em; color: var(--rg-t1); }
+.rgi-big small { font-size: 14px; letter-spacing: 0; color: var(--rg-t2); font-family: var(--font-geist), sans-serif; font-weight: 400; }
+.rgi-sub { display: flex; align-items: center; gap: 8px; margin-top: 9px; font-size: 12px; color: var(--rg-t2); flex-wrap: wrap; }
+.rgi-hist { flex: 1; min-height: 90px; margin-top: 16px; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; align-items: end; }
+.rgi-hist-col { height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: stretch; gap: 5px; min-width: 0; }
+.rgi-hist-n { text-align: center; font-size: 11.5px; color: var(--rg-t1); }
+.rgi-hist-bar { border-radius: 5px 5px 2px 2px; background: var(--lh-deal); min-height: 3px; transform-origin: bottom; animation: rgiGrowY .6s cubic-bezier(.22,1,.36,1) backwards; }
+.rgi-hist-bar.is-zero { background: var(--rg-track); }
+.rgi-hist-lbl { text-align: center; font-size: 11px; color: var(--rg-t3); white-space: nowrap; }
+.rgi-dormant.rg-card { background: transparent; border-style: dashed; box-shadow: none; }
+.rgi-dormant .rg-well { background: transparent; border: 1px dashed var(--rg-line); }
+
+/* ══ Lead sources (tabel campaign) ══ */
+.rgi-src-well { overflow: hidden; }
+.rgi-src-scroll { overflow-x: auto; }
+.rgi-src { min-width: 640px; }
+.rg .rgi-src th, .rg .rgi-src td { padding: 0 12px; }
+.rg .rgi-src th:first-child, .rg .rgi-src td:first-child { text-align: left; padding-left: 16px; }
+.rg .rgi-src th:last-child, .rg .rgi-src td:last-child { padding-right: 16px; }
+.rgi-src td { height: 54px; }
+.rgi-src tbody tr { animation: wdFadeUp .3s cubic-bezier(.22,1,.36,1) backwards; }
+.rgi-src tbody tr:hover td { background: var(--rg-hover); }
+.rgi-src-name { display: block; max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; color: var(--rg-t1); }
+.rgi-src-cat { display: flex; align-items: center; gap: 6px; margin-top: 3px; font-size: 11.5px; color: var(--rg-t2); white-space: nowrap; }
+.rgi-src-cat .rgi-dot { width: 7px; height: 7px; }
+.rgi-qual { display: inline-flex; align-items: center; gap: 8px; justify-content: flex-end; }
+.rgi-qual-bar { width: 46px; height: 6px; border-radius: 3px; background: var(--rg-track); overflow: hidden; }
+.rgi-qual-bar > i { display: block; height: 100%; border-radius: 3px; background: var(--lh-warm); }
+.rgi-src tfoot td { font-weight: 500; border-top: 1px solid var(--rg-line-soft); border-bottom: 0; background: var(--rg-well-2); }
+
+/* ══ Top cities ══ */
+.rgi-cities { flex: 1; min-height: 0; overflow-y: auto; padding: 6px 16px; }
+.rgi-city { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: center; column-gap: 10px; row-gap: 6px; padding: 8px 0; }
+.rgi-city + .rgi-city { border-top: 1px solid var(--rg-line-soft); }
+.rgi-city-rank { font-size: 11px; color: var(--rg-t3); }
+.rgi-city-name { font-size: 13px; color: var(--rg-t1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rgi-city-val { display: flex; align-items: baseline; gap: 8px; font-size: 13px; color: var(--rg-t1); white-space: nowrap; }
+.rgi-city-val > span:last-child { min-width: 34px; text-align: right; font-size: 12px; color: var(--rg-t2); }
+.rgi-city-bar { grid-column: 2 / -1; height: 6px; border-radius: 3px; background: var(--rg-track); overflow: hidden; }
+.rgi-city-bar > i { display: block; height: 100%; border-radius: 3px; background: var(--rg-spend); transform-origin: left; animation: wdGrowX .8s cubic-bezier(.22,1,.36,1) backwards; }
+
+/* ══ When leads arrive — peta panas hari × jam ══ */
+.rgi-heat-well { display: flex; flex-direction: column; overflow: hidden; }
+.rgi-heat-scroll { flex: 1; min-height: 0; overflow-x: auto; padding: 16px 16px 10px 10px; display: flex; flex-direction: column; }
+.rgi-heat { flex: 1; min-width: 560px; display: grid; grid-template-columns: 34px repeat(24, minmax(0, 1fr)); grid-template-rows: repeat(7, minmax(18px, 1fr)) 18px; gap: 3px; }
+.rgi-heat-day { display: flex; align-items: center; font-size: 11.5px; color: var(--rg-t2); }
+.rgi-cell {
+  border-radius: 4px; background: var(--rg-well-2);
+  animation: wdFadeIn .4s ease backwards;
+}
+.rgi-cell.is-peak { outline: 2px solid var(--rg-t1); outline-offset: -1px; }
+.rgi-heat-hour { font-family: var(--font-geist-mono), ui-monospace, monospace; font-size: 10px; color: var(--rg-t3); text-align: left; white-space: nowrap; }
+.rgi-heat-legend { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 16px 12px 44px; font-size: 11.5px; color: var(--rg-t2); flex-wrap: wrap; }
+.rgi-scale { display: inline-flex; align-items: center; gap: 4px; }
+.rgi-scale > i { width: 14px; height: 10px; border-radius: 3px; display: block; }
+
+/* Kosong di dalam kartu */
+.rgi-empty { flex: 1; }
+
+/* ══ Kartu sempit (layar kecil / sidebar dibuka) ══ */
+@media (max-width: 1280px) {
+  .rg:not(.is-mobile) .rgi-legend .rgi-legend-n { display: none; }
+}
+@media (max-width: 1100px) {
+  .rg:not(.is-mobile) .rgi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rg:not(.is-mobile) .rgi-span2 { grid-column: span 2; }
+}
+
+/* ══ MOBILE (≤767px) ══ */
+.rg.is-mobile .rgi-grid { grid-template-columns: 1fr; }
+.rg.is-mobile .rgi-span2 { grid-column: auto; }
+.rg.is-mobile .rgi-row-a > .rg-card { height: 340px; }
+.rg.is-mobile .rgi-row-a > .rg-card:not(.rgi-span2) { height: auto; }   /* funnel: tinggi alami */
+.rg.is-mobile .rgi-funnel { gap: 14px; }
+.rg.is-mobile .rgi-row-c > .rg-card { height: auto; }
+.rg.is-mobile .rgi-row-c .rgi-cities { max-height: 360px; }
+.rg.is-mobile .rgi-heat-well { min-height: 300px; }
+.rg.is-mobile .rgi-legend { display: none; }

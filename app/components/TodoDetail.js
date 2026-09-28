@@ -2,31 +2,26 @@
 
 import { useState } from 'react';
 import {
-  Circle, CircleCheck, Star, Sun, CalendarDays, Inbox, Plus, X, Trash2, ChevronLeft,
+  Circle, CircleCheck, Star, Sun, CalendarDays, Inbox, Plus, X, Trash2, ChevronLeft, ListTodo,
 } from 'lucide-react';
-import Dropdown from './Dropdown';
-import { TYPE } from './typography';
+import { RgMenu } from './rgKit';
 import { todayStr, addDays, dueLabel, isOverdue } from './useTodos';
 
 /* ─────────────────────────────────────────────────────────────
-   TODO DETAIL — panel kanan saat sebuah tugas dipilih (menggantikan
+   TODO DETAIL — isi kartu kanan saat sebuah tugas dipilih (menggantikan
    editor catatan). Isi ala Microsoft To Do: judul + selesai + bintang,
    Steps (sub-tugas), Add to My Day, Due date, pindah List, catatan,
    footer created + hapus.
+   Redesain "Ridgeline" (Sep 2026): kepala kartu (Task · daftar · tutup) +
+   panel dalam + kaki kartu. Styling di notes-ridgeline.css.
    ───────────────────────────────────────────────────────────── */
-
-function dotIcon(color) {
-  return function Dot() {
-    return <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: color || 'var(--t3)', flexShrink: 0, display: 'inline-block' }} />;
-  };
-}
 
 function fmtDate(iso) {
   if (!iso) return '';
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-export default function TodoDetail({ task: t, td, onRequestDelete, isMobile, onBack }) {
+export default function TodoDetail({ task: t, td, onRequestDelete, isMobile, onBack, onClose }) {
   const [stepDraft, setStepDraft] = useState('');
   const [pickDate, setPickDate] = useState(false);
 
@@ -47,114 +42,102 @@ export default function TodoDetail({ task: t, td, onRequestDelete, isMobile, onB
     { value: addDays(1),  label: 'Tomorrow',  hint: new Date(Date.now() + 864e5).toLocaleDateString('en-GB', { weekday: 'short' }) },
     { value: addDays(7),  label: 'Next week', hint: dueLabel(addDays(7)) },
     { value: '__pick',    label: 'Pick a date…' },
-    ...(t.due_date ? [{ value: '__none', label: 'Remove due date', color: '#EF4444' }] : []),
+    ...(t.due_date ? [{ value: '__none', label: 'Remove due date', tone: 'neg' }] : []),
   ];
   const listOptions = [
-    { value: '', label: 'Tasks', icon: Inbox },
-    ...td.lists.map(l => ({ value: l.id, label: l.name, icon: dotIcon(l.color) })),
+    { value: '', label: 'Tasks', Icon: Inbox },
+    ...td.lists.map(l => ({ value: l.id, label: l.name, dot: l.color || 'var(--rg-t3)' })),
   ];
 
-  /* Baris aksi ala To Do (ikon + label; aktif = warna aksen) */
-  const actionRow = (Icon, label, { on = false, onClick, right = null, key } = {}) => (
-    <div key={key} onClick={onClick} style={{
-      display: 'flex', alignItems: 'center', gap: '10px', padding: '11px 12px',
-      borderRadius: '10px', cursor: onClick ? 'pointer' : 'default',
-      color: on ? 'var(--ac)' : 'var(--t2)', fontSize: '13px', fontWeight: 600,
-      transition: 'background 0.12s',
-    }}
-      onMouseEnter={e => { if (onClick) e.currentTarget.style.background = 'var(--hover)'; }}
-      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
-    >
-      <Icon size={15} style={{ flexShrink: 0 }} />
-      <span style={{ flex: 1, minWidth: 0 }}>{label}</span>
-      {right}
-    </div>
-  );
-
-  const xBtn = (onClick, title) => (
-    <button onClick={e => { e.stopPropagation(); onClick(); }} title={title} style={{ display: 'flex', background: 'none', border: 'none', cursor: 'pointer', padding: '3px', color: 'var(--t3)', borderRadius: '6px' }}
-      onMouseEnter={e => { e.currentTarget.style.color = 'var(--t1)'; }}
-      onMouseLeave={e => { e.currentTarget.style.color = 'var(--t3)'; }}
-    ><X size={13} /></button>
+  const xBtn = (onClick, title, cls = '') => (
+    <button type="button" className={`rg-iconbtn${cls ? ' ' + cls : ''}`} onClick={e => { e.stopPropagation(); onClick(); }} title={title} aria-label={title}>
+      <X size={13} />
+    </button>
   );
 
   return (
     <>
-      {/* Header: selesai + judul + bintang */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '13px 16px', borderBottom: '1px solid var(--br)' }}>
+      {/* Kepala kartu: Task · daftar tempat tugas · tutup */}
+      <div className="rg-head">
         {isMobile && onBack && (
-          <button onClick={onBack} title="Back" style={{ display: 'flex', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t2)', padding: '2px' }}><ChevronLeft size={18} /></button>
+          <button type="button" className="rg-iconbtn" onClick={onBack} title="Back" aria-label="Back"><ChevronLeft size={15} /></button>
         )}
-        <button onClick={() => td.toggleDone(t)} title={t.done ? 'Mark as not done' : 'Mark as done'}
-          style={{ display: 'flex', background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: t.done ? 'var(--ac)' : 'var(--t3)', flexShrink: 0 }}>
-          {t.done ? <CircleCheck size={21} /> : <Circle size={21} />}
-        </button>
-        <input
-          value={t.title}
-          onChange={e => td.updateTask(t.id, { title: e.target.value }, { debounce: true })}
-          placeholder="Task title"
-          style={{
-            flex: 1, minWidth: 0, border: 'none', outline: 'none', background: 'transparent',
-            ...TYPE.h4, color: t.done ? 'var(--t3)' : 'var(--t1)', fontFamily: 'inherit',
-            textDecoration: t.done ? 'line-through' : 'none',
-          }}
-        />
-        <button onClick={() => td.toggleStar(t)} title={t.starred ? 'Remove importance' : 'Mark as important'}
-          style={{ display: 'flex', background: 'none', border: 'none', cursor: 'pointer', padding: '3px', color: t.starred ? 'var(--ac)' : 'var(--t3)', flexShrink: 0 }}>
-          <Star size={17} fill={t.starred ? 'currentColor' : 'none'} />
-        </button>
+        <span className="rg-head-ico"><ListTodo size={15} /></span>
+        <span className="rg-title">Task</span>
+        <span className="rgn-crumb">
+          <span aria-hidden="true">·</span>
+          {list ? <span className="rg-menu-dot" style={{ background: list.color || 'var(--rg-t3)' }} /> : <Inbox size={13} />}
+          <span className="rg-clip">{list ? list.name : 'Tasks'}</span>
+        </span>
+        <span style={{ flex: 1 }} />
+        {onClose && !isMobile && (
+          <button type="button" className="rg-iconbtn" onClick={onClose} title="Close task" aria-label="Close task"><X size={15} /></button>
+        )}
       </div>
 
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px 18px 18px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-
-        {/* Steps */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-          {steps.map(s => (
-            <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '9px', padding: '5px 12px', borderRadius: '9px' }}
-              onMouseEnter={e => { e.currentTarget.style.background = 'var(--hover)'; }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
-            >
-              <button onClick={() => td.toggleStep(t, s.id)} style={{ display: 'flex', background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: s.done ? 'var(--ac)' : 'var(--t3)', flexShrink: 0 }}>
-                {s.done ? <CircleCheck size={15} /> : <Circle size={15} />}
-              </button>
-              <input
-                value={s.title}
-                onChange={e => td.renameStep(t, s.id, e.target.value)}
-                style={{
-                  flex: 1, minWidth: 0, border: 'none', outline: 'none', background: 'transparent', fontFamily: 'inherit',
-                  fontSize: '13px', color: s.done ? 'var(--t3)' : 'var(--t1)', textDecoration: s.done ? 'line-through' : 'none',
-                }}
-              />
-              {xBtn(() => td.removeStep(t, s.id), 'Remove step')}
-            </div>
-          ))}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '9px', padding: '6px 12px' }}>
-            <Plus size={15} color="var(--ac)" style={{ flexShrink: 0 }} />
+      <div className="rg-well rgn-detail">
+        <div className="rgn-detail-scroll">
+          {/* Judul: selesai + judul + bintang */}
+          <div className="rgn-detail-title">
+            <button type="button" className={`rgn-circle${t.done ? ' is-done' : ''}`} onClick={() => td.toggleDone(t)}
+              title={t.done ? 'Mark as not done' : 'Mark as done'} aria-label={t.done ? 'Mark as not done' : 'Mark as done'}>
+              {t.done ? <CircleCheck size={24} /> : <Circle size={24} />}
+            </button>
             <input
-              value={stepDraft}
-              onChange={e => setStepDraft(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') addStep(); }}
-              placeholder={steps.length ? 'Next step' : 'Add step'}
-              style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', background: 'transparent', fontFamily: 'inherit', fontSize: '13px', color: 'var(--t1)' }}
+              className={`rgn-task-input${t.done ? ' is-done' : ''}`}
+              value={t.title}
+              onChange={e => td.updateTask(t.id, { title: e.target.value }, { debounce: true })}
+              placeholder="Task title"
+              aria-label="Task title"
             />
+            <button type="button" className={`rgn-star${t.starred ? ' is-on' : ''}`} onClick={() => td.toggleStar(t)}
+              title={t.starred ? 'Remove importance' : 'Mark as important'} aria-label={t.starred ? 'Remove importance' : 'Mark as important'}>
+              <Star size={18} fill={t.starred ? 'currentColor' : 'none'} />
+            </button>
           </div>
-          {steps.length > 0 && (
-            <div style={{ ...TYPE.caption, padding: '0 12px' }}>{steps.filter(s => s.done).length} of {steps.length} steps done</div>
-          )}
-        </div>
 
-        {/* Aksi: My Day · Due date · List */}
-        <div style={{ border: '1px solid var(--br)', borderRadius: '12px', padding: '4px', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
-          {actionRow(Sun, inMyDay ? 'Added to My Day' : 'Add to My Day', {
-            key: 'myday', on: inMyDay, onClick: () => td.toggleMyDay(t),
-            right: inMyDay ? xBtn(() => td.toggleMyDay(t), 'Remove from My Day') : null,
-          })}
-          <div style={{ height: '1px', background: 'var(--br)', margin: '0 10px' }} />
-          <div style={{ display: 'flex', alignItems: 'center' }}>
-            <div style={{ flex: 1 }}>
-              <Dropdown
-                label={t.due_date ? `Due ${dueLabel(t.due_date)}` : 'Add due date'}
+          {/* Steps */}
+          <div className="rgn-steps">
+            {steps.map(s => (
+              <div key={s.id} className={`rgn-step${s.done ? ' is-done' : ''}`}>
+                <button type="button" className={`rgn-circle${s.done ? ' is-done' : ''}`} onClick={() => td.toggleStep(t, s.id)}
+                  aria-label={s.done ? 'Mark step as not done' : 'Mark step as done'}>
+                  {s.done ? <CircleCheck size={16} /> : <Circle size={16} />}
+                </button>
+                <input value={s.title} onChange={e => td.renameStep(t, s.id, e.target.value)} aria-label="Step" />
+                {xBtn(() => td.removeStep(t, s.id), 'Remove step', 'rgn-step-x')}
+              </div>
+            ))}
+            <label className="rgn-step is-add">
+              <Plus size={16} />
+              <input
+                value={stepDraft}
+                onChange={e => setStepDraft(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') addStep(); }}
+                placeholder={steps.length ? 'Next step' : 'Add step'}
+              />
+            </label>
+            {steps.length > 0 && (
+              <div className="rgn-steps-meta"><span className="rg-mono">{steps.filter(s => s.done).length}/{steps.length}</span> steps done</div>
+            )}
+          </div>
+
+          {/* Aksi: My Day · Due date · List */}
+          <div className="rgn-actions">
+            <div className="rgn-act-row">
+              <button type="button" className={`rgn-act${inMyDay ? ' is-on is-sun' : ''}`} onClick={() => td.toggleMyDay(t)}>
+                <Sun size={16} />
+                <span className="rg-clip">{inMyDay ? 'Added to My Day' : 'Add to My Day'}</span>
+              </button>
+              {inMyDay && xBtn(() => td.toggleMyDay(t), 'Remove from My Day')}
+            </div>
+            <div className="rgn-act-row">
+              <RgMenu
+                block
+                caret={false}
+                className={`rgn-act${overdue ? ' is-late' : t.due_date ? ' is-on' : ''}`}
                 icon={CalendarDays}
+                label={t.due_date ? `Due ${dueLabel(t.due_date)}` : 'Add due date'}
                 options={dueOptions}
                 value={t.due_date || undefined}
                 onSelect={(v) => {
@@ -162,74 +145,62 @@ export default function TodoDetail({ task: t, td, onRequestDelete, isMobile, onB
                   if (v === '__none') { td.setDue(t, null); setPickDate(false); return; }
                   td.setDue(t, v); setPickDate(false);
                 }}
-                minWidth={200}
-                showCheck
+                minWidth={220}
+                title="Due date"
+              />
+              {t.due_date && xBtn(() => { td.setDue(t, null); setPickDate(false); }, 'Remove due date')}
+            </div>
+            {pickDate && (
+              <div className="rgn-pick">
+                <input
+                  type="date"
+                  className="rg-input rg-mono"
+                  autoFocus
+                  value={t.due_date || ''}
+                  onChange={e => { if (e.target.value) td.setDue(t, e.target.value); }}
+                  aria-label="Pick a due date"
+                />
+                <button type="button" className="rg-btn rg-btn-ghost" style={{ height: 34 }} onClick={() => setPickDate(false)}>Done</button>
+              </div>
+            )}
+            <div className="rgn-act-row">
+              <RgMenu
                 block
-                buttonStyle={{
-                  border: 'none', background: 'transparent', width: '100%', padding: '11px 12px', borderRadius: '10px',
-                  fontSize: '13px', fontWeight: 600, color: overdue ? '#EF4444' : t.due_date ? 'var(--ac)' : 'var(--t2)', justifyContent: 'flex-start', gap: '10px',
-                }}
+                caret={false}
+                className="rgn-act is-on"
+                icon={list ? undefined : Inbox}
+                dot={list ? (list.color || 'var(--rg-t3)') : undefined}
+                label={list ? list.name : 'Tasks'}
+                options={listOptions}
+                value={t.list_id || ''}
+                onSelect={(v) => td.moveToList(t, v || null)}
+                minWidth={220}
+                title="Move to list"
               />
             </div>
-            {t.due_date && xBtn(() => { td.setDue(t, null); setPickDate(false); }, 'Remove due date')}
           </div>
-          {pickDate && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 12px 10px 37px' }}>
-              <input
-                type="date"
-                autoFocus
-                value={t.due_date || ''}
-                onChange={e => { if (e.target.value) td.setDue(t, e.target.value); }}
-                style={{ padding: '6px 9px', borderRadius: '8px', border: '1px solid var(--br)', background: 'var(--cd)', color: 'var(--t1)', fontFamily: 'inherit', fontSize: '12.5px', outline: 'none' }}
-              />
-              <button onClick={() => setPickDate(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t3)', fontSize: '12px', fontFamily: 'inherit', fontWeight: 600 }}>Done</button>
-            </div>
-          )}
-          <div style={{ height: '1px', background: 'var(--br)', margin: '0 10px' }} />
-          <Dropdown
-            label={list ? list.name : 'Tasks'}
-            icon={list ? dotIcon(list.color) : Inbox}
-            options={listOptions}
-            value={t.list_id || ''}
-            onSelect={(v) => td.moveToList(t, v || null)}
-            minWidth={200}
-            block
-            title="Move to list"
-            buttonStyle={{
-              border: 'none', background: 'transparent', width: '100%', padding: '11px 12px', borderRadius: '10px',
-              fontSize: '13px', fontWeight: 600, color: 'var(--t2)', justifyContent: 'flex-start', gap: '10px',
-            }}
-          />
-        </div>
 
-        {/* Catatan tugas */}
-        <textarea
-          value={t.notes || ''}
-          onChange={e => td.updateTask(t.id, { notes: e.target.value }, { debounce: true })}
-          placeholder="Add note"
-          rows={5}
-          style={{
-            width: '100%', resize: 'vertical', minHeight: '96px', padding: '11px 12px', borderRadius: '12px',
-            border: '1px solid var(--br)', background: 'var(--bg)', color: 'var(--t1)', fontFamily: 'inherit',
-            fontSize: '13px', lineHeight: 1.6, outline: 'none', boxSizing: 'border-box',
-          }}
-          onFocus={e => { e.currentTarget.style.borderColor = 'var(--br-strong)'; }}
-          onBlur={e => { e.currentTarget.style.borderColor = 'var(--br)'; }}
-        />
+          {/* Catatan tugas */}
+          <div className="rg-field">
+            <label className="rg-label" htmlFor="rgn-task-note">Note</label>
+            <textarea
+              id="rgn-task-note"
+              className="rg-input rgn-textarea"
+              value={t.notes || ''}
+              onChange={e => td.updateTask(t.id, { notes: e.target.value }, { debounce: true })}
+              placeholder="Add a note"
+              rows={5}
+            />
+          </div>
+        </div>
       </div>
 
-      {/* Footer */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 16px', borderTop: '1px solid var(--br)' }}>
-        <span style={{ ...TYPE.caption, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {t.done && t.done_at ? `Completed ${fmtDate(t.done_at)}` : `Created ${fmtDate(t.created_at)}`}
-        </span>
-        <button onClick={() => onRequestDelete(t)} title="Delete task" style={{
-          display: 'flex', alignItems: 'center', gap: '5px', background: 'none', border: 'none', cursor: 'pointer',
-          color: 'var(--t3)', fontSize: '12px', fontWeight: 600, fontFamily: 'inherit', padding: '5px 8px', borderRadius: '8px',
-        }}
-          onMouseEnter={e => { e.currentTarget.style.color = '#EF4444'; e.currentTarget.style.background = 'rgba(239,68,68,0.08)'; }}
-          onMouseLeave={e => { e.currentTarget.style.color = 'var(--t3)'; e.currentTarget.style.background = 'transparent'; }}
-        ><Trash2 size={13} /> Delete</button>
+      {/* Kaki kartu */}
+      <div className="rg-foot rgn-detail-foot">
+        <span className="rg-clip">{t.done && t.done_at ? `Completed ${fmtDate(t.done_at)}` : `Created ${fmtDate(t.created_at)}`}</span>
+        <button type="button" className="rg-btn rg-btn-ghost rgn-del" onClick={() => onRequestDelete(t)} title="Delete task">
+          <Trash2 size={14} /> Delete
+        </button>
       </div>
     </>
   );

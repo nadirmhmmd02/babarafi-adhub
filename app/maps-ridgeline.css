@@ -1,0 +1,264 @@
+/* ══════════════════════════════════════════════════════════════════════
+   OUTLET MAPS (Maps Hub) — redesain "Ridgeline" (LIVE 28 Sep 2026).
+   Dasar (token, kartu cangkang+panel, pil, segmen, chip, menu, dialog, tabel)
+   di app/ridgeline.css. Prefix khusus: .rgm-  ·  Leaflet: .wd-map / .wd-cluster /
+   .wd-pop (globals.css) di-override di sini supaya ikut skin.
+   Susunan: top bar → (banner geocode) → Outlets by status (5 sel = filter) →
+   toolbar filter → peta + panel Alerts/Data quality → tabel outlet.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* Warna status outlet (dipakai mapsConfig.js → marker, popup, chip, sel status).
+   Titik/garis pakai warna "cerah"; teks kuning memakai tinta lebih gelap (kontras ≥4,5:1). */
+.rgm {
+  --mp-reg: var(--rg-pos);
+  --mp-unreg: #D18A1A;
+  --mp-unreg-ink: var(--rg-warn);
+  --mp-claim: var(--rg-spend);
+  --mp-review: var(--rg-neg);
+  --mp-unknown: var(--rg-other);
+}
+html[data-theme="dark"] .rgm { --mp-unreg: #E3A33B; }
+
+/* Halaman ini BOLEH scroll (bukan fit 1 layar seperti Dashboard): isi .rg-body tidak
+   boleh menyusut — tanpa ini kartu status tergencet & tertimpa toolbar di layar pendek */
+.rgm .rg-body > * { flex-shrink: 0; }
+
+/* Badge jumlah depo belum dipetakan di tombol Wilayah */
+.rgm-badge {
+  position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; padding: 0 5px;
+  display: inline-flex; align-items: center; justify-content: center; border-radius: 999px;
+  font-size: 11px; font-weight: 600; background: var(--mp-unreg); color: #1D1405; border: 2px solid var(--rg-bg);
+}
+
+/* ══ Banner geocode kota ══ */
+.rgm-banner {
+  display: flex; align-items: center; gap: 14px; flex-shrink: 0; padding: 12px 12px 12px 18px; border-radius: 16px;
+  font-size: 13px; color: var(--rg-t1);
+  background: color-mix(in srgb, var(--rg-spend) 7%, var(--rg-well));
+  border: 1px solid color-mix(in srgb, var(--rg-spend) 24%, transparent);
+}
+.rgm-banner > svg { color: var(--rg-spend); flex-shrink: 0; }
+.rgm-banner-main { flex: 1; min-width: 0; line-height: 1.45; }
+.rgm-banner-sub { color: var(--rg-t2); }
+.rgm-progress { height: 6px; margin-top: 9px; border-radius: 3px; overflow: hidden; background: var(--rg-track); }
+.rgm-progress > i { display: block; height: 100%; border-radius: 3px; background: var(--rg-spend); transform-origin: left; transition: transform .6s ease; }
+.rgm-banner .rg-btn { height: 34px; padding: 0 14px; font-size: 12.5px; }
+
+/* ══ Outlets by status: 5 sel = tombol filter (klik lagi = hapus filter) ══ */
+.rgm-status { flex: 1; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); padding: 4px; gap: 0; }
+.rgm-st {
+  position: relative; display: flex; flex-direction: column; align-items: stretch; min-width: 0;
+  padding: 12px 14px 14px; border: 0; border-radius: 12px; background: transparent; cursor: pointer;
+  text-align: left; font-family: inherit; color: inherit;
+  transition: background-color .15s ease;
+}
+.rgm-st + .rgm-st::before {
+  content: ''; position: absolute; left: 0; top: 14px; bottom: 14px; width: 1px; background: var(--rg-line-soft);
+}
+.rgm-st:hover { background: var(--rg-hover); }
+.rgm-st[aria-pressed="true"] { background: var(--rg-range); }
+.rgm-st[aria-pressed="true"]::before, .rgm-st[aria-pressed="true"] + .rgm-st::before,
+.rgm-st:hover::before, .rgm-st:hover + .rgm-st::before { opacity: 0; }
+.rgm-st-name { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--rg-t1); white-space: nowrap; }
+.rgm-st-name > span:last-child { overflow: hidden; text-overflow: ellipsis; }
+.rgm-st-on { margin-left: auto; font-size: 11px; color: var(--rg-t2); }
+.rgm-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.rgm-st-num { margin-top: 10px; font-size: 26px; font-weight: 500; line-height: 1.05; letter-spacing: -0.035em; color: var(--rg-t1); white-space: nowrap; }
+.rgm-st-pct { margin-top: 5px; margin-bottom: 12px; font-size: 12px; color: var(--rg-t2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rgm-bar { margin-top: auto; display: flex; gap: 2px; height: 6px; border-radius: 3px; background: var(--rg-track); overflow: hidden; }
+.rgm-bar > i { display: block; height: 100%; flex-shrink: 0; transform-origin: left; animation: wdGrowX .8s cubic-bezier(.22,1,.36,1) backwards; }
+.rgm-bar > i:first-child { border-radius: 3px 0 0 3px; }
+
+/* ══ Toolbar filter (berlaku untuk peta DAN tabel) ══ */
+.rgm-bar-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; flex-shrink: 0; }
+.rgm-search {
+  display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 8px 0 14px; border-radius: 999px;
+  flex: 0 1 300px; min-width: 200px; color: var(--rg-t2);
+  background: var(--rg-pill); border: 1px solid var(--rg-pill-line);
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.rgm-search:focus-within { border-color: var(--rg-t2); box-shadow: 0 0 0 3px var(--rg-range); }
+.rgm-search input { flex: 1; min-width: 0; height: 100%; border: 0; outline: none; background: transparent; font-family: inherit; font-size: 13px; color: var(--rg-t1); }
+.rg .rgm-search input:focus-visible { outline: none; }
+.rgm-search input::placeholder { color: var(--rg-t3); }
+.rgm-search button { width: 26px; height: 26px; padding: 0; border: 0; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: transparent; color: var(--rg-t3); cursor: pointer; }
+.rgm-search button:hover { background: var(--rg-hover); color: var(--rg-t1); }
+.rgm-filter { max-width: 230px; }
+.rgm-count { margin-left: auto; font-size: 12.5px; color: var(--rg-t2); white-space: nowrap; }
+
+/* ══ Peta + panel ══ */
+.rgm-row {
+  display: grid; grid-template-columns: minmax(0, 2.6fr) minmax(300px, 1fr); gap: 12px; flex-shrink: 0;
+  height: min(580px, 60vh); min-height: 420px;
+}
+/* z-index 0 WAJIB: stacking context sendiri → z-index internal Leaflet (pane 400,
+   kontrol 1000) terkurung di kartu ini, tidak menimpa menu/dialog/toast halaman */
+.rgm-map-card { position: relative; z-index: 0; contain: layout paint; }
+.rgm-map-well { flex: 1; overflow: hidden; }
+.rgm-onmap { font-size: 12px; color: var(--rg-t2); white-space: nowrap; }
+.rgm-legend { margin-left: auto; display: flex; align-items: center; gap: 12px; padding-right: 6px; font-size: 12px; color: var(--rg-t2); white-space: nowrap; }
+.rgm-legend > span { display: inline-flex; align-items: center; gap: 6px; }
+@media (max-width: 1280px) { .rg:not(.is-mobile) .rgm-legend { display: none; } }
+.rgm-empty-map { position: absolute; inset: 0; }
+
+/* Panel Alerts / Data quality */
+.rgm-panel .rg-head { padding-left: 6px; }
+.rgm-panel .rg-segs button { padding: 0 11px; }
+.rgm-seg-n {
+  min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 600; background: var(--rg-hover); color: var(--rg-t2);
+}
+.rg-segs button[aria-pressed="true"] .rgm-seg-n { background: var(--rg-t1); color: var(--rg-well); }
+.rgm-panel-well { flex: 1; min-height: 0; overflow-y: auto; padding: 10px; }
+.rgm-todo { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.rgm-todo .rg-chip { height: 28px; padding: 0 12px; }
+.rgm-alert {
+  display: flex; gap: 11px; padding: 12px; border-radius: 14px;
+  background: var(--rg-well-2); border: 1px solid var(--rg-line-soft);
+  animation: wdFadeUp .35s cubic-bezier(.22,1,.36,1) backwards;
+}
+.rgm-alert + .rgm-alert { margin-top: 8px; }
+.rgm-alert-ico {
+  width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--c) 14%, transparent); color: var(--c);
+}
+.rgm-alert-main { flex: 1; min-width: 0; }
+.rgm-alert-name { font-size: 13px; font-weight: 500; line-height: 1.3; color: var(--rg-t1); }
+.rgm-alert-desc { margin: 3px 0 5px; font-size: 12px; line-height: 1.45; color: var(--rg-t2); }
+.rgm-alert-meta { font-size: 11.5px; color: var(--rg-t3); }
+.rgm-alert > .rg-iconbtn { align-self: center; }
+.rgm-q { padding: 12px 14px; border-radius: 14px; background: var(--rg-well-2); border: 1px solid var(--rg-line-soft); }
+.rgm-q + .rgm-q { margin-top: 10px; }
+.rgm-q-title { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; color: var(--rg-t1); }
+.rgm-q-hint { margin-top: 3px; font-size: 12px; line-height: 1.5; color: var(--rg-t2); }
+.rgm-q-list { margin-top: 8px; max-height: 150px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+.rgm-q-list > div { font-size: 12.5px; color: var(--rg-t1); }
+.rgm-q-list > div > span { color: var(--rg-t3); }
+.rgm-ok-ico { width: 44px; height: 44px; border-radius: 50%; margin-bottom: 6px; display: inline-flex; align-items: center; justify-content: center; background: color-mix(in srgb, var(--rg-pos) 14%, transparent); color: var(--rg-pos); }
+
+/* ══ Tabel outlet ══ */
+.rgm-table-card { flex-shrink: 0; }
+.rgm-table-well { overflow: hidden; }
+/* Scroll di lapisan DALAM tanpa border; contain = cat ulang tabel tidak menular ke halaman */
+.rgm-scroll { max-height: 520px; overflow: auto; contain: layout paint; }
+/* table-layout FIXED wajib: ±490 baris dengan layout auto → browser mengukur ulang semua
+   sel tiap reflow (animasi sidebar patah-patah — pelajaran Agu 2026) */
+.rgm-table { table-layout: fixed; min-width: 900px; }
+.rg .rgm-table th, .rg .rgm-table td { text-align: left; padding: 0 12px; }
+.rg .rgm-table .is-c { text-align: center; }
+.rgm-table thead th { position: sticky; top: 0; z-index: 2; height: 44px; background: var(--rg-well); }
+.rgm-table th:first-child, .rgm-table td:first-child { padding-left: 16px; }
+.rgm-table th:last-child, .rgm-table td:last-child { padding-right: 16px; }
+.rgm-table td { height: 52px; overflow: hidden; text-overflow: ellipsis; }
+.rgm-tr { transition: background-color .12s ease; }
+.rgm-tr.is-go { cursor: pointer; }
+.rgm-tr:hover td { background: var(--rg-hover); }
+.rgm-tr.is-missing td { opacity: .5; }
+.rgm-tr.is-anim { animation: wdFadeUp .3s cubic-bezier(.22,1,.36,1) backwards; }
+.rgm-name { display: flex; align-items: center; gap: 7px; min-width: 0; font-weight: 500; color: var(--rg-t1); }
+.rgm-name > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rgm-sub { margin-top: 2px; font-size: 11.5px; color: var(--rg-t3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rgm-missing {
+  flex-shrink: 0; height: 18px; padding: 0 6px; border-radius: 999px; display: inline-flex; align-items: center;
+  font-size: 10px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase;
+  background: color-mix(in srgb, var(--rg-neg) 14%, transparent); color: var(--rg-neg);
+}
+.rgm-cell { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--rg-t1); }
+.rgm-cell.is-dim { color: var(--rg-t3); }
+.rgm-chip { --c: var(--mp-unknown); --ct: var(--c); background: color-mix(in srgb, var(--c) 13%, transparent); color: var(--ct); }
+.rgm-chip .rg-chip-dot { background: var(--c); }
+.rgm-note { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; color: var(--rg-t3); }
+.rgm-note.is-flag { color: var(--mp-unreg-ink); }
+.rgm-link { width: 30px; height: 30px; }
+.rgm-foot-btn { height: 32px; padding: 0 14px; font-size: 12.5px; }
+
+/* ══ Toast hasil sync / geocode (lapisan posisi dipisah dari animasi) ══ */
+.rgm-toast-pos { position: fixed; right: 20px; bottom: 20px; z-index: 1300; width: min(360px, calc(100vw - 40px)); }
+.rgm-toast {
+  padding: 4px; border-radius: 18px; background: var(--rg-shell); border: 1px solid var(--rg-pill-line); box-shadow: var(--rg-pop);
+  animation: wdSlideUp .25s cubic-bezier(.22,1,.36,1);
+}
+.rgm-toast.is-out { animation: wdFadeOut .2s ease forwards; }
+.rgm-toast-head { display: flex; align-items: center; gap: 9px; padding: 6px 6px 8px 12px; font-size: 13px; font-weight: 500; color: var(--rg-t1); }
+.rgm-toast-head > svg { flex-shrink: 0; }
+.rgm-toast-head > span { flex: 1; min-width: 0; }
+.rgm-toast-head .rg-iconbtn { width: 26px; height: 26px; }
+.rgm-toast-body { padding: 10px 14px; border-radius: 14px; background: var(--rg-well); border: 1px solid var(--rg-well-line); font-size: 12.5px; line-height: 1.6; color: var(--rg-t2); }
+
+/* ══ Dialog Depo → Province ══ */
+.rgm-depo { border-bottom: 1px solid var(--rg-line-soft); }
+.rgm-depo:last-child { border-bottom: 0; }
+.rgm-depo-btn {
+  width: 100%; display: flex; align-items: center; gap: 10px; padding: 12px 4px; border: 0; border-radius: 10px;
+  background: transparent; cursor: pointer; text-align: left; font-family: inherit;
+}
+.rgm-depo-btn:hover { background: var(--rg-hover); }
+.rgm-depo-name { flex: 1; min-width: 0; font-size: 13px; font-weight: 500; color: var(--rg-t1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rgm-depo-name > span { font-weight: 400; color: var(--rg-t2); font-size: 12px; }
+.rgm-depo-prov { font-size: 12.5px; color: var(--rg-t2); white-space: nowrap; }
+.rgm-depo-prov.is-missing { color: var(--mp-unreg-ink); font-weight: 500; }
+.rgm-provs { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 4px 14px 22px; animation: wdFadeUp .22s cubic-bezier(.22,1,.36,1); }
+.rgm-prov {
+  height: 28px; padding: 0 11px; border-radius: 999px; cursor: pointer; font-family: inherit; font-size: 12px;
+  border: 1px solid var(--rg-pill-line); background: var(--rg-pill); color: var(--rg-t2);
+  transition: border-color .13s ease, background-color .13s ease, color .13s ease;
+}
+.rgm-prov:hover { border-color: var(--rg-t3); color: var(--rg-t1); }
+.rgm-prov.is-on { background: var(--rg-t1); border-color: var(--rg-t1); color: var(--rg-well); }
+.rgm-dlg-note { margin: 0 0 8px; font-size: 12.5px; color: var(--rg-t2); }
+
+/* ══ LEAFLET ikut skin ══ */
+.rgm .wd-map.leaflet-container { background: var(--rg-well-2); border-radius: 15px; font-family: inherit; }
+html[data-theme="dark"] .rgm .wd-map.leaflet-container { background: #1E1E1E; }
+/* Peta dasar OSM → abu-abu netral (warna OSM asli terlalu ramai untuk skin netral).
+   Gelap: dibalik (invert) supaya daratan gelap & jalan terang, lalu diredam. */
+.rgm .wd-map .leaflet-tile-pane { filter: grayscale(1) contrast(.88) brightness(1.06); }
+html[data-theme="dark"] .rgm .wd-map .leaflet-tile-pane { filter: grayscale(1) invert(1) contrast(.82) brightness(.82); }
+.rgm .wd-map .leaflet-bar { border: 1px solid var(--rg-pill-line); border-radius: 12px; box-shadow: var(--rg-shadow); overflow: hidden; }
+.rgm .wd-map .leaflet-bar a {
+  width: 32px; height: 32px; line-height: 30px; font-weight: 400;
+  background: var(--rg-pill); color: var(--rg-t1); border-bottom-color: var(--rg-pill-line);
+}
+.rgm .wd-map .leaflet-bar a:hover { background: var(--rg-pill-hover); }
+.rgm .wd-map .leaflet-control-attribution { background: color-mix(in srgb, var(--rg-well) 88%, transparent); color: var(--rg-t2); border-radius: 10px 0 0 0; }
+.rgm .wd-map .leaflet-control-attribution a { color: var(--rg-t1); }
+.rgm .wd-map .leaflet-popup-content-wrapper { background: var(--rg-well); color: var(--rg-t1); border: 1px solid var(--rg-pill-line); border-radius: 14px; box-shadow: var(--rg-pop); }
+.rgm .wd-map .leaflet-popup-tip { background: var(--rg-well); border: 1px solid var(--rg-pill-line); }
+.rgm .wd-map .leaflet-popup-close-button { color: var(--rg-t3); }
+.rgm .wd-pop-name { font-size: 13.5px; font-weight: 600; letter-spacing: -0.01em; }
+.rgm .wd-pop-meta { font-size: 12px; font-weight: 400; color: var(--rg-t2); }
+.rgm .wd-pop-addr { font-size: 12px; color: var(--rg-t2); }
+.rgm .wd-pop-pill { font-size: 11.5px; font-weight: 500; }
+.rgm .wd-pop-gm { font-size: 11.5px; color: var(--rg-t3); }
+.rgm .wd-pop-note {
+  font-size: 12px; color: var(--mp-unreg-ink);
+  background: color-mix(in srgb, var(--mp-unreg) 10%, transparent); border-color: color-mix(in srgb, var(--mp-unreg) 28%, transparent);
+}
+.rgm .wd-pop-link { font-size: 12px; font-weight: 500; color: var(--rg-spend) !important; }
+/* Cluster = lingkaran netral kontras tinggi + halo (seleksi netral seperti skin) */
+.rgm .wd-cluster {
+  background: var(--rg-t1); color: var(--rg-well); background-clip: padding-box;
+  border: 4px solid color-mix(in srgb, var(--rg-t1) 20%, transparent);
+  font-family: var(--font-geist-mono), ui-monospace, monospace; font-weight: 500; font-size: 12px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.22);
+}
+.rgm .wd-dot { border-color: var(--rg-well); }
+.rgm .wd-map-note {
+  position: absolute; top: 12px; left: 56px; right: 12px; z-index: 1001; padding: 9px 12px; border-radius: 12px;
+  font-size: 12px; line-height: 1.45; color: var(--rg-t1); background: var(--rg-well);
+  border: 1px solid color-mix(in srgb, var(--mp-unreg) 35%, transparent); box-shadow: var(--rg-shadow);
+}
+
+/* ══ MOBILE (≤767px) ══ */
+.rg.is-mobile .rgm-status { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.rg.is-mobile .rgm-st::before { display: none; }
+.rg.is-mobile .rgm-st:first-child { grid-column: 1 / -1; }
+.rg.is-mobile .rgm-row { grid-template-columns: 1fr; height: auto; min-height: 0; }
+.rg.is-mobile .rgm-map-card { height: 360px; }
+.rg.is-mobile .rgm-panel { max-height: 440px; }
+.rg.is-mobile .rgm-search { flex: 1 1 100%; }
+.rg.is-mobile .rgm-legend { display: none; }
+.rg.is-mobile .rgm-banner { flex-wrap: wrap; }
+.rg.is-mobile .rgm-toast-pos { right: 16px; bottom: 16px; }

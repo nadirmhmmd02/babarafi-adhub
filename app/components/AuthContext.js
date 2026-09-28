@@ -100,8 +100,8 @@ export function AuthProvider({ children }) {
     });
     if (error || !data?.session) {
       const msg = /invalid login credentials/i.test(error?.message || '')
-        ? 'Email atau password salah'
-        : (error?.message || 'Login gagal — coba lagi');
+        ? 'Wrong email or password.'
+        : (error?.message || 'Sign-in failed — please try again.');
       return { ok: false, error: msg };
     }
     applySession(data.session);

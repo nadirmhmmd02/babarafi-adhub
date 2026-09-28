@@ -1,4 +1,6 @@
 import './globals.css';
+// Skin "Ridgeline" halaman Ads Hub — semua aturan di-scope ke .rg (redesain Sep 2026)
+import './ridgeline.css';
 import { Plus_Jakarta_Sans } from 'next/font/google';
 import { AuthProvider } from './components/AuthContext';
 import { DateFilterProvider } from './components/DateFilterContext';

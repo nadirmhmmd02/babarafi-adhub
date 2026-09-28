@@ -1,17 +1,31 @@
 'use client';
+
+/* ══ CALENDAR — redesain "Ridgeline" (LIVE 28 Sep 2026) ═════════════
+   Nuansa sama dengan Dashboard: top bar judul + konteks | navigasi bulan & aksi,
+   Gantt di kartu cangkang + panel dalam, angka Geist Mono, warna objektif =
+   entitas dashboard (Awareness ungu · Traffic oranye · Conversion teal),
+   pilihan/aktif netral. Skin: app/ridgeline.css + app/calendar-ridgeline.css.
+   LOGIKA (Supabase `campaigns`, urutan objektif→tanggal mulai, budget per bulan,
+   ganti status optimistik, lebar kolom + auto-fit, autocomplete Ad Content) TIDAK
+   diubah. Baru: Objective/Status di form = segmen (bukan <select> bawaan),
+   konfirmasi hapus = dialog bergaya (bukan confirm() browser), Esc menutup popup.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+import '../calendar-ridgeline.css';
 import { useState, useEffect, useRef } from 'react';
-import { ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
+import {
+  ChevronLeft, ChevronRight, ChevronDown, Plus, Pencil, Trash2, Check,
+  CalendarRange, CalendarClock, Wallet, TriangleAlert, RefreshCw,
+} from 'lucide-react';
 import { supabase } from '../supabase';
 import { useAuth } from '../components/AuthContext';
 import useIsMobile from '../components/useIsMobile';
+import { dashboardFontVars } from '../components/dashboardFonts';
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const OBJ_ORDER = ['Awareness','Traffic','Conversion'];
-const OBJ_STYLE = {
-  Awareness: { bg:'rgba(91,127,212,0.14)', color:'#5b8fd4', bar:'rgba(91,127,212,0.7)' },
-  Traffic:   { bg:'rgba(245,158,11,0.14)',  color:'#f59e0b', bar:'rgba(245,158,11,0.75)' },
-  Conversion:{ bg:'rgba(16,185,129,0.14)',  color:'#10b981', bar:'rgba(16,185,129,0.7)' },
-};
+// Warna objektif = entitas yang sama dengan Dashboard (donut, grafik, Top Campaigns)
+const OBJ_VAR = { Awareness: 'var(--rg-aware)', Traffic: 'var(--rg-traffic)', Conversion: 'var(--rg-conv)' };
 
 function daysInMonth(y,m){ return new Date(y,m+1,0).getDate() }
 // "YYYY-MM-DD" WAJIB di-parse sebagai tanggal LOKAL. new Date("2026-07-15") dibaca UTC —
@@ -20,14 +34,18 @@ function parseLocal(v){ if(!v)return null; const [y,m,d]=String(v).slice(0,10).s
 function isActive(c,y,m,d){ if(!c.mulai||!c.selesai)return false; const s=parseLocal(c.mulai),e=parseLocal(c.selesai),cur=new Date(y,m,d); return cur>=s&&cur<=e }
 function hasActivity(c,y,m){ if(!c.mulai||!c.selesai)return false; const s=parseLocal(c.mulai),e=parseLocal(c.selesai),ms=new Date(y,m,1),me=new Date(y,m+1,0); return s<=me&&e>=ms }
 function budgetForMonth(c,y,m){ const days=daysInMonth(y,m); let t=0; for(let d=1;d<=days;d++){ if(isActive(c,y,m,d))t++ } return t*(c.bh||0) }
-function fmtRp(v){ if(!v)return'—'; if(v>=1000000)return'Rp '+(v/1000000).toFixed(1).replace('.0','')+' jt'; return'Rp '+(v/1000).toFixed(0)+'rb' }
+// Angka penuh gaya Indonesia (sama dengan Dashboard): Rp 1.440.000
+function fmtRp(v){ if(!v)return'—'; return 'Rp '+Math.round(v).toLocaleString('id-ID') }
+function fmtDay(v){ return v ? parseLocal(v).toLocaleDateString('en-GB',{day:'numeric',month:'short'}) : '—' }
 
 const STATUSES = ['Draft','Running','Done'];
-const STATUS_STYLE = {
-  Draft:   { bg:'rgba(245,158,11,0.12)',  color:'#f59e0b',   icon:'✏' },
-  Running: { bg:'rgba(16,185,129,0.14)',  color:'#10b981',   icon:'▶' },
-  Done:    { bg:'rgba(115,115,115,0.12)', color:'var(--t3)', icon:'✓' },
-};
+// Status = chip netral (Draft), hijau (Running), redup (Done) — ikon lucide, bukan emoji
+const STATUS_TONE = { Draft: '', Running: 'is-pos', Done: 'is-muted' };
+function StatusIcon({ s, size = 11 }) {
+  if (s === 'Running') return <span className="rg-chip-dot" />;
+  if (s === 'Done') return <Check size={size} strokeWidth={3} />;
+  return <Pencil size={size - 1} strokeWidth={2.4} />;
+}
 
 const emptyForm = { name:'', obj:'Awareness', konten:'', bh:'', mulai:'', selesai:'', status:'Draft' };
 
@@ -43,8 +61,10 @@ export default function CalendarPage() {
   const [error, setError]               = useState(null);
   const [form, setForm]                 = useState(emptyForm);
   const [editId, setEditId]             = useState(null);
+  const [saving, setSaving]             = useState(false);
   const [tableKey, setTableKey]         = useState(0);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [confirmDel, setConfirmDel]     = useState(null); // campaign yang mau dihapus
   // Dropdown ganti status langsung dari tabel (admin) — posisi fixed dari rect pill
   const [statusDrop, setStatusDrop]     = useState(null); // { id, x, y }
 
@@ -53,7 +73,6 @@ export default function CalendarPage() {
   const CAMP_MIN = 120, CAMP_MAX = 620, CAMP_DEFAULT = 220;
   const [campW, setCampW]       = useState(CAMP_DEFAULT);
   const [colDrag, setColDrag]   = useState(false);
-  const [colHover, setColHover] = useState(false);
   const colDragX = useRef(0);
   const colDragW = useRef(CAMP_DEFAULT);
 
@@ -89,12 +108,16 @@ export default function CalendarPage() {
   }
 
   function autoFitCampW() {
+    // Ukur dengan font sel nama yang sebenarnya (Geist) supaya hasil auto-fit pas
+    const cell = document.querySelector('.rgk-td-name');
+    const cs = cell ? getComputedStyle(cell) : getComputedStyle(document.body);
     const ctx = document.createElement('canvas').getContext('2d');
-    ctx.font = `500 12px ${getComputedStyle(document.body).fontFamily}`;
+    ctx.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
     let max = 0;
     sorted.forEach(c => { max = Math.max(max, ctx.measureText(c.name || '').width); });
-    // + padding sel kiri-kanan (8px × 2) + buffer kecil biar tidak kepotong ellipsis
-    saveCampW(Math.max(CAMP_MIN, Math.min(CAMP_MAX, Math.ceil(max) + 16 + 6)));
+    const pad = cell ? parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight) : 24;
+    // + padding sel kiri-kanan + buffer kecil biar tidak kepotong ellipsis
+    saveCampW(Math.max(CAMP_MIN, Math.min(CAMP_MAX, Math.ceil(max) + pad + 6)));
   }
 
   const today = { y: now.getFullYear(), m: now.getMonth(), d: now.getDate() };
@@ -134,16 +157,18 @@ export default function CalendarPage() {
   }
 
   async function handleSave() {
-    if (!form.name) return;
+    if (!form.name || saving) return;
+    setSaving(true);
     const payload = { name:form.name, obj:form.obj, konten:form.konten, bh:parseInt(form.bh)||0, mulai:form.mulai||null, selesai:form.selesai||null, status:form.status };
     if (editId) { await supabase.from('campaigns').update(payload).eq('id', editId); }
     else         { await supabase.from('campaigns').insert([payload]); }
+    setSaving(false);
     setShowModal(false); setForm(emptyForm); setEditId(null);
     loadCampaigns();
   }
 
   async function handleDelete(id) {
-    if (!confirm('Delete this campaign?')) return;
+    setConfirmDel(null);
     await supabase.from('campaigns').delete().eq('id', id);
     loadCampaigns();
   }
@@ -177,506 +202,454 @@ export default function CalendarPage() {
     };
   }, [statusDrop]);
 
+  // Esc menutup popup yang sedang terbuka (form, konfirmasi hapus, dropdown status)
+  useEffect(() => {
+    if (!showModal && !confirmDel && !statusDrop) return;
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      if (statusDrop) setStatusDrop(null);
+      else if (confirmDel) setConfirmDel(null);
+      else if (showModal && !saving) setShowModal(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showModal, confirmDel, statusDrop, saving]);
+
   const totalBudget  = sorted.reduce((sum,c) => sum + budgetForMonth(c,year,month), 0);
   const budgetByObj  = OBJ_ORDER.reduce((acc,o) => {
     acc[o] = sorted.filter(c => c.obj===o).reduce((s,c) => s + budgetForMonth(c,year,month), 0);
     return acc;
   }, {});
+  const undated = campaigns.filter(c => !c.mulai || !c.selesai);
+  const isThisMonth = year === today.y && month === today.m;
+  const totalCols = (isAdmin ? 9 : 8) + days;
 
-  const inp = {
-    width:'100%', padding:'8px 12px', fontSize:'13px',
-    border:'1px solid var(--br)', borderRadius:'8px',
-    background:'var(--sf)', color:'var(--t1)',
-    fontFamily:'inherit', outline:'none',
-    transition:'border-color 0.2s',
-  };
-
-  const thBase = {
-    padding:'9px 6px', fontSize:'10px', fontWeight:'600',
-    color:'var(--t3)', textTransform:'uppercase', letterSpacing:'.4px',
-    background:'var(--sf)', whiteSpace:'nowrap',
-  };
+  const ctxLine = loading
+    ? <span>Loading schedule…</span>
+    : (<>
+        <span>Ad schedule</span>
+        <span className="rg-ctx-sep" aria-hidden="true" />
+        <span>{sorted.length} campaign{sorted.length === 1 ? '' : 's'} in {MONTHS[month]}</span>
+        {undated.length > 0 && (<>
+          <span className="rg-ctx-sep" aria-hidden="true" />
+          <span>{undated.length} not scheduled yet</span>
+        </>)}
+      </>);
 
   return (
-    <div style={{ padding: isMobile ? '18px 20px' : '12px 16px 16px', flex:1, minHeight:0, overflowY:'auto', display:'flex', flexDirection:'column', gap: isMobile ? '14px' : '10px' }}>
+    <div className={`rg rg-page ${dashboardFontVars}${isMobile ? ' is-mobile' : ''}`}>
 
-      {/* Error banner */}
-      {error && (
-        <div style={{ padding:'12px 16px', background:'rgba(239,68,68,0.1)', border:'1px solid rgba(239,68,68,0.3)', borderRadius:'10px', color:'#ef4444', fontSize:'13px' }}>
-          ⚠️ Gagal load data: {error}
-        </div>
-      )}
-
-      {/* Topbar — desktop: card mengambang (nuansa dashboard redesain 2026) */}
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:'10px',
-        ...(isMobile ? null : {
-          background:'var(--cd)', border:'1px solid var(--br)', borderRadius:'18px',
-          padding:'12px 20px', boxShadow:'var(--shadow)',
-        }) }}>
-        <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
-          <button onClick={prevMonth} style={{
-            width:'32px', height:'32px', borderRadius:'8px',
-            border:'1px solid var(--br)', background:'var(--cd)',
-            cursor:'pointer', color:'var(--t1)',
-            display:'flex', alignItems:'center', justifyContent:'center', padding:0,
-            transition:'background 0.15s, border-color 0.15s',
-          }}
-          onMouseEnter={e => e.currentTarget.style.borderColor='var(--ac)'}
-          onMouseLeave={e => e.currentTarget.style.borderColor='var(--br)'}
-          ><ChevronLeft size={16} /></button>
-
-          <span style={{ fontSize:'16px', fontWeight:'500', color:'var(--t1)', minWidth:'160px', textAlign:'center' }}>
-            {MONTHS[month]} {year}
-          </span>
-
-          <button onClick={nextMonth} style={{
-            width:'32px', height:'32px', borderRadius:'8px',
-            border:'1px solid var(--br)', background:'var(--cd)',
-            cursor:'pointer', color:'var(--t1)',
-            display:'flex', alignItems:'center', justifyContent:'center', padding:0,
-            transition:'background 0.15s, border-color 0.15s',
-          }}
-          onMouseEnter={e => e.currentTarget.style.borderColor='var(--ac)'}
-          onMouseLeave={e => e.currentTarget.style.borderColor='var(--br)'}
-          ><ChevronRight size={16} /></button>
-
-          {/* Legend */}
-          <div style={{ display:'flex', gap:'12px', marginLeft:'12px' }}>
-            {OBJ_ORDER.map(o => (
-              <span key={o} style={{ display:'flex', alignItems:'center', gap:'5px', fontSize:'11px', color:'var(--t3)' }}>
-                <span style={{ width:'8px', height:'8px', borderRadius:'2px', background:OBJ_STYLE[o].bar, display:'inline-block' }}/>
-                {o}
-              </span>
-            ))}
+      {/* ══ TOP BAR — judul + konteks (kiri) · bulan & aksi (kanan) ══ */}
+      <header className="rg-top">
+        <div className="rg-top-title">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <h1 className="rg-h1">Calendar</h1>
           </div>
+          <div className="rg-ctx">{ctxLine}</div>
         </div>
 
-        <div style={{ display:'flex', gap:'8px', marginLeft:'auto' }}>
-          {isAdmin && (
-            <button onClick={openAdd} style={{
-              display:'flex', alignItems:'center', gap:'6px',
-              padding:'7px 16px', fontSize:'13px',
-              border:'none', borderRadius:'8px',
-              background:'var(--ac)', color:'#fff', cursor:'pointer', fontWeight:'500',
-              transition:'opacity 0.15s',
-            }}
-            onMouseEnter={e => e.currentTarget.style.opacity='0.85'}
-            onMouseLeave={e => e.currentTarget.style.opacity='1'}
-            >+ Add Campaign</button>
-          )}
+        <div className="rg-tools">
+          <div className="rgk-month" role="group" aria-label="Month">
+            <button type="button" className="rg-iconbtn" onClick={prevMonth} aria-label="Previous month" title="Previous month">
+              <ChevronLeft size={16} />
+            </button>
+            <span className="rgk-month-label">{MONTHS[month]} {year}</span>
+            <button type="button" className="rg-iconbtn" onClick={nextMonth} aria-label="Next month" title="Next month">
+              <ChevronRight size={16} />
+            </button>
+          </div>
+          {isAdmin && (<>
+            <span className="rg-vsep" aria-hidden="true" />
+            <button type="button" className="rg-pill" onClick={openAdd}>
+              <Plus size={15} />Add campaign
+            </button>
+          </>)}
         </div>
-      </div>
+      </header>
 
-      {/* Table */}
-      {loading ? (
-        <div style={{ textAlign:'center', padding:'48px', color:'var(--t3)', fontSize:'13px' }}>Loading...</div>
-      ) : (
-        <div
-          key={tableKey}
-          style={{
-            border:'1px solid var(--br)', overflow:'hidden',
-            borderRadius: isMobile ? '10px' : '18px',
-            ...(isMobile ? null : { background:'var(--cd)', boxShadow:'var(--shadow)' }),
-            animation:'wdFadeUp 0.3s cubic-bezier(0.4,0,0.2,1)',
-          }}
-        >
-          <div style={{ overflowX:'auto' }}>
-            {/* Mobile: minWidth memaksa tabel Gantt melebar → scroll ke kanan
-                (seperti tabel Campaigns), bukan kolom tergencet. Desktop tak berubah. */}
-            <table style={{ borderCollapse:'collapse', width:'100%', tableLayout:'fixed', minWidth: isMobile ? '920px' : undefined }}>
-              <colgroup>
-                {/* Desktop: lebar px dari state (resizable). Mobile: tetap % lama. */}
-                <col style={{ width: isMobile ? '16%' : campW + 'px' }}/>
-                <col style={{ width:'8%' }}/>
-                <col style={{ width:'8%' }}/>
-                <col style={{ width:'6%' }}/>
-                <col style={{ width:'5%' }}/>
-                <col style={{ width:'5%' }}/>
-                <col style={{ width:'6%' }}/>
-                <col style={{ width:'6%' }}/>
-                <col style={{ width:'6%' }}/>
-                {Array.from({ length:days }).map((_,i) => (
-                  <col key={i} style={{ width:`${(34/days)}%` }}/>
+      {/* ══ ISI ══ */}
+      <div className="rg-body rgk-body">
+
+        {error && (
+          <div className="rg-error" role="alert">
+            <span className="rg-error-ico"><TriangleAlert size={20} /></span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="rg-error-title">The schedule couldn’t be loaded</div>
+              <div className="rg-error-msg">{error}</div>
+            </div>
+            <button type="button" className="rg-pill" onClick={loadCampaigns}>
+              <RefreshCw size={15} />Try again
+            </button>
+          </div>
+        )}
+
+        {/* ── Gantt ── */}
+        <div className="rg-card rg-rise rgk-card">
+          <div className="rg-head">
+            <span className="rg-head-ico"><CalendarRange size={15} /></span>
+            <span className="rg-title">Schedule</span>
+            <div className="rgk-legend" aria-label="Objectives">
+              {OBJ_ORDER.map(o => (
+                <span key={o} className="rgk-legend-item"><span className="rgk-legend-dot" style={{ background: OBJ_VAR[o] }} />{o}</span>
+              ))}
+            </div>
+          </div>
+          <div className="rg-well rgk-well">
+            {loading ? (
+              <div className="rgk-skel">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="rgk-skel-row">
+                    <span className="rg-skel" style={{ width: `${22 - (i % 3) * 4}%`, height: 11 }} />
+                    <span className="rg-skel" style={{ width: 72, height: 20, borderRadius: 999 }} />
+                    <span className="rg-skel" style={{ marginLeft: `${8 + (i * 7) % 30}%`, width: `${18 + (i * 11) % 26}%`, height: 12, borderRadius: 6 }} />
+                  </div>
                 ))}
-              </colgroup>
-              <thead>
-                <tr>
-                  <th style={{ ...thBase, textAlign:'left', position:'sticky', left:0, background:'var(--sf)', zIndex:2 }}>
-                    Campaign
-                    {/* Handle resize batas Campaign|Objective — drag = atur lebar, double-click = auto-fit */}
-                    {!isMobile && (
-                      <div
-                        onMouseDown={startColDrag}
-                        onDoubleClick={autoFitCampW}
-                        onMouseEnter={() => setColHover(true)}
-                        onMouseLeave={() => setColHover(false)}
-                        title="Geser untuk atur lebar · double-click untuk auto-fit"
-                        style={{
-                          position:'absolute', top:0, bottom:0, right:'-4px', width:'9px',
-                          cursor:'col-resize', zIndex:3,
-                          display:'flex', alignItems:'stretch', justifyContent:'center',
-                        }}>
-                        <div style={{
-                          width:'2px',
-                          background: colDrag || colHover ? 'var(--cal-accent)' : 'var(--br-strong)',
-                          opacity: colDrag || colHover ? 1 : 0.55,
-                          borderRadius:'2px',
-                          transition:'background 0.15s, opacity 0.15s',
-                        }} />
-                      </div>
-                    )}
-                  </th>
-                  <th style={{ ...thBase, textAlign:'left' }}>Objective</th>
-                  <th style={{ ...thBase, textAlign:'left' }}>Ad Content</th>
-                  <th style={{ ...thBase, textAlign:'right' }}>Bgt/Day</th>
-                  <th style={{ ...thBase, textAlign:'right' }}>Start</th>
-                  <th style={{ ...thBase, textAlign:'right' }}>End</th>
-                  <th style={{ ...thBase, textAlign:'right' }}>Total Bgt</th>
-                  <th style={{ ...thBase, textAlign:'left' }}>Status</th>
-                  {isAdmin && <th style={{ ...thBase, textAlign:'left' }}>Action</th>}
-                  {Array.from({ length:days }, (_,i) => i+1).map(d => {
-                    const isToday = year===today.y && month===today.m && d===today.d;
-                    return (
-                      <th key={d} style={{
-                        ...thBase, textAlign:'center', padding:'9px 0',
-                        fontWeight: isToday ? '700' : '500',
-                        color: isToday ? 'var(--ac)' : 'var(--t3)',
-                      }}>{d}</th>
-                    );
-                  })}
-                </tr>
-              </thead>
-              <tbody>
-                {sorted.length === 0 ? (
-                  <tr><td colSpan={9+days} style={{ textAlign:'center', padding:'40px', color:'var(--t3)', fontSize:'13px' }}>
-                    No campaigns this month.
-                  </td></tr>
-                ) : sorted.map((c, rowIdx) => {
-                  const bt = budgetForMonth(c, year, month);
-                  const st = c.status;
-                  return (
-                    <tr
-                      key={c.id}
-                      style={{
-                        borderTop:'1px solid var(--br)',
-                        transition:'background 0.15s',
-                        animation:`wdFadeUp 0.3s cubic-bezier(0.4,0,0.2,1) backwards`,
-                        animationDelay: `${rowIdx * 0.04}s`,
-                      }}
-                      onMouseEnter={e => e.currentTarget.style.background='rgba(255,255,255,0.03)'}
-                      onMouseLeave={e => e.currentTarget.style.background='transparent'}
-                    >
-                      <td style={{ padding:'8px', fontSize:'12px', fontWeight:'500', color:'var(--t1)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', position:'sticky', left:0, background:'var(--cd)', zIndex:1 }}>{c.name}</td>
-                      <td style={{ padding:'6px' }}>
-                        <span style={{ padding:'2px 7px', borderRadius:'20px', fontSize:'9px', fontWeight:'600', background:OBJ_STYLE[c.obj]?.bg, color:OBJ_STYLE[c.obj]?.color, whiteSpace:'nowrap' }}>{c.obj}</span>
-                      </td>
-                      <td style={{ padding:'6px', fontSize:'11px', color:'var(--t2)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:'0' }}>{c.konten || '—'}</td>
-                      <td style={{ padding:'6px', fontSize:'11px', color:'var(--t2)', textAlign:'right', whiteSpace:'nowrap' }}>{c.bh ? fmtRp(c.bh) : '—'}</td>
-                      <td style={{ padding:'6px', fontSize:'11px', color:'var(--t2)', textAlign:'right', whiteSpace:'nowrap' }}>{c.mulai ? parseLocal(c.mulai).toLocaleDateString('en-GB',{day:'numeric',month:'short'}) : '—'}</td>
-                      <td style={{ padding:'6px', fontSize:'11px', color:'var(--t2)', textAlign:'right', whiteSpace:'nowrap' }}>{c.selesai ? parseLocal(c.selesai).toLocaleDateString('en-GB',{day:'numeric',month:'short'}) : '—'}</td>
-                      <td style={{ padding:'6px', fontSize:'11px', fontWeight:'500', color:'var(--t1)', textAlign:'right', whiteSpace:'nowrap' }}>{fmtRp(bt)}</td>
-                      <td style={{ padding:'6px' }}>
-                        {/* Admin: pill jadi tombol dropdown — ganti status langsung tanpa buka modal Edit */}
-                        <span
-                          data-wd-status={isAdmin ? 'pill' : undefined}
-                          role={isAdmin ? 'button' : undefined}
-                          title={isAdmin ? 'Klik untuk ganti status' : undefined}
-                          onClick={isAdmin ? (e => {
-                            const r = e.currentTarget.getBoundingClientRect();
-                            setStatusDrop(prev => prev?.id === c.id ? null : { id:c.id, x:r.left, y:r.bottom + 4 });
-                          }) : undefined}
-                          style={{
-                            display:'inline-flex', alignItems:'center', gap:'3px',
-                            padding:'2px 7px', borderRadius:'20px', fontSize:'9px', fontWeight:'600',
-                            background: STATUS_STYLE[st]?.bg || STATUS_STYLE.Draft.bg,
-                            color: STATUS_STYLE[st]?.color || STATUS_STYLE.Draft.color,
-                            whiteSpace:'nowrap',
-                            cursor: isAdmin ? 'pointer' : 'default',
-                            userSelect:'none',
-                            border: statusDrop?.id === c.id ? '1px solid currentColor' : '1px solid transparent',
-                            transition:'border-color 0.15s',
-                          }}
-                        >
-                          {STATUS_STYLE[st]?.icon || STATUS_STYLE.Draft.icon} {st}
-                          {isAdmin && <ChevronDown size={9} style={{ marginLeft:'1px' }} />}
-                        </span>
-                      </td>
-                      {isAdmin && (
-                        <td style={{ padding:'6px 4px', whiteSpace:'nowrap' }}>
-                          <button
-                            onClick={() => openEdit(c)}
-                            style={{ fontSize:'10px', padding:'3px 7px', borderRadius:'6px', border:'1px solid var(--br)', background:'transparent', color:'var(--t2)', cursor:'pointer', marginRight:'3px', transition:'border-color 0.15s, color 0.15s' }}
-                            onMouseEnter={e => { e.currentTarget.style.borderColor='var(--t2)'; e.currentTarget.style.color='var(--t1)'; }}
-                            onMouseLeave={e => { e.currentTarget.style.borderColor='var(--br)'; e.currentTarget.style.color='var(--t2)'; }}
-                          >✏</button>
-                          <button
-                            onClick={() => handleDelete(c.id)}
-                            style={{ fontSize:'10px', padding:'3px 7px', borderRadius:'6px', border:'1px solid rgba(239,68,68,0.25)', background:'transparent', color:'#ef4444', cursor:'pointer', transition:'border-color 0.15s' }}
-                            onMouseEnter={e => e.currentTarget.style.borderColor='rgba(239,68,68,0.6)'}
-                            onMouseLeave={e => e.currentTarget.style.borderColor='rgba(239,68,68,0.25)'}
-                          >🗑</button>
-                        </td>
-                      )}
-                      {Array.from({ length:days }, (_,i) => i+1).map((d, di) => {
-                        const isToday = year===today.y && month===today.m && d===today.d;
-                        const active  = isActive(c, year, month, d);
-                        const prev    = isActive(c, year, month, d-1);
-                        const next    = isActive(c, year, month, d+1);
-                        const radius  = !prev && !next ? '3px' : !prev ? '3px 0 0 3px' : !next ? '0 3px 3px 0' : '0';
+              </div>
+            ) : (
+              <div className="rgk-scroll" key={tableKey}>
+                {/* Kolom info = lebar px pas isinya (chip & angka Geist Mono); kolom hari berbagi
+                    sisa ruang. Tabel min 1180px → di layar sempit / HP digeser ke kanan (kolom
+                    Campaign menempel), bukan tergencet. */}
+                <table className={`rg-table rgk-table${colDrag ? ' is-dragging' : ''}`}>
+                  <colgroup>
+                    {/* Desktop: lebar px dari state (resizable). Mobile: tetap. */}
+                    <col style={{ width: (isMobile ? 150 : campW) + 'px' }}/>
+                    <col style={{ width: 88 }}/>
+                    <col style={{ width: 96 }}/>
+                    <col style={{ width: 84 }}/>
+                    <col style={{ width: 52 }}/>
+                    <col style={{ width: 52 }}/>
+                    <col style={{ width: 100 }}/>
+                    <col style={{ width: 96 }}/>
+                    {isAdmin && <col style={{ width: 68 }}/>}
+                    {Array.from({ length:days }).map((_,i) => <col key={i} />)}
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      <th className="rgk-th-name">
+                        Campaign
+                        {/* Handle resize batas Campaign|Objective — drag = atur lebar, double-click = auto-fit */}
+                        {!isMobile && (
+                          <div className={`rgk-colgrip${colDrag ? ' is-drag' : ''}`}
+                            onMouseDown={startColDrag} onDoubleClick={autoFitCampW}
+                            title="Drag to resize · double-click to fit" aria-hidden="true" />
+                        )}
+                      </th>
+                      <th className="rgk-left">Objective</th>
+                      <th className="rgk-left">Ad content</th>
+                      <th>Budget/day</th>
+                      <th>Start</th>
+                      <th>End</th>
+                      <th>Total budget</th>
+                      <th className="rgk-left">Status</th>
+                      {isAdmin && <th className="rgk-left">Action</th>}
+                      {Array.from({ length:days }, (_,i) => i+1).map(d => {
+                        const isToday = isThisMonth && d === today.d;
                         return (
-                          <td key={d} style={{
-                            padding:'4px 1px', textAlign:'center', verticalAlign:'middle',
-                            background: isToday ? 'rgba(245,158,11,0.06)' : 'transparent',
-                          }}>
-                            {active && (
-                              <div style={{
-                                height:'13px',
-                                background: OBJ_STYLE[c.obj]?.bar,
-                                borderRadius: radius,
-                                transformOrigin: 'left center',
-                                animation: !prev ? `wdGrowX 0.4s cubic-bezier(0.4,0,0.2,1) ${rowIdx*0.04 + di*0.005}s backwards` : 'none',
-                              }}/>
-                            )}
-                          </td>
+                          <th key={d} className={`rgk-day${isToday ? ' is-today' : ''}`}
+                            aria-label={isToday ? `${d} (today)` : undefined}>{d}</th>
                         );
                       })}
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Budget summary footer */}
-      <div style={{
-        display:'flex', alignItems:'center', justifyContent:'space-between',
-        background:'var(--cd)', border:'1px solid var(--br)',
-        borderRadius:'10px', padding:'16px 20px',
-        animation:'wdFadeUp 0.4s cubic-bezier(0.4,0,0.2,1) 0.1s backwards',
-      }}>
-        <div>
-          <div style={{ fontSize:'12px', color:'var(--t3)', marginBottom:'4px' }}>
-            Total Ad Budget · <span style={{ color:'var(--ac)' }}>{MONTHS[month]} {year}</span>
-          </div>
-          <div style={{ fontSize:'22px', fontWeight:'500', color:'var(--t1)' }}>{fmtRp(totalBudget)}</div>
-        </div>
-        <div style={{ display:'flex', alignItems:'center', gap:'20px' }}>
-          {OBJ_ORDER.map((o,i) => (
-            <div key={o} style={{
-              textAlign:'center',
-              paddingLeft: i>0 ? '20px' : 0,
-              borderLeft: i>0 ? '1px solid var(--br)' : '',
-            }}>
-              <div style={{ fontSize:'10px', color:'var(--t3)', textTransform:'uppercase', letterSpacing:'0.4px', marginBottom:'3px' }}>{o}</div>
-              <div style={{ fontSize:'14px', fontWeight:'500', color: OBJ_STYLE[o].color }}>{budgetByObj[o]>0 ? fmtRp(budgetByObj[o]) : '—'}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Campaign tanpa tanggal */}
-      {campaigns.filter(c => !c.mulai || !c.selesai).length > 0 && (
-        <div style={{ background:'var(--cd)', border:'1px solid var(--br)', borderRadius:'10px', padding:'14px 16px' }}>
-          <div style={{ fontSize:'11px', fontWeight:'600', color:'var(--t3)', textTransform:'uppercase', letterSpacing:'0.4px', marginBottom:'10px' }}>
-            Draft / Belum ada tanggal ({campaigns.filter(c => !c.mulai || !c.selesai).length})
-          </div>
-          <div style={{ display:'flex', flexDirection:'column', gap:'6px' }}>
-            {campaigns.filter(c => !c.mulai || !c.selesai).map(c => (
-              <div key={c.id} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'8px 10px', background:'var(--sf)', borderRadius:'8px' }}>
-                <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
-                  <span style={{ padding:'2px 7px', borderRadius:'20px', fontSize:'9px', fontWeight:'600', background: OBJ_STYLE[c.obj]?.bg, color: OBJ_STYLE[c.obj]?.color }}>{c.obj}</span>
-                  <span style={{ fontSize:'12px', color:'var(--t1)', fontWeight:'500' }}>{c.name}</span>
-                </div>
-                <div style={{ display:'flex', alignItems:'center', gap:'6px' }}>
-                  <span style={{ fontSize:'11px', color:'var(--t3)' }}>Belum ada tanggal</span>
-                  {isAdmin && <button onClick={() => openEdit(c)} style={{ fontSize:'10px', padding:'3px 8px', borderRadius:'6px', border:'1px solid var(--br)', background:'transparent', color:'var(--ac)', cursor:'pointer' }}>Set tanggal</button>}
-                </div>
+                  </thead>
+                  <tbody>
+                    {sorted.length === 0 ? (
+                      <tr className="rgk-empty-row"><td colSpan={totalCols}>
+                        <div className="rg-empty">
+                          <strong>No campaigns scheduled in {MONTHS[month]}</strong>
+                          <span>{isAdmin ? 'Use “Add campaign” to plan one, or check another month.' : 'Check another month with the arrows above.'}</span>
+                        </div>
+                      </td></tr>
+                    ) : sorted.map((c, rowIdx) => {
+                      const bt = budgetForMonth(c, year, month);
+                      const st = STATUSES.includes(c.status) ? c.status : 'Draft';
+                      return (
+                        <tr key={c.id} className="rgk-row" style={{ animationDelay: `${Math.min(rowIdx, 14) * 30}ms` }}>
+                          <td className="rgk-td-name" title={c.name}>{c.name}</td>
+                          <td className="rgk-left">
+                            <span className="rgk-obj"><span className="rgk-obj-dot" style={{ background: OBJ_VAR[c.obj] }} />{c.obj}</span>
+                          </td>
+                          <td className="rgk-left rgk-content" title={c.konten || undefined}>{c.konten || '—'}</td>
+                          <td className="rg-num">{c.bh ? fmtRp(c.bh) : '—'}</td>
+                          <td className="rg-num rgk-date">{fmtDay(c.mulai)}</td>
+                          <td className="rg-num rgk-date">{fmtDay(c.selesai)}</td>
+                          <td className="rg-num rgk-total">{fmtRp(bt)}</td>
+                          <td className="rgk-left">
+                            {/* Admin: pill jadi tombol dropdown — ganti status langsung tanpa buka modal Edit */}
+                            {isAdmin ? (
+                              <button type="button" data-wd-status="pill"
+                                className={`rg-chip rgk-status ${STATUS_TONE[st]}${statusDrop?.id === c.id ? ' is-open' : ''}`}
+                                title="Change status" aria-haspopup="menu" aria-expanded={statusDrop?.id === c.id}
+                                onClick={e => {
+                                  const r = e.currentTarget.getBoundingClientRect();
+                                  setStatusDrop(prev => prev?.id === c.id ? null : { id:c.id, x:r.left, y:r.bottom + 6 });
+                                }}>
+                                <StatusIcon s={st} />{st}<ChevronDown size={11} className="rgk-status-caret" />
+                              </button>
+                            ) : (
+                              <span className={`rg-chip rgk-status ${STATUS_TONE[st]}`}><StatusIcon s={st} />{st}</span>
+                            )}
+                          </td>
+                          {isAdmin && (
+                            <td className="rgk-left">
+                              <div className="rgk-acts">
+                                <button type="button" className="rg-iconbtn rgk-act" onClick={() => openEdit(c)}
+                                  title="Edit campaign" aria-label={`Edit ${c.name}`}><Pencil size={13} /></button>
+                                <button type="button" className="rg-iconbtn rgk-act is-neg" onClick={() => setConfirmDel(c)}
+                                  title="Delete campaign" aria-label={`Delete ${c.name}`}><Trash2 size={13} /></button>
+                              </div>
+                            </td>
+                          )}
+                          {Array.from({ length:days }, (_,i) => i+1).map((d, di) => {
+                            const isToday = isThisMonth && d === today.d;
+                            const active  = isActive(c, year, month, d);
+                            const prev    = isActive(c, year, month, d-1);
+                            const next    = isActive(c, year, month, d+1);
+                            const cls = !prev && !next ? ' is-solo' : !prev ? ' is-start' : !next ? ' is-end' : '';
+                            return (
+                              <td key={d} className={`rgk-daycell${isToday ? ' is-today' : ''}`}>
+                                {active && (
+                                  <div className={`rgk-bar${cls}`} style={{
+                                    background: OBJ_VAR[c.obj],
+                                    animation: !prev ? `wdGrowX 0.4s cubic-bezier(.22,1,.36,1) ${Math.min(rowIdx, 14) * 0.03 + di * 0.004}s backwards` : 'none',
+                                  }}/>
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
-            ))}
+            )}
           </div>
         </div>
-      )}
+
+        {/* ── Ringkasan budget bulan ini ── */}
+        <div className="rg-card rg-rise rgk-card" style={{ animationDelay: '80ms' }}>
+          <div className="rg-head">
+            <span className="rg-head-ico"><Wallet size={15} /></span>
+            <span className="rg-title">Monthly budget</span>
+            <span className="rg-meta">{MONTHS[month]} {year}</span>
+          </div>
+          <div className="rg-well rgk-budget">
+            <div className="rgk-budget-total">
+              <div className="rgk-budget-label">Total ad budget</div>
+              <div className="rg-num rgk-budget-value">{fmtRp(totalBudget)}</div>
+              <div className="rgk-budget-sub">daily budget × days running in {MONTHS[month]}</div>
+            </div>
+            <div className="rgk-budget-split">
+              <div className="rgk-budget-objs">
+                {OBJ_ORDER.map(o => (
+                  <div key={o} className="rgk-budget-obj">
+                    <div className="rgk-budget-obj-label"><span className="rgk-obj-dot" style={{ background: OBJ_VAR[o] }} />{o}</div>
+                    <div className={`rg-num rgk-budget-obj-value${budgetByObj[o] > 0 ? '' : ' rg-dim'}`}>{budgetByObj[o] > 0 ? fmtRp(budgetByObj[o]) : '—'}</div>
+                    <div className="rgk-budget-obj-pct">{totalBudget > 0 && budgetByObj[o] > 0 ? `${Math.round(budgetByObj[o] / totalBudget * 100)}% of month` : 'no budget'}</div>
+                  </div>
+                ))}
+              </div>
+              {totalBudget > 0 && (
+                <div className="rgk-share" aria-hidden="true">
+                  {OBJ_ORDER.filter(o => budgetByObj[o] > 0).map(o => (
+                    <span key={o} style={{ flex: budgetByObj[o], background: OBJ_VAR[o] }} />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* ── Campaign tanpa tanggal ── */}
+        {undated.length > 0 && (
+          <div className="rg-card rg-rise rgk-card" style={{ animationDelay: '140ms' }}>
+            <div className="rg-head">
+              <span className="rg-head-ico"><CalendarClock size={15} /></span>
+              <span className="rg-title">Not scheduled yet</span>
+              <span className="rg-meta">{undated.length} campaign{undated.length === 1 ? '' : 's'} without dates</span>
+            </div>
+            <div className="rg-well rgk-undated">
+              {undated.map(c => (
+                <div key={c.id} className="rgk-undated-row">
+                  <span className="rgk-obj"><span className="rgk-obj-dot" style={{ background: OBJ_VAR[c.obj] }} />{c.obj}</span>
+                  <span className="rgk-undated-name" title={c.name}>{c.name}</span>
+                  <span className="rgk-undated-note">No dates yet</span>
+                  {isAdmin && (
+                    <button type="button" className="rg-btn rgk-setdates" onClick={() => openEdit(c)}>Set dates</button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Dropdown status (fixed — di luar tabel supaya tidak kepotong overflow scroll) */}
       {statusDrop && (() => {
         const c = campaigns.find(x => x.id === statusDrop.id);
         if (!c) return null;
         return (
-          <div
-            data-wd-status="drop"
-            style={{
-              position:'fixed', left: statusDrop.x, top: statusDrop.y, zIndex:60,
-              minWidth:'128px', padding:'5px',
-              background:'var(--cd)', border:'1px solid var(--br)', borderRadius:'10px',
-              boxShadow:'0 12px 32px rgba(0,0,0,0.25)',
-              animation:'wdScaleIn 0.15s cubic-bezier(0.4,0,0.2,1)',
-            }}
-          >
+          <div data-wd-status="drop" className="rg-menu rgk-statusmenu" role="menu"
+            style={{ position:'fixed', left: statusDrop.x, top: statusDrop.y, zIndex: 60 }}>
             {STATUSES.map(s => {
               const isCur = s === c.status;
               return (
-                <div
-                  key={s}
+                <button key={s} type="button" role="menuitem"
+                  className={`rg-menu-item${isCur ? ' is-on' : ''}`}
                   // onMouseDown (bukan onClick) — pola sama dengan autocomplete Ad Content
                   // di halaman ini: aksi tetap jalan walau elemen keburu di-unmount.
-                  onMouseDown={() => { if (!isCur) changeStatus(c.id, s); else setStatusDrop(null); }}
-                  style={{
-                    display:'flex', alignItems:'center', gap:'7px',
-                    padding:'7px 10px', borderRadius:'7px', cursor:'pointer',
-                    fontSize:'12px', fontWeight: isCur ? '600' : '500',
-                    color:'var(--t1)',
-                    background: isCur ? 'var(--sf)' : 'transparent',
-                    transition:'background 0.1s',
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'var(--sf)'}
-                  onMouseLeave={e => e.currentTarget.style.background = isCur ? 'var(--sf)' : 'transparent'}
-                >
-                  <span style={{
-                    display:'inline-flex', alignItems:'center', justifyContent:'center',
-                    width:'16px', height:'16px', borderRadius:'50%', fontSize:'8px',
-                    background: STATUS_STYLE[s].bg, color: STATUS_STYLE[s].color, flexShrink:0,
-                  }}>{STATUS_STYLE[s].icon}</span>
-                  <span style={{ flex:1 }}>{s}</span>
-                  {isCur && <span style={{ fontSize:'10px', color:'var(--ac)' }}>✓</span>}
-                </div>
+                  onMouseDown={() => { if (!isCur) changeStatus(c.id, s); else setStatusDrop(null); }}>
+                  <span className={`rg-chip rgk-status-mini ${STATUS_TONE[s]}`}><StatusIcon s={s} size={10} /></span>
+                  {s}
+                  {isCur && <Check size={14} className="rg-menu-check" />}
+                </button>
               );
             })}
           </div>
         );
       })()}
 
-      {/* Modal */}
+      {/* ── Konfirmasi hapus ── */}
+      {confirmDel && (
+        <div className="rg-overlay" onClick={() => setConfirmDel(null)}>
+          <div className="rg-dialog" role="dialog" aria-modal="true" aria-labelledby="rgk-del-title" onClick={e => e.stopPropagation()}>
+            <div className="rg-dialog-head">
+              <span className="rg-dialog-ico is-neg"><Trash2 size={16} /></span>
+              <div style={{ minWidth: 0 }}>
+                <div id="rgk-del-title" className="rg-dialog-title">Delete this campaign?</div>
+                <div className="rg-dialog-sub">It will be removed from the schedule</div>
+              </div>
+            </div>
+            <div className="rg-dialog-body">
+              <strong className="rgk-dlg-name">{confirmDel.name}</strong>
+              <p className="rgk-dlg-text">This can’t be undone.</p>
+            </div>
+            <div className="rg-dialog-foot">
+              <button type="button" className="rg-btn rg-btn-ghost" onClick={() => setConfirmDel(null)}>Cancel</button>
+              <button type="button" className="rg-btn rg-btn-danger" onClick={() => handleDelete(confirmDel.id)} autoFocus>
+                <Trash2 size={14} />Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Form tambah / ubah campaign ── */}
       {showModal && (
-        <div style={{
-          position:'fixed', inset:0,
-          background:'rgba(0,0,0,0.5)', zIndex:50,
-          display:'flex', alignItems:'center', justifyContent:'center',
-          animation:'wdFadeIn 0.2s ease',
-        }}
-        onClick={e => { if (e.target === e.currentTarget) setShowModal(false); }}
-        >
-          <div style={{
-            background:'var(--cd)', borderRadius:'12px', padding:'24px',
-            width:'400px', border:'1px solid var(--br)',
-            boxShadow:'0 20px 60px rgba(0,0,0,0.4)',
-            animation:'wdScaleIn 0.25s cubic-bezier(0.4,0,0.2,1)',
-          }}>
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'20px' }}>
-              <span style={{ fontSize:'15px', fontWeight:'500', color:'var(--t1)' }}>{editId ? 'Edit Campaign' : 'Add Campaign'}</span>
-              <button onClick={() => setShowModal(false)} style={{ background:'none', border:'none', fontSize:'18px', cursor:'pointer', color:'var(--t3)', lineHeight:1 }}>✕</button>
-            </div>
-
-            {/* Campaign Name */}
-            <div style={{ marginBottom:'12px' }}>
-              <div style={{ fontSize:'11px', color:'var(--t3)', textTransform:'uppercase', letterSpacing:'.4px', marginBottom:'5px', fontWeight:'600' }}>Campaign Name</div>
-              <input style={inp} type="text" placeholder="Enter campaign name..." value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}/>
-            </div>
-
-            {/* Ad Content — dengan autocomplete */}
-            <div style={{ marginBottom:'12px', position:'relative' }}>
-              <div style={{ fontSize:'11px', color:'var(--t3)', textTransform:'uppercase', letterSpacing:'.4px', marginBottom:'5px', fontWeight:'600' }}>Ad Content</div>
-              <input
-                style={inp}
-                type="text"
-                placeholder="Instagram post, video, etc..."
-                value={form.konten}
-                autoComplete="off"
-                onChange={e => { setForm(f => ({ ...f, konten: e.target.value })); setShowSuggestions(true); }}
-                onFocus={() => setShowSuggestions(true)}
-                onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-              />
-              {(() => {
-                // Unique values saja, exclude yg sudah persis sama dengan input
-                const allKonten = [...new Set(campaigns.map(c => c.konten).filter(Boolean))];
-                const filtered = allKonten
-                  .filter(k => k.toLowerCase().includes((form.konten || '').toLowerCase()) && k.toLowerCase() !== (form.konten || '').toLowerCase())
-                  .slice(0, 5);
-                if (!showSuggestions || filtered.length === 0) return null;
-                return (
-                  <div style={{
-                    position:'absolute', top:'100%', left:0, right:0, zIndex:100,
-                    background:'var(--cd)', border:'1px solid var(--br)',
-                    borderRadius:'8px', marginTop:'4px',
-                    boxShadow:'0 8px 24px rgba(0,0,0,0.3)',
-                    overflow:'hidden',
-                    animation:'wdScaleIn 0.15s cubic-bezier(0.4,0,0.2,1)',
-                  }}>
-                    {filtered.map((k, i) => (
-                      <div
-                        key={i}
-                        onMouseDown={() => { setForm(f => ({ ...f, konten: k })); setShowSuggestions(false); }}
-                        style={{
-                          padding:'9px 12px', fontSize:'13px', cursor:'pointer',
-                          color:'var(--t1)', borderTop: i > 0 ? '1px solid var(--br)' : 'none',
-                          transition:'background 0.1s',
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.background = 'var(--sf)'}
-                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                      >
-                        {k}
-                      </div>
-                    ))}
-                  </div>
-                );
-              })()}
-            </div>
-
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px', marginBottom:'12px' }}>
-              <div>
-                <div style={{ fontSize:'11px', color:'var(--t3)', textTransform:'uppercase', letterSpacing:'.4px', marginBottom:'5px', fontWeight:'600' }}>Objective</div>
-                <select style={inp} value={form.obj} onChange={e => setForm(f => ({ ...f, obj:e.target.value }))}>
-                  {OBJ_ORDER.map(o => <option key={o}>{o}</option>)}
-                </select>
-              </div>
-              <div>
-                <div style={{ fontSize:'11px', color:'var(--t3)', textTransform:'uppercase', letterSpacing:'.4px', marginBottom:'5px', fontWeight:'600' }}>Status</div>
-                <select style={inp} value={form.status} onChange={e => setForm(f => ({ ...f, status:e.target.value }))}>
-                  {['Draft','Running','Done'].map(s => <option key={s}>{s}</option>)}
-                </select>
+        <div className="rg-overlay" onClick={e => { if (e.target === e.currentTarget && !saving) setShowModal(false); }}>
+          <div className="rg-dialog rgk-form" role="dialog" aria-modal="true" aria-labelledby="rgk-form-title">
+            <div className="rg-dialog-head">
+              <span className="rg-dialog-ico">{editId ? <Pencil size={15} /> : <Plus size={16} />}</span>
+              <div style={{ minWidth: 0 }}>
+                <div id="rgk-form-title" className="rg-dialog-title">{editId ? 'Edit campaign' : 'Add campaign'}</div>
+                <div className="rg-dialog-sub">Planned schedule · not synced to Meta</div>
               </div>
             </div>
 
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px', marginBottom:'12px' }}>
-              <div>
-                <div style={{ fontSize:'11px', color:'var(--t3)', textTransform:'uppercase', letterSpacing:'.4px', marginBottom:'5px', fontWeight:'600' }}>Start Date</div>
-                <input style={inp} type="date" value={form.mulai} onChange={e => setForm(f => ({ ...f, mulai:e.target.value }))}/>
+            <div className="rg-dialog-body rgk-form-body">
+              {/* Campaign Name */}
+              <label className="rg-field">
+                <span className="rg-label">Campaign name</span>
+                <input className="rg-input" type="text" placeholder="Enter campaign name…" autoFocus
+                  value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}/>
+              </label>
+
+              {/* Ad Content — dengan autocomplete */}
+              <div className="rg-field" style={{ position:'relative' }}>
+                <label className="rg-label" htmlFor="rgk-konten">Ad content</label>
+                <input
+                  id="rgk-konten"
+                  className="rg-input"
+                  type="text"
+                  placeholder="Instagram post, video, etc…"
+                  value={form.konten}
+                  autoComplete="off"
+                  onChange={e => { setForm(f => ({ ...f, konten: e.target.value })); setShowSuggestions(true); }}
+                  onFocus={() => setShowSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                />
+                {(() => {
+                  // Unique values saja, exclude yg sudah persis sama dengan input
+                  const allKonten = [...new Set(campaigns.map(c => c.konten).filter(Boolean))];
+                  const filtered = allKonten
+                    .filter(k => k.toLowerCase().includes((form.konten || '').toLowerCase()) && k.toLowerCase() !== (form.konten || '').toLowerCase())
+                    .slice(0, 5);
+                  if (!showSuggestions || filtered.length === 0) return null;
+                  return (
+                    <div className="rg-menu rgk-suggest" role="listbox">
+                      {filtered.map((k, i) => (
+                        <button key={i} type="button" role="option" aria-selected="false" className="rg-menu-item"
+                          onMouseDown={() => { setForm(f => ({ ...f, konten: k })); setShowSuggestions(false); }}>
+                          {k}
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
-              <div>
-                <div style={{ fontSize:'11px', color:'var(--t3)', textTransform:'uppercase', letterSpacing:'.4px', marginBottom:'5px', fontWeight:'600' }}>End Date</div>
-                <input style={inp} type="date" value={form.selesai} onChange={e => setForm(f => ({ ...f, selesai:e.target.value }))}/>
+
+              <div className="rg-field">
+                <span className="rg-label">Objective</span>
+                <div className="rg-segs is-block" role="group" aria-label="Objective">
+                  {OBJ_ORDER.map(o => (
+                    <button key={o} type="button" aria-pressed={form.obj === o} onClick={() => setForm(f => ({ ...f, obj: o }))}>
+                      <span className="rgk-obj-dot" style={{ background: OBJ_VAR[o] }} />{o}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rg-field">
+                <span className="rg-label">Status</span>
+                <div className="rg-segs is-block" role="group" aria-label="Status">
+                  {STATUSES.map(s => (
+                    <button key={s} type="button" aria-pressed={form.status === s} onClick={() => setForm(f => ({ ...f, status: s }))}>
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rgk-form-grid">
+                <label className="rg-field">
+                  <span className="rg-label">Start date</span>
+                  <input className="rg-input rg-num" type="date" value={form.mulai} onChange={e => setForm(f => ({ ...f, mulai:e.target.value }))}/>
+                </label>
+                <label className="rg-field">
+                  <span className="rg-label">End date</span>
+                  <input className="rg-input rg-num" type="date" value={form.selesai} onChange={e => setForm(f => ({ ...f, selesai:e.target.value }))}/>
+                </label>
+              </div>
+
+              <div className="rg-field">
+                <span className="rg-label">Daily budget</span>
+                {/* Titik ribuan otomatis saat mengetik (100000 → 100.000) —
+                    pola sama dgn popup Edit Daily Budget di halaman Campaigns:
+                    tampilan diformat id-ID, state tetap digit mentah. */}
+                <label className="rg-input-affix">
+                  <span className="rg-affix">Rp</span>
+                  <input
+                    className="rg-num"
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="100.000"
+                    aria-label="Daily budget in rupiah"
+                    value={form.bh ? parseInt(form.bh).toLocaleString('id-ID') : ''}
+                    onChange={e => setForm(f => ({ ...f, bh: e.target.value.replace(/\D/g, '') }))}
+                    onKeyDown={e => { if (e.key === 'Enter') handleSave(); }}
+                  />
+                  <span className="rg-affix">/ day</span>
+                </label>
               </div>
             </div>
 
-            <div style={{ marginBottom:'16px' }}>
-              <div style={{ fontSize:'11px', color:'var(--t3)', textTransform:'uppercase', letterSpacing:'.4px', marginBottom:'5px', fontWeight:'600' }}>Daily Budget (Rp)</div>
-              {/* Titik ribuan otomatis saat mengetik (100000 → 100.000) —
-                  pola sama dgn popup Edit Daily Budget di halaman Campaigns:
-                  tampilan diformat id-ID, state tetap digit mentah. */}
-              <input
-                style={inp}
-                type="text"
-                inputMode="numeric"
-                placeholder="100.000"
-                value={form.bh ? parseInt(form.bh).toLocaleString('id-ID') : ''}
-                onChange={e => setForm(f => ({ ...f, bh: e.target.value.replace(/\D/g, '') }))}
-              />
-            </div>
-
-            <div style={{ display:'flex', justifyContent:'flex-end', gap:'8px', paddingTop:'14px', borderTop:'1px solid var(--br)' }}>
-              <button
-                onClick={() => setShowModal(false)}
-                style={{ padding:'8px 16px', fontSize:'13px', border:'1px solid var(--br)', borderRadius:'8px', background:'transparent', color:'var(--t2)', cursor:'pointer', transition:'color 0.15s' }}
-                onMouseEnter={e => e.currentTarget.style.color='var(--t1)'}
-                onMouseLeave={e => e.currentTarget.style.color='var(--t2)'}
-              >Cancel</button>
-              <button
-                onClick={handleSave}
-                style={{ padding:'8px 20px', fontSize:'13px', border:'none', borderRadius:'8px', background:'var(--ac)', color:'#fff', cursor:'pointer', fontWeight:'500', transition:'opacity 0.15s' }}
-                onMouseEnter={e => e.currentTarget.style.opacity='0.85'}
-                onMouseLeave={e => e.currentTarget.style.opacity='1'}
-              >{editId ? 'Update' : 'Save'}</button>
+            <div className="rg-dialog-foot">
+              <button type="button" className="rg-btn rg-btn-ghost" onClick={() => setShowModal(false)} disabled={saving}>Cancel</button>
+              <button type="button" className={`rg-btn rg-btn-primary${saving ? ' is-busy' : ''}`} onClick={handleSave} disabled={!form.name || saving}>
+                {saving && <RefreshCw size={13} style={{ animation: 'wdSpin 0.8s linear infinite' }} />}
+                {saving ? 'Saving…' : editId ? 'Update' : 'Save'}
+              </button>
             </div>
           </div>
         </div>

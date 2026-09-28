@@ -4,7 +4,9 @@ import { useRef, useCallback } from 'react';
 import { Moon, Sun } from 'lucide-react';
 import { useAuth } from './AuthContext';
 
-export default function ThemeToggle({ size = 40, iconSize = 15 }) {
+// className (opsional): tampilan diambil dari class (mis. tombol bulat "rg-pill rg-round"
+// di Dashboard redesain); tanpa className = tampilan lama (dipakai halaman lain).
+export default function ThemeToggle({ size = 40, iconSize = 15, className }) {
   const { theme, toggleTheme } = useAuth();
   const dark = theme !== 'light';
   const busy = useRef(false);
@@ -30,6 +32,14 @@ export default function ThemeToggle({ size = 40, iconSize = 15 }) {
       });
     }, 110);
   }, [toggleTheme]);
+
+  if (className) return (
+    <button type="button" onClick={handleClick} className={className}
+      title={dark ? 'Switch to light' : 'Switch to dark'}
+      aria-label={dark ? 'Switch to light theme' : 'Switch to dark theme'}>
+      {dark ? <Moon size={iconSize} /> : <Sun size={iconSize} color="#F59E0B" />}
+    </button>
+  );
 
   return (
     <button

@@ -48,10 +48,12 @@ const OBJ_GROUP = {
   OUTCOME_ENGAGEMENT: 'Traffic',
   LINK_CLICKS: 'Traffic',
 };
+// Warna objektif = entitas dashboard redesain "Ridgeline" (token --rg-* dari halaman
+// Campaigns yang merender popup ini); fallback = warna lama kalau dipakai di luar .rg
 const OBJ_STYLE = {
-  Awareness:  { bg: 'rgba(91,127,212,0.14)', color: '#5b8fd4' },
-  Traffic:    { bg: 'rgba(245,158,11,0.14)', color: '#f59e0b' },
-  Conversion: { bg: 'rgba(16,185,129,0.14)', color: '#10b981' },
+  Awareness:  { dot: 'var(--rg-aware, #8B5CF6)' },
+  Traffic:    { dot: 'var(--rg-traffic, #F59E0B)' },
+  Conversion: { dot: 'var(--rg-conv, #10b981)' },
 };
 
 export default function CombineModal({ campaigns, periodLabel, onClose }) {
@@ -277,7 +279,9 @@ export default function CombineModal({ campaigns, periodLabel, onClose }) {
               return (
                 <div key={r.c.id} style={{ ...tile(0.36 + i * 0.05), padding: '11px 14px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '9px', marginBottom: '7px' }}>
-                    <span style={{ padding: '2px 9px', borderRadius: '20px', fontSize: '10px', fontWeight: 500, background: gs.bg, color: gs.color, flexShrink: 0 }}>{grp}</span>
+                    <span className="rg-chip" style={{ color: 'var(--t1)', height: 22, fontSize: '11px' }}>
+                      <span className="rg-chip-dot" style={{ background: gs.dot }} />{grp}
+                    </span>
                     <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--t1)', flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.c.name}</span>
                     <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--t1)', flexShrink: 0 }}>{fmtRpFull(r.spend)}</span>
                     <span style={{ fontSize: '10.5px', color: 'var(--t3)', width: '38px', textAlign: 'right', flexShrink: 0 }}>{share.toFixed(0)}%</span>
@@ -285,7 +289,7 @@ export default function CombineModal({ campaigns, periodLabel, onClose }) {
                   <div style={{ height: '4px', borderRadius: '2px', background: 'var(--track)', overflow: 'hidden' }}>
                     <div style={{
                       width: `${share}%`, height: '100%', borderRadius: '2px',
-                      background: 'var(--cal-accent)', transformOrigin: 'left',
+                      background: gs.dot, transformOrigin: 'left', // meter berwarna objektif, seperti Spend Breakdown
                       animation: `wdGrowX 0.6s cubic-bezier(0.4,0,0.2,1) ${0.4 + i * 0.08}s backwards`,
                     }} />
                   </div>

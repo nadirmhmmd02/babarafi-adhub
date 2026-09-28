@@ -4,19 +4,21 @@
    di Google Sheets. Nambah provinsi/status = edit di sini.
    ───────────────────────────────────────────────────────────── */
 
-// Warna ikut keluarga warna data project (sama di dua tema)
+// Warna = token skin "Ridgeline" (didefinisikan di app/maps-ridgeline.css, .rgm), jadi
+// ikut tema terang/gelap — dipakai juga di marker & popup Leaflet (ada di dalam .rgm).
+// Arti: terdaftar = hijau "bagus" · belum = kuning tua "perlu kerja" · klaim = biru "info".
 export const MAPS_STATUS = [
-  { value: 'Sudah di Daftarkan', label: 'Registered',    color: '#2FB673' },
-  { value: 'Belum di Daftarkan', label: 'Not Registered', color: '#F59E0B' },
-  { value: 'Perlu Klaim Bisnis', label: 'Needs Claim',   color: '#3B82F6' },
+  { value: 'Sudah di Daftarkan', label: 'Registered',     color: 'var(--mp-reg)' },
+  { value: 'Belum di Daftarkan', label: 'Not Registered', color: 'var(--mp-unreg)' },
+  { value: 'Perlu Klaim Bisnis', label: 'Needs Claim',    color: 'var(--mp-claim)' },
 ];
 
 export const STATUS_COLOR = Object.fromEntries(MAPS_STATUS.map(s => [s.value, s.color]));
 export const STATUS_LABEL = Object.fromEntries(MAPS_STATUS.map(s => [s.value, s.label]));
 
 // Outlet dengan koordinat rusak / status tak dikenal
-export const REVIEW_COLOR = '#EF4444';
-export const UNKNOWN_COLOR = '#9CA3AF';
+export const REVIEW_COLOR = 'var(--mp-review)';
+export const UNKNOWN_COLOR = 'var(--mp-unknown)';
 
 export function statusColor(status, coordBroken) {
   if (coordBroken) return REVIEW_COLOR;
@@ -37,11 +39,15 @@ export const PROVINSI = [
 
 export const UNMAPPED_PROVINSI = 'Belum dipetakan';
 
-// Tile peta: CARTO basemaps (gratis + atribusi wajib), varian per tema
+// Tile peta: OpenStreetMap standar (gratis, tanpa akun/API key, atribusi WAJIB).
+// Sejak Sep 2026 CARTO basemaps membalas gambar "API KEY REQUIRED" → diganti OSM
+// (keputusan Nadir 28 Sep 2026). Warna OSM aslinya ramai, jadi di halaman dibuat
+// abu-abu netral lewat CSS filter pada pane tile (terang: grayscale; gelap: grayscale +
+// invert) — lihat app/maps-ridgeline.css. URL sama di dua tema.
 export const TILE = {
-  light: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-  dark:  'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions" target="_blank" rel="noreferrer">CARTO</a>',
+  light: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+  dark:  'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a> contributors',
 };
 
 // Pusat peta default: Indonesia

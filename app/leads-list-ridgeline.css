@@ -1,0 +1,233 @@
+/* ══════════════════════════════════════════════════════════════════════
+   LEADS LIST — redesain "Ridgeline" (LIVE 28 Sep 2026). Dasar (token,
+   kartu, pil, segmen, chip, menu, dialog, bar melayang, tabel) di app/ridgeline.css;
+   warna status & sales (--lh-*) di app/leads-ridgeline.css. Prefix khusus: .rgll-
+   Aturan Nadir yang dijaga: header tabel RATA KIRI (kolom aksi center, angka kanan),
+   menu rata tengah thd tombol (kanan di ujung layar), fitur nonaktif tampil abu-abu
+   + cursor not-allowed (bukan disembunyikan), angka tabular, entrance animation.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* ══ Toolbar: tab · cari · filter · kolom ══ */
+.rgll-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; flex-shrink: 0; }
+.rgll-bar-end { margin-left: auto; display: flex; gap: 8px; }
+
+/* Tab segmen: Black Box · All leads (+ panah kategori menempel = split button).
+   Gaya segmen sendiri (bukan .rg-segs — aturan `.rg-segs button` ikut menata tombol
+   di dalam menu kategori yang dirender di dalam split). */
+.rgll-tabs {
+  display: inline-flex; align-items: center; gap: 2px; height: 40px; padding: 3px; flex-shrink: 0;
+  border-radius: 999px; background: var(--rg-seg); border: 1px solid var(--rg-line);
+}
+.rgll-tab {
+  height: 32px; padding: 0 12px; border: 0; border-radius: 999px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
+  background: transparent; color: var(--rg-t2); font-family: inherit; font-size: 12.5px; font-weight: 500;
+  transition: background-color .15s ease, color .15s ease, box-shadow .15s ease;
+}
+.rgll-tab:hover { color: var(--rg-t1); }
+.rgll-tab.is-on { background: var(--rg-seg-on); color: var(--rg-t1); box-shadow: 0 1px 2px rgba(0,0,0,0.12); }
+.rgll-split { position: relative; display: inline-flex; align-items: center; border-radius: 999px; transition: background-color .15s ease, box-shadow .15s ease; }
+.rgll-split.is-on { background: var(--rg-seg-on); box-shadow: 0 1px 2px rgba(0,0,0,0.12); }
+.rgll-split.is-on .rgll-tab { color: var(--rg-t1); }
+.rgll-split .rgll-tab { background: transparent; box-shadow: none; }
+.rgll-split-main { padding-right: 8px !important; border-radius: 999px 0 0 999px !important; }
+.rgll-split-caret { padding: 0 10px 0 8px !important; border-radius: 0 999px 999px 0 !important; position: relative; }
+.rgll-split-caret::before { content: ''; position: absolute; left: 0; top: 8px; bottom: 8px; width: 1px; background: var(--rg-line); }
+.rgll-split-caret[aria-expanded="true"] .rg-caret { transform: rotate(180deg); }
+.rgll-count {
+  min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 600; background: var(--rg-neg); color: #fff;
+}
+/* Aksi utama top bar (Add leads) = .rg-pill.is-primary — kini di ridgeline.css (dipakai Notes juga) */
+
+/* Kotak cari (pil 40px) */
+.rgll-search {
+  display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px; border-radius: 999px;
+  flex: 0 1 260px; min-width: 180px;
+  background: var(--rg-pill); border: 1px solid var(--rg-pill-line); color: var(--rg-t2);
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.rgll-search:focus-within { border-color: var(--rg-t2); box-shadow: 0 0 0 3px var(--rg-range); }
+.rgll-search input {
+  flex: 1; min-width: 0; height: 100%; border: 0; outline: none; background: transparent;
+  font-family: inherit; font-size: 13px; color: var(--rg-t1);
+}
+.rgll-search input::placeholder { color: var(--rg-t3); }
+.rgll-search button { display: inline-flex; padding: 3px; border: 0; border-radius: 50%; background: transparent; color: var(--rg-t3); cursor: pointer; }
+.rgll-search button:hover { color: var(--rg-t1); background: var(--rg-hover); }
+
+/* Pil filter aktif = garis lebih tegas (netral, bukan aksen) · nonaktif = abu-abu + not-allowed */
+.rg-pill.is-off, .rg-pill.is-off:hover { opacity: .5; cursor: not-allowed; background: var(--rg-pill); }
+.rgll-pill-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+/* Menu pil (lapisan posisi dipisah dari animasi wdScaleIn) */
+.rgll-menu-pos { position: absolute; z-index: 60; }
+.rgll-menu-pos.is-down { top: 46px; }
+.rgll-menu-pos.is-up { bottom: 46px; }
+.rgll-menu-pos.is-center { left: 50%; transform: translateX(-50%); }
+.rgll-menu-pos.is-right { right: 0; }
+.rgll-menu-pos .rg-menu { max-height: 360px; overflow-y: auto; }
+.rgll-menu-hint { margin-left: auto; padding-left: 12px; font-size: 11.5px; color: var(--rg-t3); }
+.rgll-menu-foot { padding: 7px 10px 4px; margin-top: 4px; border-top: 1px solid var(--rg-line-soft); font-size: 11.5px; color: var(--rg-t3); }
+.rgll-menu-box {
+  width: 16px; height: 16px; border-radius: 5px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1.5px solid var(--rg-pill-line); color: var(--rg-well);
+}
+.rgll-menu-box.is-on { background: var(--rg-t1); border-color: var(--rg-t1); }
+
+/* ══ Kartu tabel ══ */
+.rgll-card { flex: 1; min-height: 280px; }
+.rgll-card .rg-head { flex-wrap: nowrap; }
+.rgll-well { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+/* Area scroll = lapisan DALAM tanpa border — kalau panel ber-border sendiri yang di-scroll,
+   isi kolom yang lewat di bawah kolom menempel tembus 1px di garis tepi kiri */
+.rgll-scroll { flex: 1; min-height: 0; overflow: auto; }
+/* Saat memuat ulang: baris diredupkan & tidak bisa diklik (aksi di atas data yang sedang diganti) */
+.rgll-well.rg-busy { pointer-events: none; }
+.rgll-table { min-width: 100%; }
+.rgll-table.is-list { min-width: 1180px; }
+.rgll-table.is-inbox { min-width: 900px; }
+.rg .rgll-table th, .rg .rgll-table td { text-align: left; padding: 0 12px; }
+.rgll-table thead th { position: sticky; top: 0; z-index: 2; height: 44px; background: var(--rg-well); }
+.rgll-table th:first-child, .rgll-table td:first-child { padding-left: 16px; }
+.rgll-table th:last-child,  .rgll-table td:last-child  { padding-right: 18px; }
+.rg .rgll-table .is-c { text-align: center; }
+.rg .rgll-table .is-r { text-align: right; }
+.rgll-table td { height: 52px; }
+
+.rgll-row { animation: wdFadeUp .28s cubic-bezier(.22,1,.36,1) backwards; }
+.rgll-row:hover td { background: var(--rg-hover); }
+.rgll-row.is-picked td { background: var(--rg-range); }
+/* Lebar kolom centang DIKUNCI 44px (offset kolom Name yang menempel bergantung padanya) */
+.rg .rgll-table .rgll-td-check, .rg .rgll-table .rgll-th-check {
+  box-sizing: border-box; width: 44px; min-width: 44px; max-width: 44px; padding: 0 0 0 16px;
+}
+
+/* Kolom menempel saat tabel digeser ke samping: centang (left 0) + Name (left = lebar centang).
+   Latar WAJIB pekat — hover/terpilih memakai warna transparan, jadi dilapis di atas --rg-well
+   supaya isi kolom lain yang lewat di bawahnya tidak tembus. */
+.rg .rgll-table .rgll-stick { position: sticky; z-index: 1; background-color: var(--rg-well); }
+.rg .rgll-table thead th.rgll-stick { z-index: 3; }
+.rgll-row:hover td.rgll-stick { background: linear-gradient(var(--rg-hover), var(--rg-hover)), var(--rg-well); }
+.rgll-row.is-picked td.rgll-stick { background: linear-gradient(var(--rg-range), var(--rg-range)), var(--rg-well); }
+.rgll-stick-edge { box-shadow: inset -1px 0 0 var(--rg-line-soft); }
+
+/* Kotak centang */
+.rgll-check {
+  width: 18px; height: 18px; padding: 0; border-radius: 6px; flex-shrink: 0; vertical-align: middle; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1.5px solid var(--rg-pill-line); background: var(--rg-well); color: var(--rg-well);
+  transition: background-color .15s ease, border-color .15s ease;
+}
+.rgll-row:hover .rgll-check, .rgll-check:hover { border-color: var(--rg-t3); }
+.rgll-check.is-on { background: var(--rg-t1); border-color: var(--rg-t1); }
+.rgll-check.is-some { background: var(--rg-t1); border-color: var(--rg-t1); }
+
+/* Sel */
+.rgll-date { color: var(--rg-t2); white-space: nowrap; }
+.rgll-name { display: inline-flex; align-items: center; gap: 7px; max-width: 220px; font-weight: 500; color: var(--rg-t1); }
+.rgll-name > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rgll-new {
+  flex-shrink: 0; height: 18px; padding: 0 6px; border-radius: 999px;
+  display: inline-flex; align-items: center;
+  font-size: 10px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase;
+  background: var(--rg-neg); color: #fff;
+}
+.rgll-phone { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; color: var(--rg-t1); }
+.rgll-phone.is-masked { color: var(--rg-t2); }
+.rgll-copy {
+  width: 24px; height: 24px; padding: 0; border: 0; border-radius: 50%; cursor: pointer; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: transparent; color: var(--rg-t3); opacity: .6;
+  transition: opacity .15s ease, background-color .15s ease, color .15s ease;
+}
+.rgll-row:hover .rgll-copy { opacity: 1; }
+.rgll-copy:hover { background: var(--rg-hover); color: var(--rg-t1); }
+.rgll-muted { color: var(--rg-t2); }
+.rgll-clip { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rgll-email { max-width: 170px; }
+.rgll-camp { max-width: 180px; }
+.rgll-dash { color: var(--rg-t3); }
+.rgll-cat { max-width: 150px; background: color-mix(in srgb, var(--rg-conv) 13%, transparent); color: var(--rg-conv); }
+.rgll-cat > span { overflow: hidden; text-overflow: ellipsis; }
+
+/* Chip pilih (Sales / Status) — warna per item, klik = menu */
+.rgll-pick {
+  --c: var(--rg-t2);
+  display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px 0 9px;
+  border-radius: 999px; border: 1px solid transparent; cursor: pointer; white-space: nowrap;
+  font-family: inherit; font-size: 12px; font-weight: 500;
+  background: color-mix(in srgb, var(--c) 13%, transparent); color: var(--c);
+  transition: border-color .15s ease, background-color .15s ease;
+}
+button.rgll-pick:hover, .rgll-pick[aria-expanded="true"] { border-color: color-mix(in srgb, var(--c) 45%, transparent); }
+.rgll-pick.is-empty { background: transparent; border: 1px dashed var(--rg-pill-line); color: var(--rg-t3); }
+button.rgll-pick.is-empty:hover { border-color: var(--rg-t3); color: var(--rg-t1); }
+.rgll-pick-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--c); flex-shrink: 0; }
+.rgll-pick-caret { opacity: .6; margin-left: -1px; }
+span.rgll-pick { cursor: default; }
+/* "No Status" & abu-abu lain: teks tetap terbaca */
+.rgll-pick.is-none { color: var(--rg-t2); }
+
+/* Tombol bulat kecil: follow-up & notes */
+.rgll-dot-btn {
+  width: 30px; height: 30px; padding: 0; border-radius: 50%; flex-shrink: 0; vertical-align: middle;
+  display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+  border: 1px dashed var(--rg-pill-line); background: transparent; color: var(--rg-t3);
+  transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+}
+.rgll-dot-btn:hover { border-color: var(--rg-t3); color: var(--rg-t1); }
+.rgll-dot-btn.is-fu { border: 1px solid transparent; background: color-mix(in srgb, var(--rg-pos) 15%, transparent); color: var(--rg-pos); }
+.rgll-dot-btn.is-note { border: 1px solid var(--rg-pill-line); border-style: solid; background: var(--rg-pill); color: var(--rg-t1); }
+.rgll-dot-btn:disabled { cursor: default; }
+.rgll-dot-btn:disabled:hover { border-color: var(--rg-pill-line); }
+.rgll-closing { white-space: nowrap; }
+.rgll-closing.is-deal { color: var(--rg-pos); font-weight: 600; }
+
+/* Verifikasi (Black Box) */
+.rgll-verify { display: inline-flex; gap: 6px; }
+.rgll-verify .rg-btn { height: 30px; padding: 0 12px; font-size: 12px; }
+.rgll-approve { background: color-mix(in srgb, var(--rg-pos) 14%, transparent); border-color: transparent; color: var(--rg-pos); font-weight: 600; }
+.rgll-approve:hover { background: color-mix(in srgb, var(--rg-pos) 22%, transparent) !important; }
+.rgll-reject { background: transparent; border-color: transparent; color: var(--rg-neg); }
+.rgll-reject:hover { background: color-mix(in srgb, var(--rg-neg) 10%, transparent) !important; }
+
+/* Menu baris (fixed — tidak terpotong scroll tabel) */
+.rgll-rowmenu { position: fixed; z-index: 90; transform: translateX(-50%); }
+
+/* Skeleton & kosong */
+.rgll-skel { padding: 6px 16px; }
+.rgll-skel-row { display: flex; align-items: center; gap: 22px; height: 52px; border-bottom: 1px solid var(--rg-line-soft); }
+.rgll-skel-row:last-child { border-bottom: 0; }
+.rgll-empty { min-height: 260px; }
+.rgll-empty-ico { width: 44px; height: 44px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: var(--rg-hover); color: var(--rg-t2); margin-bottom: 6px; }
+.rgll-empty-ico.is-pos { background: color-mix(in srgb, var(--rg-pos) 14%, transparent); color: var(--rg-pos); }
+.rgll-empty span { max-width: 400px; line-height: 1.5; }
+
+/* Kaki kartu: jumlah + paginasi */
+.rgll-pager { display: inline-flex; align-items: center; gap: 8px; }
+.rgll-pager .rg-iconbtn { width: 30px; height: 30px; }
+
+/* ══ Bar melayang aksi massal ══ */
+.rgll-float .rg-float-in { gap: 8px; padding: 6px 6px 6px 16px; }
+.rgll-float .rg-btn { height: 34px; padding: 0 13px; font-size: 12.5px; }
+.rgll-float .rg-pill { height: 34px; font-size: 12.5px; }
+.rgll-float-count { font-size: 13px; color: var(--rg-t2); margin-right: 4px; white-space: nowrap; }
+.rgll-float-count b { color: var(--rg-t1); font-weight: 600; }
+.rgll-float .rgll-x { width: 34px; height: 34px; }
+.rg-toast.is-up { bottom: 84px; }
+.rg-toast.is-err .rg-float-in svg { color: var(--rg-neg); }
+
+/* ══ Dialog Deal / Notes / Import ══ */
+.rgll-dlg-body { display: flex; flex-direction: column; gap: 14px; }
+.rgll-textarea { height: auto; min-height: 120px; padding: 11px 14px; line-height: 1.5; resize: vertical; }
+.rgll-import { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; padding: 8px 4px; }
+.rgll-import strong { font-size: 14px; }
+
+/* ══ MOBILE (≤767px) ══ */
+.rg.is-mobile .rgll-search { flex: 1 1 100%; order: -1; }
+.rg.is-mobile .rgll-card { min-height: 420px; }
+.rg.is-mobile .rgll-float .rg-float-in { flex-wrap: wrap; justify-content: center; white-space: normal; border-radius: 22px; padding: 10px; max-width: calc(100vw - 32px); }
+.rg.is-mobile .rgll-float { width: max-content; max-width: calc(100vw - 32px); }

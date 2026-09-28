@@ -1,186 +1,149 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+/* ══ ANALYTICS & INSIGHTS — redesain "Ridgeline" (LIVE 28 Sep 2026) ════
+   Insight otomatis dari data Meta Ads yang sedang berjalan (insightEngine.js,
+   rule-based dari data real; siap di-upgrade ke narasi LLM). Route tetap /reports.
+   Nuansa sama dengan Dashboard: top bar judul + konteks | pil tanggal & refresh,
+   kartu cangkang + panel dalam, angka Geist Mono, delta ber-ikon bulat.
+   Skor = cincin tebal + "72/100" + chip status (ala panel "AI Search Visibility"
+   referensi). Tanpa tombol tema — tema ikut setting global (keputusan lama, commit
+   821d8da). Logika fetch = mode=dashboard (sama dengan Dashboard) — JANGAN diubah.
+   Skin: app/ridgeline.css + app/reports-ridgeline.css.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+import '../reports-ridgeline.css';
+import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  Sparkles, Calendar, ChevronDown, RefreshCw,
+  Sparkles, RefreshCw,
   TrendingUp, TrendingDown, TriangleAlert, Award, Activity,
-  Zap, Target, Wallet, BadgeCheck, CircleAlert, Crosshair,
+  Zap, Target, Wallet, BadgeCheck, CircleAlert, Crosshair, Lightbulb,
 } from 'lucide-react';
 import CountUp from '../components/CountUp';
 import useIsMobile from '../components/useIsMobile';
 import DateFilterPopup from '../components/DateFilterPopup';
 import { useReportsFilter, DATE_PRESETS_DASHBOARD } from '../components/DateFilterContext';
-import { TYPE } from '../components/typography';
-import { buildAnalysis, fmtRp, fmtNum, fmtPct } from '../components/insightEngine';
+import { buildAnalysis, fmtRp, fmtNum } from '../components/insightEngine';
+import { monotonePath } from '../components/AreaChart';
+import { dashboardFontVars } from '../components/dashboardFonts';
+import { presetToRange, fmtRangeShort, fmtClock, Delta, DatePill } from '../components/rgKit';
 import { authFetch } from '../supabase';
 
-/* ─────────────────────────────────────────────────────────────
-   ANALYTICS & INSIGHTS — WILL OF D
-   Insight otomatis dari data Meta Ads yang sedang berjalan.
-   Analisis dihitung insightEngine.js (rule-based dari data real);
-   struktur siap di-upgrade ke narasi LLM nanti.
-   Route tetap /reports. Logika fetch = mode=dashboard (sama
-   dengan halaman Dashboard) — JANGAN diubah.
-   ───────────────────────────────────────────────────────────── */
-
-const BG     = 'var(--pg)';
-const CARD   = 'var(--cd)';
-const BORDER = 'var(--br)';
-const TXT    = 'var(--t1)';
-const SUB    = 'var(--t2)';
-const MUTE   = 'var(--t3)';
-
-const CARD_BASE = {
-  background: CARD,
-  border: `1px solid ${BORDER}`,
-  borderRadius: '18px',
-  boxShadow: 'var(--shadow)',
-};
-
-/* Severity → warna semantik (positif ikut var tema: hijau dark / hijau emerald light) */
+/* Tingkat insight → nada warna skin (critical merah · warning kuning tua · positive hijau ·
+   info biru). Status color hanya untuk arti status, bukan dekorasi. */
 const SEV = {
-  critical: { color: '#EF4444',     soft: 'rgba(239,68,68,0.12)',  fg: '#EF4444',          label: 'Critical' },
-  warning:  { color: '#F59E0B',     soft: 'rgba(245,158,11,0.14)', fg: '#B45309',          label: 'Warning'  },
-  positive: { color: 'var(--pos)',  soft: 'var(--pos-soft)',       fg: 'var(--accent-fg)', label: 'Positive' },
-  info:     { color: '#3B82F6',     soft: 'rgba(59,130,246,0.13)', fg: '#3B82F6',          label: 'Info'     },
+  critical: { tone: 'neg',  label: 'Critical' },
+  warning:  { tone: 'warn', label: 'Warning'  },
+  positive: { tone: 'pos',  label: 'Positive' },
+  info:     { tone: 'info', label: 'Info'     },
 };
+const TONE_VAR = { neg: 'var(--rg-neg)', warn: 'var(--rg-warn)', pos: 'var(--rg-pos)', info: 'var(--rg-spend)' };
 
 const ICONS = {
   TrendingUp, TrendingDown, TriangleAlert, Award, Activity,
   Zap, Target, Wallet, BadgeCheck, CircleAlert, Crosshair,
 };
 
-/* ─── Mini sparkline (pola sama dengan dashboard) ─── */
-function Spark({ data, color, h = 26 }) {
-  const pts = (data || []).filter(v => v != null && v >= 0);
-  if (pts.length < 2) return null;
-  const max = Math.max(...pts) || 1;
-  const min = Math.min(...pts);
-  const range = max - min || 1;
-  const W = 240;
-  const coords = pts.map((v, i) => {
-    const x = (i / (pts.length - 1)) * W;
-    const y = h - 3 - ((v - min) / range) * (h - 6);
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  });
+const scoreTone = (v) => (v >= 68 ? 'pos' : v >= 50 ? 'warn' : 'neg');
+
+/* ─── Mini sparkline kartu insight (kurva monoton, warna = nada insight) ─── */
+function Spark({ data, tone }) {
+  const vals = (data || []).filter(v => v != null && v >= 0);
+  if (vals.length < 2) return null;
+  const W = 240, H = 34;
+  const max = Math.max(...vals), min = Math.min(...vals), rng = max - min || 1;
+  const pts = vals.map((v, i) => ({ x: (i / (vals.length - 1)) * W, y: H - 4 - ((v - min) / rng) * (H - 8) }));
   return (
-    <svg viewBox={`0 0 ${W} ${h}`} preserveAspectRatio="none" style={{ display: 'block', width: '100%', height: h }}>
-      <polyline points={coords.join(' ')} fill="none" stroke={color} strokeWidth="1.6"
-        vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" style={{ opacity: 0.75 }} />
+    <svg className="rgr-spark" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true">
+      <path d={monotonePath(pts)} fill="none" vectorEffect="non-scaling-stroke"
+        style={{ stroke: TONE_VAR[tone], strokeWidth: 1.8, strokeLinejoin: 'round', strokeLinecap: 'round' }} />
     </svg>
   );
 }
 
-/* ─── Delta badge kecil (pola Badge dashboard) ─── */
-function Delta({ pct, invert = false }) {
-  if (pct == null) return null;
-  const good = invert ? pct <= 0 : pct >= 0;
-  return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center', gap: '3px',
-      padding: '2px 7px', borderRadius: '6px', fontSize: '11px', fontWeight: 600,
-      background: good ? 'var(--pos-soft)' : 'var(--neg-soft)',
-      color: good ? 'var(--accent-fg)' : '#EF4444',
-    }}>
-      <span style={{ fontSize: '8px' }}>{pct >= 0 ? '▲' : '▼'}</span>
-      {Math.abs(pct).toFixed(1)}%
-    </span>
-  );
-}
-
-/* ─── Gauge skor (ring SVG, animasi via transition dashoffset) ─── */
-function ScoreGauge({ score, size = 132 }) {
+/* ─── Skor: cincin tebal + angka monospace + chip status (ala referensi) ─── */
+function ScoreRing({ score, label, size = 170 }) {
   const [prog, setProg] = useState(0);
   useEffect(() => {
     const t = setTimeout(() => setProg(score), 150);
     return () => clearTimeout(t);
   }, [score]);
-  const R = 56, C = 2 * Math.PI * R;
-  const color = score >= 68 ? 'var(--pos)' : score >= 50 ? '#F59E0B' : '#EF4444';
+  const R = 40, C = 2 * Math.PI * R;
+  const tone = scoreTone(score);
   return (
-    <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
-      <svg viewBox="0 0 132 132" style={{ width: size, height: size, transform: 'rotate(-90deg)' }}>
-        <circle cx="66" cy="66" r={R} fill="none" stroke="var(--track)" strokeWidth="11" />
-        <circle cx="66" cy="66" r={R} fill="none" stroke={color} strokeWidth="11" strokeLinecap="round"
-          strokeDasharray={C}
-          strokeDashoffset={C - (prog / 100) * C}
-          style={{ transition: 'stroke-dashoffset 1s cubic-bezier(0.4,0,0.2,1)' }} />
+    <div className="rgr-ring" style={{ width: size, height: size }}>
+      <svg viewBox="0 0 100 100" aria-hidden="true">
+        <circle cx="50" cy="50" r={R} fill="none" strokeWidth="13" style={{ stroke: 'var(--rg-track)' }} />
+        <circle cx="50" cy="50" r={R} fill="none" strokeWidth="13" strokeLinecap="round"
+          strokeDasharray={C} strokeDashoffset={C - (prog / 100) * C}
+          style={{ stroke: TONE_VAR[tone], transition: 'stroke-dashoffset 1s cubic-bezier(.22,1,.36,1)' }} />
       </svg>
-      <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ fontSize: '32px', fontWeight: 700, color: TXT, letterSpacing: '-1px', lineHeight: 1 }}>
-          <CountUp value={score} display={String(score)} delay={150} />
-        </div>
-        <div style={{ ...TYPE.caption, marginTop: '3px' }}>/ 100</div>
+      <div className="rgr-ring-center">
+        <span className="rgr-ring-label">Score</span>
+        <span className="rg-mono rgr-ring-value">
+          <CountUp value={score} display={String(score)} delay={150} /><span className="rgr-ring-max">/100</span>
+        </span>
+        <span className={`rg-chip is-${tone} rgr-ring-chip`}>{label}</span>
       </div>
     </div>
   );
 }
 
-/* ─── Kartu insight ─── */
+/* ─── Kartu insight: kepala (ikon + judul + tingkat) · panel (isi, angka, tren) ─── */
 function InsightCard({ insight, index }) {
-  const [hover, setHover] = useState(false);
-  const sev = SEV[insight.severity];
-  const Icon = ICONS[insight.icon] || Sparkles;
+  const sev = SEV[insight.severity] || SEV.info;
+  const Icon = ICONS[insight.icon] || Lightbulb;
   return (
-    <div
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        ...CARD_BASE,
-        borderColor: hover ? 'var(--br-strong)' : BORDER,
-        padding: '18px',
-        display: 'flex', flexDirection: 'column', gap: '12px',
-        animation: `wdFadeUp 0.4s cubic-bezier(0.4,0,0.2,1) ${120 + index * 60}ms backwards`,
-        transition: 'border-color 0.2s',
-      }}
-    >
-      {/* header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '11px' }}>
-        <div style={{
-          width: '36px', height: '36px', borderRadius: '10px', flexShrink: 0,
-          background: sev.soft, display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>
-          <Icon size={17} color={sev.color} />
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: '14px', fontWeight: 600, color: TXT, lineHeight: 1.3 }}>{insight.title}</div>
-        </div>
-        <span style={{
-          fontSize: '10px', fontWeight: 700, letterSpacing: '0.8px', textTransform: 'uppercase',
-          color: sev.fg, background: sev.soft, padding: '3px 8px', borderRadius: '999px', flexShrink: 0,
-        }}>{sev.label}</span>
+    <div className="rg-card rg-rise rgr-card" style={{ animationDelay: `${120 + Math.min(index, 8) * 55}ms` }}>
+      <div className="rg-head rgr-card-head">
+        <span className={`rgr-sev-ico is-${sev.tone}`}><Icon size={15} /></span>
+        <span className="rgr-card-title">{insight.title}</span>
+        <span className={`rg-chip is-${sev.tone} rgr-sev-chip`}>{sev.label}</span>
       </div>
-
-      {/* body */}
-      <div style={{ fontSize: '12.5px', color: SUB, lineHeight: 1.65 }}>{insight.body}</div>
-
-      {/* chips */}
-      {insight.chips?.length > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-          {insight.chips.map((c, i) => (
-            <div key={i} style={{
-              display: 'flex', alignItems: 'baseline', gap: '6px',
-              padding: '6px 10px', borderRadius: '8px',
-              background: 'var(--data-bg)', border: '1px solid var(--data-br)',
-            }}>
-              <span style={{ fontSize: '10.5px', color: MUTE }}>{c.label}</span>
-              <span style={{
-                fontSize: '12.5px', fontWeight: 600,
-                color: c.tone === 'pos' ? 'var(--accent-fg)' : c.tone === 'neg' ? '#EF4444' : TXT,
-              }}>{c.value}</span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* sparkline */}
-      {insight.spark && (
-        <div style={{ marginTop: 'auto' }}>
-          <Spark data={insight.spark} color={sev.color} />
-        </div>
-      )}
+      <div className="rg-well rgr-card-well">
+        <p className="rgr-card-body">{insight.body}</p>
+        {insight.chips?.length > 0 && (
+          <div className="rgr-chips">
+            {insight.chips.map((c, i) => (
+              <div key={i} className="rgr-datum">
+                <span className="rgr-datum-label">{c.label}</span>
+                <span className={`rg-mono rgr-datum-value${c.tone === 'pos' ? ' is-pos' : c.tone === 'neg' ? ' is-neg' : ''}`}>{c.value}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        {insight.spark && <Spark data={insight.spark} tone={sev.tone} />}
+      </div>
     </div>
+  );
+}
+
+function ReportsSkeleton({ isMobile }) {
+  return (
+    <>
+      <div className="rg-card rgr-hero">
+        <div className="rg-head"><span className="rg-skel" style={{ width: 150, height: 11 }} /></div>
+        <div className="rg-well rgr-hero-well">
+          <span className="rg-skel" style={{ width: isMobile ? 136 : 170, height: isMobile ? 136 : 170, borderRadius: '50%' }} />
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <span className="rg-skel" style={{ width: '70%', height: 14 }} />
+            <span className="rg-skel" style={{ width: '45%', height: 10 }} />
+          </div>
+        </div>
+      </div>
+      <div className="rgr-grid">
+        {[0, 1, 2].map(i => (
+          <div key={i} className="rg-card rgr-card">
+            <div className="rg-head"><span className="rg-skel" style={{ width: '55%', height: 11 }} /></div>
+            <div className="rg-well rgr-card-well" style={{ gap: 10 }}>
+              <span className="rg-skel" style={{ width: '92%', height: 10 }} />
+              <span className="rg-skel" style={{ width: '78%', height: 10 }} />
+              <span className="rg-skel" style={{ width: '40%', height: 26, borderRadius: 10 }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </>
   );
 }
 
@@ -192,6 +155,7 @@ export default function ReportsPage() {
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState(null);
   const [analysis, setAnalysis]   = useState(null);
+  const [updatedAt, setUpdatedAt] = useState(null);
 
   // Bulan kiri kalender (UI only) — default: bulan lalu + bulan ini
   const _initCal = new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1);
@@ -203,6 +167,10 @@ export default function ReportsPage() {
   useEffect(() => {
     setTopbarSlot(isMobile ? document.getElementById('wd-topbar-actions') : null);
   }, [isMobile]);
+
+  // Penanda permintaan terakhir: respons lama yang datang belakangan (mis. ganti filter
+  // cepat lalu Refresh) tidak boleh menimpa hasil yang lebih baru
+  const fetchToken = useRef(0);
 
   useEffect(() => { if (!isCustom) fetchData(); }, [dateOpt, isCustom]);
   // Restore custom range yang persist di context saat balik ke tab ini
@@ -216,19 +184,23 @@ export default function ReportsPage() {
   }, [showDropdown]);
 
   async function fetchData(since = '', until = '') {
+    const token = ++fetchToken.current;
     setLoading(true); setError(null);
     try {
       const url = since && until
         ? `/api/meta?mode=dashboard&since=${since}&until=${until}`
         : `/api/meta?mode=dashboard&date_preset=${dateOpt.value}`;
-      const res  = await authFetch(url);
+      const res = await authFetch(url);
       const json = await res.json();
+      if (token !== fetchToken.current) return;
       if (json.error) throw new Error(json.error);
       setAnalysis(buildAnalysis(json));
+      setUpdatedAt(new Date());
     } catch (err) {
+      if (token !== fetchToken.current) return;
       setError(err.message);
     }
-    setLoading(false);
+    if (token === fetchToken.current) setLoading(false);
   }
 
   function refresh() {
@@ -276,199 +248,162 @@ export default function ReportsPage() {
     }
     return dateOpt.label;
   }
+  const curRange  = isCustom && customSince && customUntil
+    ? { since: customSince, until: customUntil }
+    : presetToRange(dateOpt.value);
+  const rangeText = fmtRangeShort(curRange.since, curRange.until, true);
 
-  const refreshButton = (
+  // Tombol refresh HP — dirender via portal ke top bar MobileNav (di luar skin),
+  // jadi tetap gaya lama 36px agar serasi dengan tombol top bar lain
+  const refreshButtonMobile = (
     <button onClick={refresh} title="Refresh" style={{
-      width: isMobile ? '36px' : '40px', height: isMobile ? '36px' : '40px',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: CARD, border: `1px solid ${BORDER}`, borderRadius: isMobile ? '9px' : '10px',
+      width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: 'var(--cd)', border: '1px solid var(--br)', borderRadius: '9px',
       cursor: 'pointer', flexShrink: 0, transition: 'border-color 0.15s',
     }}
     onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--br-strong)'}
-    onMouseLeave={e => e.currentTarget.style.borderColor = BORDER}
+    onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--br)'}
     >
-      <RefreshCw size={15} color={SUB} style={loading ? { animation: 'wdSpin 0.8s linear infinite' } : undefined} />
+      <RefreshCw size={15} color="var(--t2)" style={loading ? { animation: 'wdSpin 0.8s linear infinite' } : undefined} />
     </button>
   );
 
   const m = analysis?.metrics;
+  const initialLoading = loading && !analysis;
+  const busy = loading && analysis ? ' rg-busy' : '';
+
+  const ctxLine = initialLoading
+    ? <span>Analyzing Meta Ads data…</span>
+    : error && !analysis
+      ? <span>Could not load data</span>
+      : analysis ? (<>
+          <span className="rg-live" aria-hidden="true" />
+          <span>{analysis.insights.length} insight{analysis.insights.length === 1 ? '' : 's'}</span>
+          <span className="rg-ctx-sep" aria-hidden="true" />
+          <span>{analysis.campaignCount} campaign{analysis.campaignCount === 1 ? '' : 's'} analyzed</span>
+          <span className="rg-ctx-sep" aria-hidden="true" />
+          <span>{loading ? 'Refreshing…' : updatedAt ? `Updated ${fmtClock(updatedAt)}` : ''}</span>
+        </>) : <span>Auto-generated from Meta Ads data</span>;
+
+  const stats = m ? [
+    { label: 'Leads',       value: fmtNum(m.leads),       pct: m.dLeads,       good: 'up' },
+    { label: 'Traffic',     value: fmtNum(m.traffic),     pct: m.dTraffic,     good: 'up' },
+    // Total Spend: naik/turun = keputusan budget → abu-abu netral (aturan sama dengan Dashboard)
+    { label: 'Total Spend', value: fmtRp(m.spend),        pct: m.dSpend,       good: 'none' },
+    { label: 'Reach',       value: fmtNum(m.reach),       pct: m.dReach,       good: 'up' },
+    { label: 'Impressions', value: fmtNum(m.impressions), pct: m.dImpressions, good: 'up' },
+    { label: 'CPM',         value: m.cpm != null ? fmtRp(m.cpm) : '—', pct: m.dCPM, good: 'down' },
+  ] : [];
 
   return (
-    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', background: BG }}>
+    <div className={`rg rg-page ${dashboardFontVars}${isMobile ? ' is-mobile' : ''}`}>
 
-      {/* ══ HEADER ══ */}
-      <header style={ isMobile ? {
-        display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: '12px',
-        padding: '14px 16px', flexShrink: 0, borderBottom: `1px solid ${BORDER}`,
-      } : {
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '12px 20px', margin: '12px 16px 0', flexShrink: 0,
-        background: CARD, border: `1px solid ${BORDER}`, borderRadius: '18px',
-        boxShadow: 'var(--shadow)',
-      }}>
-        <div>
-          <h1 style={{ ...TYPE.h1, ...(isMobile ? { fontSize: '20px' } : null) }}>Analytics &amp; Insights</h1>
-          <p style={{ ...TYPE.small, marginTop: '3px' }}>
-            {loading ? 'Analyzing…' : analysis
-              ? `${analysis.insights.length} insights · ${analysis.campaignCount} campaigns analyzed · ${filterLabel()}`
-              : 'Auto-generated from Meta Ads data'}
-          </p>
+      {/* ══ TOP BAR ══ */}
+      <header className="rg-top">
+        <div className="rg-top-title">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <h1 className="rg-h1">Analytics &amp; Insights</h1>
+          </div>
+          <div className="rg-ctx">{ctxLine}</div>
         </div>
 
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: isMobile ? '8px' : '10px',
-          justifyContent: isMobile ? 'flex-end' : 'flex-start',
-        }}>
-          {/* Date filter (sama dengan Dashboard & Campaigns) */}
-          <div style={{ position: 'relative' }} data-filter>
-            <button onClick={openFilter} style={{
-              display: 'flex', alignItems: 'center', gap: '8px',
-              padding: '9px 14px',
-              background: CARD, border: `1px solid ${isCustom ? 'var(--cal-accent)' : BORDER}`,
-              borderRadius: '10px', fontSize: '13px',
-              color: TXT, cursor: 'pointer', transition: 'border-color 0.15s',
-            }}>
-              <Calendar size={14} color={SUB} />
-              {filterLabel()}
-              <ChevronDown size={13} color={SUB} />
+        <div className="rg-tools">
+          {/* Filter tanggal (sama dengan Dashboard & Campaigns) */}
+          <DatePill open={showDropdown} onToggle={openFilter} isMobile={isMobile} isCustom={isCustom}
+            presetLabel={dateOpt.label} mobileLabel={filterLabel()} rangeText={rangeText}>
+            <DateFilterPopup
+              presets={DATE_PRESETS_DASHBOARD}
+              dateOpt={dateOpt}
+              isCustom={isCustom}
+              customSince={customSince}
+              customUntil={customUntil}
+              calY={calY} calM={calM}
+              isMobile={isMobile}
+              onSelectPreset={handleSelectPreset}
+              onPickDay={pickDay}
+              onPickRange={pickRange}
+              onShiftCal={shiftCal}
+              onApply={applyCustomRange}
+              onClose={() => setShowDropdown(false)}
+            />
+          </DatePill>
+
+          {!isMobile && (<>
+            <span className="rg-vsep" aria-hidden="true" />
+            <button type="button" className="rg-pill rg-round" title="Refresh data" aria-label="Refresh data"
+              onClick={refresh} disabled={loading}>
+              <RefreshCw size={15} style={loading ? { animation: 'wdSpin 0.8s linear infinite' } : undefined} />
             </button>
-
-            {showDropdown && (
-              <DateFilterPopup
-                presets={DATE_PRESETS_DASHBOARD}
-                dateOpt={dateOpt}
-                isCustom={isCustom}
-                customSince={customSince}
-                customUntil={customUntil}
-                calY={calY} calM={calM}
-                isMobile={isMobile}
-                onSelectPreset={handleSelectPreset}
-                onPickDay={pickDay}
-                onPickRange={pickRange}
-                onShiftCal={shiftCal}
-                onApply={applyCustomRange}
-                onClose={() => setShowDropdown(false)}
-              />
-            )}
-          </div>
-
-          {!isMobile && refreshButton}
-          {isMobile && topbarSlot && createPortal(refreshButton, topbarSlot)}
+          </>)}
+          {isMobile && topbarSlot && createPortal(refreshButtonMobile, topbarSlot)}
         </div>
       </header>
 
-      {/* ══ CONTENT ══ */}
-      <div style={{
-        flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden',
-        padding: isMobile ? '16px' : '12px 16px 16px',
-        display: 'flex', flexDirection: 'column', gap: isMobile ? '16px' : '10px',
-      }}>
+      {/* ══ ISI ══ */}
+      <div className="rg-body rgr-body">
 
-        {loading && (
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px' }}>
-            <div style={{
-              width: '52px', height: '52px', borderRadius: '16px',
-              background: 'var(--cal-accent-soft)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              animation: 'wdPulseDot 1.6s ease-in-out infinite',
-            }}>
-              <Sparkles size={24} color="var(--cal-accent-line)" />
-            </div>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ ...TYPE.h4 }}>Analyzing your campaign data…</div>
-              <div style={{ ...TYPE.caption, marginTop: '5px' }}>Reading Meta Ads performance · {filterLabel()}</div>
-            </div>
-          </div>
-        )}
+        {initialLoading && <ReportsSkeleton isMobile={isMobile} />}
 
         {!loading && error && (
-          <div style={{ padding: '14px 18px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '12px', color: '#EF4444', fontSize: '12px' }}>
-            Error: {error}
+          <div className="rg-error" role="alert">
+            <span className="rg-error-ico"><TriangleAlert size={20} /></span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="rg-error-title">The analysis couldn’t be loaded</div>
+              <div className="rg-error-msg">{error}</div>
+            </div>
+            <button type="button" className="rg-pill" onClick={refresh}>
+              <RefreshCw size={15} />Try again
+            </button>
           </div>
         )}
 
-        {!loading && !error && analysis && (<>
-
+        {analysis && !error && (<>
           {/* ══ HERO: PERFORMANCE SCORE ══ */}
-          <div style={{
-            ...CARD_BASE, flexShrink: 0,
-            display: 'flex', flexDirection: isMobile ? 'column' : 'row',
-            alignItems: 'center', gap: isMobile ? '18px' : '28px',
-            padding: isMobile ? '22px 18px' : '22px 28px',
-            animation: 'wdFadeUp 0.4s cubic-bezier(0.4,0,0.2,1) backwards',
-          }}>
-            <ScoreGauge score={analysis.score.value} size={isMobile ? 120 : 132} />
-
-            <div style={{ flex: 1, minWidth: 0, textAlign: isMobile ? 'center' : 'left' }}>
-              <span style={{
-                display: 'inline-flex', alignItems: 'center', gap: '6px',
-                padding: '4px 12px', borderRadius: '999px',
-                background: SEV[analysis.score.value >= 68 ? 'positive' : analysis.score.value >= 50 ? 'warning' : 'critical'].soft,
-                color:      SEV[analysis.score.value >= 68 ? 'positive' : analysis.score.value >= 50 ? 'warning' : 'critical'].fg,
-                fontSize: '11px', fontWeight: 700, letterSpacing: '0.6px', textTransform: 'uppercase',
-              }}>
-                <Sparkles size={12} />
-                {analysis.score.label}
-              </span>
-              <div style={{ fontSize: isMobile ? '15px' : '16px', fontWeight: 600, color: TXT, lineHeight: 1.45, marginTop: '10px' }}>
-                {analysis.score.verdict}
-              </div>
-              <div style={{ ...TYPE.caption, marginTop: '8px' }}>
-                Performance score · auto-generated from your Meta Ads data · {filterLabel()} vs previous period
-              </div>
+          <div className={`rg-card rg-rise rgr-hero${busy}`}>
+            <div className="rg-head">
+              <span className="rg-head-ico"><Sparkles size={15} /></span>
+              <span className="rg-title">Performance score</span>
+              <span className="rg-meta">{filterLabel()} vs previous period</span>
             </div>
+            <div className="rg-well rgr-hero-well">
+              <ScoreRing score={analysis.score.value} label={analysis.score.label} size={isMobile ? 136 : 170} />
 
-            {/* mini stats — grid 2 kolom (desktop) / 3 kolom (mobile) */}
-            <div style={ isMobile ? {
-              display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px 10px',
-              width: '100%', borderTop: `1px solid ${BORDER}`, paddingTop: '16px',
-            } : {
-              display: 'grid', gridTemplateColumns: 'repeat(2, minmax(160px, 1fr))', gap: '18px 36px',
-              flexShrink: 0, alignContent: 'center',
-              borderLeft: `1px solid ${BORDER}`, paddingLeft: '36px',
-            }}>
-              {[
-                { label: 'Leads',       value: fmtNum(m.leads),   pct: m.dLeads,   invert: false },
-                { label: 'Traffic',     value: fmtNum(m.traffic), pct: m.dTraffic, invert: false },
-                { label: 'Total Spend', value: fmtRp(m.spend),    pct: m.dSpend,   invert: false },
-                { label: 'Reach',       value: fmtNum(m.reach),  pct: m.dReach,       invert: false },
-                { label: 'Impressions', value: fmtNum(m.impressions), pct: m.dImpressions, invert: false },
-                { label: 'CPM',         value: m.cpm != null ? fmtRp(m.cpm) : '—',    pct: m.dCPM, invert: true },
-              ].map(s => (
-                <div key={s.label} style={{ minWidth: 0 }}>
-                  <div style={{ ...TYPE.caption }}>{s.label}</div>
-                  <div style={{ fontSize: isMobile ? '14px' : '16px', fontWeight: 700, color: TXT, letterSpacing: '-0.3px', margin: '3px 0 4px', whiteSpace: 'nowrap' }}>{s.value}</div>
-                  <Delta pct={s.pct} invert={s.invert} />
+              <div className="rgr-verdict">
+                <div className="rgr-verdict-text">{analysis.score.verdict}</div>
+                <div className="rgr-verdict-note">
+                  Scored from your live Meta Ads data — trends in leads, traffic, costs and reach compared with the previous period.
                 </div>
-              ))}
+              </div>
+
+              <div className="rgr-stats">
+                {stats.map(s => (
+                  <div key={s.label} className="rgr-stat">
+                    <div className="rgr-stat-label">{s.label}</div>
+                    <div className="rg-mono rgr-stat-value">{s.value}</div>
+                    <Delta pct={s.pct} good={s.good} />
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 
           {/* ══ INSIGHT CARDS ══ */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0, marginTop: '2px' }}>
-            <span style={{ ...TYPE.cardTitle }}>Generated Insights</span>
-            <span style={{
-              ...TYPE.caption, padding: '3px 10px', borderRadius: '999px',
-              background: 'var(--data-bg)', border: '1px solid var(--data-br)',
-            }}>From live Meta Ads data</span>
+          <div className="rgr-section">
+            <span className="rgr-section-title">Generated insights</span>
+            <span className="rg-chip">{analysis.insights.length} from live Meta Ads data</span>
           </div>
 
           {analysis.insights.length === 0 ? (
-            <div style={{
-              ...CARD_BASE, flexShrink: 0, padding: '36px 24px', textAlign: 'center',
-              animation: 'wdFadeUp 0.4s cubic-bezier(0.4,0,0.2,1) 120ms backwards',
-            }}>
-              <div style={{ ...TYPE.h4 }}>All quiet — no notable signals this period</div>
-              <div style={{ ...TYPE.small, marginTop: '6px', color: MUTE }}>
-                Metrics are stable compared to the previous period. Check back after a few days of new data.
+            <div className="rg-card rg-rise rgr-card" style={{ animationDelay: '120ms' }}>
+              <div className="rg-well rgr-quiet">
+                <div className="rg-empty">
+                  <strong>All quiet — no notable signals this period</strong>
+                  <span>Metrics are stable compared to the previous period. Check back after a few days of new data.</span>
+                </div>
               </div>
             </div>
           ) : (
-            <div style={{
-              display: 'grid', flexShrink: 0,
-              gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(320px, 1fr))',
-              gap: '16px', paddingBottom: '8px',
-            }}>
+            <div className={`rgr-grid${busy}`}>
               {analysis.insights.map((ins, i) => (
                 <InsightCard key={ins.id} insight={ins} index={i} />
               ))}

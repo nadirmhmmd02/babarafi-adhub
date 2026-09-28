@@ -1,0 +1,148 @@
+/* ══════════════════════════════════════════════════════════════════════
+   CALENDAR — bagian KHUSUS halaman Calendar (redesain "Ridgeline",
+   28 Sep 2026, LIVE). Dasar (token, kartu, pil, chip, tabel, menu,
+   dialog, form) di app/ridgeline.css. Semua aturan di-scope ke .rg / .rgk-.
+   Gantt = tampilan padat: huruf & padding sel sedikit lebih kecil dari tabel
+   Campaigns supaya ±30 kolom hari tetap terbaca di laptop 1366px.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* ── Navigasi bulan (pil berisi ‹ bulan ›) ── */
+.rgk-month {
+  display: inline-flex; align-items: center; gap: 2px; height: 40px; padding: 0 4px;
+  border-radius: 999px; background: var(--rg-pill); border: 1px solid var(--rg-pill-line); flex-shrink: 0;
+}
+.rgk-month .rg-iconbtn { width: 30px; height: 30px; border-color: transparent; background: transparent; }
+.rgk-month .rg-iconbtn:hover { background: var(--rg-hover); }
+.rgk-month-label {
+  min-width: 132px; text-align: center; white-space: nowrap;
+  font-size: 13px; font-weight: 500; color: var(--rg-t1); font-variant-numeric: tabular-nums;
+}
+
+/* ── Kartu & legenda ── */
+.rgk-card { flex-shrink: 0; }
+.rgk-well { overflow: hidden; }
+.rgk-legend { margin-left: auto; display: flex; align-items: center; gap: 14px; padding-right: 6px; }
+.rgk-legend-item { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--rg-t2); white-space: nowrap; }
+.rgk-legend-dot, .rgk-obj-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.rgk-obj-dot { width: 7px; height: 7px; }
+
+/* ── Tabel Gantt ── */
+.rgk-scroll { overflow-x: auto; }
+.rgk-table { table-layout: fixed; min-width: 1180px; font-size: 12px; }
+.rg .rgk-table th { height: 40px; padding: 0 6px; font-size: 11.5px; }
+.rg .rgk-table td { height: 42px; padding: 0 6px; font-size: 12px; }
+.rg .rgk-table th.rgk-left, .rg .rgk-table td.rgk-left { text-align: left; }
+.rg .rgk-table td.rg-num { font-size: 11.5px; }
+
+/* Kolom Campaign menempel di kiri saat Gantt digeser — latarnya WAJIB pekat
+   (bukan transparan) supaya isi yang lewat di bawahnya tidak tembus */
+.rgk-th-name, .rgk-td-name {
+  position: sticky; left: 0; text-align: left !important; padding-left: 14px !important;
+  background: var(--rg-well); box-shadow: 1px 0 0 var(--rg-line-soft);
+}
+.rgk-th-name { z-index: 3; }
+.rgk-td-name { z-index: 1; font-weight: 500; color: var(--rg-t1); overflow: hidden; text-overflow: ellipsis; }
+.rgk-row { animation: wdFadeUp .3s cubic-bezier(.22,1,.36,1) backwards; }
+.rgk-row:hover td { background: var(--rg-hover); }
+.rgk-row:hover .rgk-td-name { background: color-mix(in srgb, var(--rg-t1) 4.5%, var(--rg-well)); }
+.rgk-table.is-dragging .rgk-td-name { box-shadow: 1px 0 0 var(--rg-t3); }
+
+/* Pegangan lebar kolom Campaign | Objective */
+.rgk-colgrip {
+  position: absolute; top: 8px; bottom: 8px; right: -4px; width: 9px; z-index: 4;
+  cursor: col-resize; display: flex; justify-content: center;
+}
+.rgk-colgrip::before {
+  content: ''; width: 2px; height: 100%; border-radius: 2px;
+  background: var(--rg-pill-line); transition: background-color .15s ease;
+}
+.rgk-colgrip:hover::before, .rgk-colgrip.is-drag::before { background: var(--rg-t2); }
+
+.rgk-obj { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--rg-t1); white-space: nowrap; }
+.rg .rgk-content { color: var(--rg-t2); overflow: hidden; text-overflow: ellipsis; }
+.rgk-date { color: var(--rg-t2) !important; }
+.rgk-total { font-weight: 600; }
+
+/* Status: chip kecil; admin = tombol dropdown */
+.rgk-status { height: 22px; padding: 0 8px; gap: 5px; font-size: 11.5px; }
+.rgk-status-caret { opacity: .6; margin-left: -1px; }
+button.rgk-status.is-open { border-color: currentColor; }
+.rgk-acts { display: inline-flex; gap: 4px; }
+.rgk-act { width: 26px; height: 26px; }
+
+/* Kolom hari: nomor Geist Mono kecil; kolom hari ini = pita netral tipis */
+.rgk-day {
+  text-align: center !important; padding: 0 !important;
+  font-family: var(--font-geist-mono), ui-monospace, monospace; font-variant-numeric: tabular-nums;
+  font-size: 10px !important; font-weight: 500; color: var(--rg-t3) !important; letter-spacing: -0.04em;
+}
+.rgk-day.is-today { color: var(--rg-t1) !important; font-weight: 700; background: var(--rg-range); }
+.rgk-daycell { padding: 0 !important; text-align: center; }
+.rgk-daycell.is-today { background: var(--rg-range); }
+.rgk-row:hover .rgk-daycell.is-today { background: var(--rg-range); }
+.rgk-bar { height: 12px; opacity: .92; transform-origin: left center; }
+.rgk-bar.is-start { margin-left: 2px; border-radius: 6px 0 0 6px; }
+.rgk-bar.is-end   { margin-right: 2px; border-radius: 0 6px 6px 0; }
+.rgk-bar.is-solo  { margin: 0 2px; border-radius: 6px; }
+.rgk-empty-row td { height: 160px; text-align: center; }
+
+/* ── Skeleton ── */
+.rgk-skel { padding: 8px 16px; }
+.rgk-skel-row { display: flex; align-items: center; gap: 18px; height: 42px; border-bottom: 1px solid var(--rg-line-soft); }
+.rgk-skel-row:last-child { border-bottom: 0; }
+
+/* ── Ringkasan budget bulanan ── */
+.rgk-budget {
+  display: grid; grid-template-columns: minmax(220px, 1fr) minmax(0, 2fr); align-items: center;
+  gap: 28px; padding: 18px 20px;
+}
+.rgk-budget-label { font-size: 12px; color: var(--rg-t2); }
+.rgk-budget-value { margin-top: 6px; font-size: 24px; font-weight: 500; color: var(--rg-t1); letter-spacing: -0.03em; white-space: nowrap; }
+.rgk-budget-sub { margin-top: 6px; font-size: 11.5px; color: var(--rg-t3); }
+.rgk-budget-split {
+  display: flex; flex-direction: column; gap: 14px; min-width: 0;
+  padding-left: 28px; border-left: 1px solid var(--rg-line-soft);
+}
+.rgk-budget-objs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.rgk-budget-obj-label { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--rg-t1); }
+.rgk-budget-obj-value { margin-top: 5px; font-size: 16px; font-weight: 500; color: var(--rg-t1); white-space: nowrap; }
+.rgk-budget-obj-pct { margin-top: 3px; font-size: 11.5px; color: var(--rg-t2); }
+.rgk-share { display: flex; gap: 3px; height: 8px; }
+.rgk-share > span { min-width: 4px; border-radius: 4px; transform-origin: left; animation: wdGrowX .8s cubic-bezier(.22,1,.36,1) .15s backwards; }
+
+/* ── Campaign tanpa tanggal ── */
+.rgk-undated { padding: 4px 8px; }
+.rgk-undated-row {
+  display: flex; align-items: center; gap: 14px; min-height: 48px; padding: 0 8px;
+  border-bottom: 1px solid var(--rg-line-soft);
+}
+.rgk-undated-row:last-child { border-bottom: 0; }
+.rgk-undated-row .rgk-obj { width: 100px; flex-shrink: 0; }
+.rgk-undated-name {
+  flex: 1; min-width: 0; font-size: 13px; font-weight: 500; color: var(--rg-t1);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.rgk-undated-note { font-size: 12px; color: var(--rg-t3); white-space: nowrap; }
+.rgk-setdates { height: 30px; padding: 0 12px; font-size: 12px; }
+
+/* ── Menu status & form ── */
+.rgk-statusmenu { min-width: 150px; }
+.rgk-status-mini { width: 20px; height: 20px; padding: 0; justify-content: center; }
+.rgk-form { max-width: 480px; }
+.rgk-form-body { display: flex; flex-direction: column; gap: 14px; }
+.rgk-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.rgk-suggest { position: absolute; top: 100%; left: 0; right: 0; margin-top: 6px; z-index: 5; }
+.rgk-dlg-name { display: block; font-size: 13.5px; line-height: 1.45; word-break: break-word; }
+.rgk-dlg-text { margin: 8px 0 0; }
+
+/* ── Header kartu sempit: legenda disembunyikan (warna tetap terbaca dari kolom Objective) ── */
+.rg:not(.is-mobile) .rgk-card .rg-head { container-type: inline-size; }
+@container (max-width: 520px) { .rgk-legend { display: none; } }
+
+/* ── MOBILE (≤767px) ── */
+.rg.is-mobile .rgk-legend { display: none; }
+.rg.is-mobile .rgk-month-label { min-width: 110px; }
+.rg.is-mobile .rgk-budget { grid-template-columns: 1fr; gap: 16px; }
+.rg.is-mobile .rgk-budget-split { padding: 16px 0 0; border-left: 0; border-top: 1px solid var(--rg-line-soft); }
+.rg.is-mobile .rgk-undated-note { display: none; }
+.rg.is-mobile .rgk-undated-row .rgk-obj { width: auto; }

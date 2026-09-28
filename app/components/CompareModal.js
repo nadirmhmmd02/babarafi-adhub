@@ -6,10 +6,6 @@ import {
   ChevronLeft, ChevronRight, RefreshCw, CircleAlert, Check,
 } from 'lucide-react';
 import { authFetch } from '../supabase';
-/* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */
-import { isDemoOn, demoDelay } from './demoMode';
-import { buildDemoDashboard } from './demoDashboard';
-/* ═══ END PREVIEW-ONLY ═══ */
 import { TYPE } from './typography';
 import CountUp from './CountUp';
 
@@ -248,17 +244,6 @@ export default function CompareModal({ initialSince, initialUntil, onClose }) {
     if (!canCompare) return;
     setBusy(true); setError(null);
     try {
-      /* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ (saklar Demo data: dua periode dari data dummy) */
-      if (isDemoOn()) {
-        await demoDelay(450);
-        setResult({
-          a: computeMetrics(buildDemoDashboard({ since: aSince, until: aUntil })),
-          b: computeMetrics(buildDemoDashboard({ since: bSince, until: bUntil })),
-        });
-        setBusy(false);
-        return;
-      }
-      /* ═══ END PREVIEW-ONLY ═══ */
       const [ra, rb] = await Promise.all([
         authFetch(`/api/meta?mode=dashboard&since=${aSince}&until=${aUntil}`),
         authFetch(`/api/meta?mode=dashboard&since=${bSince}&until=${bUntil}`),

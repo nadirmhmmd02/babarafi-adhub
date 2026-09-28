@@ -3,10 +3,6 @@ import { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { X, Globe, MessageCircle, ImageOff, RefreshCw, Users, Eye, MousePointerClick, UserPlus, Gauge, Coins, Wallet, Banknote, Target, RectangleVertical, Square, ChevronLeft, ChevronRight } from 'lucide-react';
 import CountUp from './CountUp';
 import { authFetch } from '../supabase';
-/* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */
-import { demoDelay } from './demoMode';
-import { buildDemoCampaignDetail } from './demoDashboard';
-/* ═══ END PREVIEW-ONLY ═══ */
 
 /* ─── Helpers metrik (sama persis dengan logika tabel campaigns — jangan diubah) ─── */
 function getActionValue(actions, types) {
@@ -248,15 +244,6 @@ export default function CampaignModal({ campaign, query, periodLabel, onClose })
     let alive = true;
     (async () => {
       try {
-        /* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ (campaign dummy → konten & platform dummy) */
-        if (String(campaign.id).startsWith('demo-')) {
-          await demoDelay(400);
-          if (!alive) return;
-          setDetail(buildDemoCampaignDetail(campaign));
-          setLoading(false);
-          return;
-        }
-        /* ═══ END PREVIEW-ONLY ═══ */
         const res  = await authFetch(`/api/meta?mode=campaign_detail&campaign_id=${campaign.id}&${query}`);
         const json = await res.json();
         if (!alive) return;

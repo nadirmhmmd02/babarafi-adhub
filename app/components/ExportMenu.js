@@ -12,12 +12,6 @@ import { dashboardFontVars } from './dashboardFonts';
 import { monotonePath } from './AreaChart';
 import { fmtRangeShort, toneOf, fmtPct1 } from './rgKit';
 import { buildReportData, monthChunks, isWholeMonths, monthToken } from './reportData';
-/* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ (Export pakai data dummy saat saklar Demo data nyala;
-   nama file diberi "DEMO" supaya laporan berisi angka rekaan tidak tertukar dengan laporan asli) */
-import { isDemoOn } from './demoMode';
-import { buildDemoDashboard } from './demoDashboard';
-const demoTag = () => (isDemoOn() ? 'DEMO-' : '');
-/* ═══ END PREVIEW-ONLY ═══ */
 
 /* ─────────────────────────────────────────────────────────────
    EXPORT LAPORAN (PDF/JPG 16:9, 1280×720) — redesain "Ridgeline" 28 Sep 2026
@@ -482,13 +476,13 @@ export default function ExportMenu({
       const wCss = canvas.width / 2, hCss = canvas.height / 2;
       if (type === 'jpg') {
         const a = document.createElement('a');
-        a.href = canvas.toDataURL('image/jpeg', 0.95); a.download = `BabaRafiAdHub-report-${demoTag()}${stamp()}.jpg`;
+        a.href = canvas.toDataURL('image/jpeg', 0.95); a.download = `BabaRafiAdHub-report-${stamp()}.jpg`;
         document.body.appendChild(a); a.click(); a.remove();
       } else {
         const { jsPDF } = await import('jspdf');
         const pdf = new jsPDF({ orientation: 'landscape', unit: 'px', format: [wCss, hCss] });
         pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, wCss, hCss);
-        pdf.save(`BabaRafiAdHub-report-${demoTag()}${stamp()}.pdf`);
+        pdf.save(`BabaRafiAdHub-report-${stamp()}.pdf`);
       }
     } catch (err) {
       console.error('Export failed:', err);
@@ -503,15 +497,8 @@ export default function ExportMenu({
     setBusy(true);
     try {
       const reports = await Promise.all(months.map(async (mo) => {
-        let json;
-        /* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */
-        if (isDemoOn()) json = buildDemoDashboard({ since: mo.since, until: mo.until });
-        else
-        /* ═══ END PREVIEW-ONLY ═══ */
-        {
-          const res = await authFetch(`/api/meta?mode=dashboard&since=${mo.since}&until=${mo.until}`);
-          json = await res.json();
-        }
+        const res  = await authFetch(`/api/meta?mode=dashboard&since=${mo.since}&until=${mo.until}`);
+        const json = await res.json();
         if (json.error) throw new Error(json.error);
         const r = buildReportData(json);
         return {
@@ -552,7 +539,7 @@ export default function ExportMenu({
           for (let i = 0; i < canvases.length; i++) {
             const a = document.createElement('a');
             a.href = canvases[i].toDataURL('image/jpeg', 0.95);
-            a.download = `BabaRafiAdHub-report-${demoTag()}${split.reports[i].token}-${stamp()}.jpg`;
+            a.download = `BabaRafiAdHub-report-${split.reports[i].token}-${stamp()}.jpg`;
             document.body.appendChild(a); a.click(); a.remove();
             await new Promise(r => setTimeout(r, 400));   // jeda antar unduhan biar tidak diblok browser
           }
@@ -566,7 +553,7 @@ export default function ExportMenu({
             else pdf.addPage([w, h], 'landscape');
             pdf.addImage(c.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, w, h);
           });
-          if (pdf) pdf.save(`BabaRafiAdHub-report-${demoTag()}${split.reports.length}bulan-${stamp()}.pdf`);
+          if (pdf) pdf.save(`BabaRafiAdHub-report-${split.reports.length}bulan-${stamp()}.pdf`);
         }
       } catch (err) {
         console.error('Export failed:', err);

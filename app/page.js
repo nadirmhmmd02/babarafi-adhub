@@ -1,6 +1,6 @@
 'use client';
 
-/* ══ DASHBOARD ADS HUB — redesain "Ridgeline" (PREVIEW LOKAL, Sep 2026) ═══════
+/* ══ DASHBOARD ADS HUB — redesain "Ridgeline" (LIVE 28 Sep 2026) ═══════
    THESIS: laporan iklan dibaca seperti instrumen — kartu cangkang + panel dalam,
      angka monospace, warna hanya untuk data & arah perubahan (bukan dekorasi).
    OWN-WORLD: kanvas charcoal #222 (terang: abu hangat #F2F2EF), cangkang #1D1D1D,
@@ -39,11 +39,6 @@ import DateFilterPopup from './components/DateFilterPopup';
 import { TYPE } from './components/typography';
 import { dashboardFontVars } from './components/dashboardFonts';
 import { supabase, authFetch } from './supabase';
-/* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */
-import PreviewPanel from './components/PreviewPanel';
-import { buildDemoDashboard } from './components/demoDashboard';
-import { DEMO_ALLOWED, useDemoMode, DemoChip, demoDelay } from './components/demoMode';
-/* ═══ END PREVIEW-ONLY ═══ */
 
 /* ─── Token lama (masih dipakai tombol top bar mobile & popup Suggestions) ─── */
 const BG      = 'var(--pg)';
@@ -492,18 +487,8 @@ export default function DashboardPage() {
   const [platform, setPlatform]         = useState(DEFAULT_PLATFORM);
   const suggestRef = useRef(null);
   // Penanda permintaan terakhir: respons lama yang datang belakangan tidak boleh
-  // menimpa hasil yang lebih baru (mis. ganti filter cepat / saklar data preview)
+  // menimpa hasil yang lebih baru (mis. ganti filter cepat lalu Refresh)
   const fetchToken = useRef(0);
-
-  /* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ (saklar Demo data bersama — app/components/demoMode.js) */
-  const demo = useDemoMode();
-  const prevDemo = useRef(demo);
-  useEffect(() => {
-    if (prevDemo.current === demo) return;
-    prevDemo.current = demo;
-    refresh();
-  }, [demo]);
-  /* ═══ END PREVIEW-ONLY ═══ */
 
   // Slot aksi di top bar mobile (MobileNav) — diisi via portal.
   // Kiri theme toggle: export + refresh · kanan theme toggle: suggestions (admin)
@@ -564,18 +549,8 @@ export default function DashboardPage() {
       const url = since && until
         ? `/api/meta?mode=dashboard&since=${since}&until=${until}`
         : `/api/meta?mode=dashboard&date_preset=${dateOpt.value}`;
-      let json;
-      /* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */
-      if (demo) {
-        const r = since && until ? { since, until } : presetToRange(dateOpt.value);
-        await demoDelay();
-        json = buildDemoDashboard({ ...r, isThisMonth: !(since && until) && dateOpt.value === 'this_month' });
-      } else
-      /* ═══ END PREVIEW-ONLY ═══ */
-      {
-        const res = await authFetch(url);
-        json = await res.json();
-      }
+      const res = await authFetch(url);
+      const json = await res.json();
       if (token !== fetchToken.current) return;
       if (json.error) throw new Error(json.error);
 
@@ -1025,9 +1000,6 @@ export default function DashboardPage() {
         <div className="rg-top-title">
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <h1 className="rg-h1">Dashboard</h1>
-            {/* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */}
-            {demo && <DemoChip />}
-            {/* ═══ END PREVIEW-ONLY ═══ */}
           </div>
           <div className="rg-ctx">{ctxLine}</div>
         </div>
@@ -1044,8 +1016,6 @@ export default function DashboardPage() {
               aria-label="Compare two periods" onClick={() => setShowCompare(true)}>
               <GitCompareArrows size={15} />
             </button>
-            {/* Export tetap jalan saat Demo data (permintaan Nadir 28 Sep 2026) — laporan dari data
-                dummy, nama file ber-"DEMO" (lihat PREVIEW-ONLY di ExportMenu.js) */}
             {isAdmin && <ExportMenu {...exportProps} pill iconOnly />}
             <span className="rg-vsep" aria-hidden="true" />
             <button type="button" className="rg-pill rg-round" title="Refresh data" aria-label="Refresh data"
@@ -1156,12 +1126,6 @@ export default function DashboardPage() {
           onClose={() => setShowLeadsInfo(false)}
         />
       )}
-
-      {/* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */}
-      {DEMO_ALLOWED && isAdmin && !isMobile && (
-        <PreviewPanel note="Applies to every Ads Hub page. Exported reports use the demo numbers (file name starts with DEMO)." />
-      )}
-      {/* ═══ END PREVIEW-ONLY ═══ */}
     </div>
   );
 }

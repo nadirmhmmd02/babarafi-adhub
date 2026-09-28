@@ -1,6 +1,6 @@
 'use client';
 
-/* ══ LEADS HUB — DASHBOARD, redesain "Ridgeline" (PREVIEW LOKAL, 28 Sep 2026) ══════
+/* ══ LEADS HUB — DASHBOARD, redesain "Ridgeline" (LIVE 28 Sep 2026) ══════
    Nuansa sama dengan Dashboard Ads Hub: top bar judul + konteks | pil filter & aksi,
    kartu cangkang + panel dalam, angka Geist Mono penuh, delta ber-ikon bulat, warna
    hanya untuk data (status, sales) — pilihan/aktif netral. Skin: app/ridgeline.css +
@@ -41,11 +41,6 @@ import { dashboardFontVars } from '../components/dashboardFonts';
 import {
   fmtRangeShort, fmtClock, fmtPct1, toneOf, Delta, InfoTip, DatePill, KpiSpark, previousRange,
 } from '../components/rgKit';
-/* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */
-import PreviewPanel from '../components/PreviewPanel';
-import { buildDemoLeads } from '../components/demoDashboard';
-import { DEMO_ALLOWED, useDemoMode, DemoChip, demoDelay } from '../components/demoMode';
-/* ═══ END PREVIEW-ONLY ═══ */
 
 /* ─── Format angka — PENUH gaya Indonesia (sama dengan Dashboard Ads Hub) ─── */
 const fmtInt = v => Math.round(v || 0).toLocaleString('id-ID');
@@ -460,16 +455,6 @@ export default function LeadsDashboardPage() {
     setTopbarSlot(isMobile ? document.getElementById('wd-topbar-actions') : null);
   }, [isMobile]);
 
-  /* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ (saklar Demo data bersama — app/components/demoMode.js) */
-  const demo = useDemoMode();
-  const prevDemo = useRef(demo);
-  useEffect(() => {
-    if (prevDemo.current === demo) return;
-    prevDemo.current = demo;
-    if (role) fetchData();
-  }, [demo]);
-  /* ═══ END PREVIEW-ONLY ═══ */
-
   useEffect(() => { if (!role) return; fetchData(); }, [role, dateOpt, isCustom, customSince, customUntil, kategori]);
 
   useEffect(() => {
@@ -490,52 +475,39 @@ export default function LeadsDashboardPage() {
     try {
       let leads, prevLeads = null, spend = 0, inboxCount = 0;
 
-      /* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */
-      if (demo) {
-        await demoDelay();
-        const byCat = rows => (kategori === 'Semua' ? rows : rows.filter(l => l.kategori_promo === kategori));
-        const cur = buildDemoLeads(range);
-        leads = byCat(cur.rows);
-        prevLeads = byCat(buildDemoLeads(prevR).rows);
-        spend = cur.spend;
-        inboxCount = role === 'admin' ? cur.inboxCount : 0;
-      } else
-      /* ═══ END PREVIEW-ONLY ═══ */
-      {
-        // 1. Leads approved dalam periode (cohort by created_at) + periode pembanding
-        const q = (r, cols) => {
-          let query = supabase
-            .from('leads')
-            .select(cols)
-            .eq('verification', 'approved')
-            .gte('created_at', r.since + 'T00:00:00')
-            .lte('created_at', r.until + 'T23:59:59.999');
-          if (kategori !== 'Semua') query = query.eq('kategori_promo', kategori);
-          return query.limit(10000);
-        };
-        const [curRes, prevRes] = await Promise.all([
-          q(range, 'status, followed_up, closing_amount, kategori_promo, sales, created_at'),
-          q(prevR, 'status, followed_up'),
-        ]);
-        if (curRes.error) throw new Error(curRes.error.message);
-        leads = curRes.data;
-        prevLeads = prevRes.error ? null : prevRes.data;   // gagal → delta "—", halaman tetap jalan
+      // 1. Leads approved dalam periode (cohort by created_at) + periode pembanding
+      const q = (r, cols) => {
+        let query = supabase
+          .from('leads')
+          .select(cols)
+          .eq('verification', 'approved')
+          .gte('created_at', r.since + 'T00:00:00')
+          .lte('created_at', r.until + 'T23:59:59.999');
+        if (kategori !== 'Semua') query = query.eq('kategori_promo', kategori);
+        return query.limit(10000);
+      };
+      const [curRes, prevRes] = await Promise.all([
+        q(range, 'status, followed_up, closing_amount, kategori_promo, sales, created_at'),
+        q(prevR, 'status, followed_up'),
+      ]);
+      if (curRes.error) throw new Error(curRes.error.message);
+      leads = curRes.data;
+      prevLeads = prevRes.error ? null : prevRes.data;   // gagal → delta "—", halaman tetap jalan
 
-        // 2. Spend campaign konversi (agregat) — periode sama
-        try {
-          const url = isCustom && customSince && customUntil
-            ? `/api/leads?mode=spend&since=${customSince}&until=${customUntil}`
-            : `/api/leads?mode=spend&date_preset=${dateOpt.value}`;
-          const res  = await authFetch(url);
-          const json = await res.json();
-          if (!json.error) spend = json.spend || 0;
-        } catch (e) {}
+      // 2. Spend campaign konversi (agregat) — periode sama
+      try {
+        const url = isCustom && customSince && customUntil
+          ? `/api/leads?mode=spend&since=${customSince}&until=${customUntil}`
+          : `/api/leads?mode=spend&date_preset=${dateOpt.value}`;
+        const res  = await authFetch(url);
+        const json = await res.json();
+        if (!json.error) spend = json.spend || 0;
+      } catch (e) {}
 
-        // 3. Black Box count (admin only)
-        if (role === 'admin') {
-          const { count } = await supabase.from('leads').select('id', { count: 'exact', head: true }).eq('verification', 'unverified');
-          inboxCount = count || 0;
-        }
+      // 3. Black Box count (admin only)
+      if (role === 'admin') {
+        const { count } = await supabase.from('leads').select('id', { count: 'exact', head: true }).eq('verification', 'unverified');
+        inboxCount = count || 0;
       }
       if (token !== fetchToken.current) return;
 
@@ -648,9 +620,6 @@ export default function LeadsDashboardPage() {
         <div className="rg-top-title">
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <h1 className="rg-h1">Dashboard</h1>
-            {/* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */}
-            {demo && <DemoChip />}
-            {/* ═══ END PREVIEW-ONLY ═══ */}
           </div>
           <div className="rg-ctx">{ctxLine}</div>
         </div>
@@ -802,12 +771,6 @@ export default function LeadsDashboardPage() {
           </div>
         </>)}
       </div>
-
-      {/* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */}
-      {DEMO_ALLOWED && role === 'admin' && !isMobile && (
-        <PreviewPanel note="Also applies here. Tip: pick “Last 7 days” to see the money row before the first deal (dormant)." />
-      )}
-      {/* ═══ END PREVIEW-ONLY ═══ */}
     </div>
   );
 }

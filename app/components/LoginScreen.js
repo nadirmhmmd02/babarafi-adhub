@@ -10,15 +10,14 @@ import { dashboardFontVars } from './dashboardFonts';
 
 /* ─────────────────────────────────────────────────────────────
    LOGIN SCREEN — tampilan halaman /login (redesain "Ridgeline", 28 Sep 2026).
-   Dipisah dari app/login/page.js supaya bisa dipratinjau saat sudah login
-   (PREVIEW-ONLY: app/preview-login/page.js merender <LoginScreen preview />).
+   Dipisah dari app/login/page.js (halaman itu cukup merender komponen ini).
    Logika masuk SAMA dengan versi lama: login(email, password, remember) →
    redirect ke homeFor(role); "Remember me" = sesi localStorage vs sessionStorage.
    Tema ikut data-theme <html> (skrip no-flash di layout.js) — tidak dikunci terang.
    Styling: app/login-ridgeline.css (.rgin-) di atas skin .rg.
    ───────────────────────────────────────────────────────────── */
 
-export default function LoginScreen({ preview = false, previewBar = null }) {
+export default function LoginScreen() {
   const { login } = useAuth();
   const router = useRouter();
 
@@ -35,9 +34,6 @@ export default function LoginScreen({ preview = false, previewBar = null }) {
     e.preventDefault();
     setError(''); setInfo('');
     if (!email.trim() || !password) { setError('Enter your email and password.'); return; }
-    /* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */
-    if (preview) { setInfo('Preview only — signing in is turned off on this page.'); return; }
-    /* ═══ END PREVIEW-ONLY ═══ */
     setBusy(true);
     const res = await login(email, password, remember);
     if (res.ok) {
@@ -52,7 +48,6 @@ export default function LoginScreen({ preview = false, previewBar = null }) {
 
   return (
     <div className={`rg rgin ${dashboardFontVars}`}>
-      {previewBar}
       <section className="rg-card rgin-card rg-rise" aria-label="Sign in">
         {/* Kepala: logo mark (Saffron) + nama produk */}
         <div className="rgin-brand">

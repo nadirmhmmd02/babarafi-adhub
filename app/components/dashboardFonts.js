@@ -1,5 +1,5 @@
 /* ─────────────────────────────────────────────────────────────
-   FONT ADS HUB — redesain "Ridgeline" (preview lokal Sep 2026)
+   FONT ADS HUB — redesain "Ridgeline" (LIVE 28 Sep 2026)
    Referensi Nadir memakai sans grotesk + angka monospace → Geist + Geist Mono.
    Dipasang (lewat CSS variable) di akar halaman Ads Hub (.rg: Dashboard,
    Campaigns, Calendar, Analytics & Insights) + Sidebar; halaman lain tetap

@@ -20,18 +20,13 @@ import {
   MAPS_STATUS, STATUS_LABEL, REVIEW_COLOR, statusColor,
   PROVINSI, UNMAPPED_PROVINSI,
 } from '../components/mapsConfig';
-/* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */
-import PreviewPanel from '../components/PreviewPanel';
-import { DEMO_ALLOWED, useDemoMode, DemoChip } from '../components/demoMode';
-import { demoMapsCall } from '../components/demoMaps';
-/* ═══ END PREVIEW-ONLY ═══ */
 
 /* ─────────────────────────────────────────────────────────────
    MAPS HUB — halaman /maps (ADMIN-ONLY fase 1, lihat MAPS-HUB-PLAN.md).
    Monitoring status pendaftaran Google Maps 500+ outlet dari Google
    Sheets (read-only). AppShell sudah me-redirect role non-admin.
 
-   Redesain "Ridgeline" (Sep 2026, PREVIEW LOKAL) — skin .rg + maps-ridgeline.css
+   Redesain "Ridgeline" (LIVE 28 Sep 2026) — skin .rg + maps-ridgeline.css
    (prefix .rgm-). Atas→bawah: top bar → banner geocode (kalau ada kota kosong) →
    "Outlets by status" (5 sel = filter status) → toolbar filter (cari · Depo ·
    Province · City — berlaku untuk peta & tabel) → peta + panel Alerts/Data quality
@@ -83,14 +78,8 @@ export default function MapsPage() {
   const { role, ready, theme } = useAuth();
   const isMobile = useIsMobile();
 
-  /* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ (saklar Demo data bersama; saat nyala semua
-     panggilan /api/maps dijawab demoMaps.js dari memori — Supabase & Google Sheets tidak
-     disentuh. Saat dicabut: hapus blok ini, ganti `callApi(x)` kembali ke authFetch) */
-  const demo = useDemoMode();
-  /* ═══ END PREVIEW-ONLY ═══ */
   // Satu pintu ke /api/maps: body null = GET (daftar), selain itu POST {action,…}
   async function callApi(body) {
-    if (demo) return demoMapsCall(body);   // PREVIEW-ONLY — JANGAN DI-PUSH (baris ini dibuang)
     const res = body
       ? await authFetch('/api/maps', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       : await authFetch('/api/maps');
@@ -142,7 +131,7 @@ export default function MapsPage() {
     if (ready && role === 'admin') { setLoading(true); load(); }
     return () => { geoStop.current = true; if (toastTimer.current) clearTimeout(toastTimer.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, role, demo]);
+  }, [ready, role]);
 
   function showToast(kind, lines) {
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -402,9 +391,6 @@ export default function MapsPage() {
         <div className="rg-top-title">
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <h1 className="rg-h1">Outlet Maps</h1>
-            {/* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */}
-            {demo && <DemoChip />}
-            {/* ═══ END PREVIEW-ONLY ═══ */}
           </div>
           <div className="rg-ctx">{ctxLine}</div>
         </div>
@@ -776,12 +762,6 @@ export default function MapsPage() {
           </div>
         </div>
       )}
-
-      {/* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */}
-      {DEMO_ALLOWED && !isMobile && !toast && (
-        <PreviewPanel note="Also applies here. Made-up outlets across 25 depos — Sync, Mark as done, province mapping and geocoding only change this browser." />
-      )}
-      {/* ═══ END PREVIEW-ONLY ═══ */}
     </div>
   );
 }

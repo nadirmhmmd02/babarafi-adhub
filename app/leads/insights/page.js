@@ -1,6 +1,6 @@
 'use client';
 
-/* ══ LEADS HUB — ANALYTICS & INSIGHTS (dibangun 28 Sep 2026, gaya "Ridgeline", PREVIEW LOKAL) ══
+/* ══ LEADS HUB — ANALYTICS & INSIGHTS (dibangun 28 Sep 2026, gaya "Ridgeline", LIVE) ══
    Dulu placeholder "under development". Isi dipilih Nadir (28 Sep 2026), atas → bawah:
      1. Temuan otomatis (kartu insight rule-based — gaya sama dengan Analytics Ads Hub)
      2. Leads over time (batang bertumpuk per kategori promo) + Lead funnel
@@ -38,11 +38,6 @@ import { monotonePath } from '../../components/AreaChart';
 import {
   buildLeadsAnalysis, DOW, fmtInt, fmtDec, fmtPct, fmtRp, catColor, catName,
 } from '../../components/leadsInsightEngine';
-/* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */
-import PreviewPanel from '../../components/PreviewPanel';
-import { buildDemoLeads } from '../../components/demoDashboard';
-import { DEMO_ALLOWED, useDemoMode, DemoChip, demoDelay } from '../../components/demoMode';
-/* ═══ END PREVIEW-ONLY ═══ */
 
 const plural = (n, w) => `${fmtInt(n)} ${w}${n === 1 ? '' : 's'}`;
 
@@ -503,16 +498,12 @@ export default function LeadsInsightsPage() {
   const [topbarSlot, setTopbarSlot] = useState(null);
   useEffect(() => { setTopbarSlot(isMobile ? document.getElementById('wd-topbar-actions') : null); }, [isMobile]);
 
-  /* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ (saklar Demo data bersama — app/components/demoMode.js) */
-  const demo = useDemoMode();
-  /* ═══ END PREVIEW-ONLY ═══ */
-
   const range = isCustom && customSince && customUntil ? { since: customSince, until: customUntil } : presetToRange(dateOpt.value);
   const prevR = previousRange(range.since, range.until);
 
   useEffect(() => { if (!role) return; fetchData(); },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [role, dateOpt, isCustom, customSince, customUntil, kategori, demo]);
+    [role, dateOpt, isCustom, customSince, customUntil, kategori]);
 
   useEffect(() => {
     if (!showDropdown) return;
@@ -526,32 +517,22 @@ export default function LeadsInsightsPage() {
     setLoading(true); setError(null);
     try {
       let rows, prevRows = null;
-      /* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */
-      if (demo) {
-        await demoDelay();
-        const byCat = r => (kategori === 'Semua' ? r : r.filter(l => l.kategori_promo === kategori));
-        rows = byCat(buildDemoLeads(range).rows);
-        prevRows = byCat(buildDemoLeads(prevR).rows);
-      } else
-      /* ═══ END PREVIEW-ONLY ═══ */
-      {
-        // Lead approved dalam periode (cohort by created_at) + periode pembanding — pola query Dashboard
-        const cols = 'status, followed_up, closing_amount, kategori_promo, sales, created_at, domicile, deal_date, campaign_ref(name)';
-        const q = (r) => {
-          let query = supabase
-            .from('leads')
-            .select(cols)
-            .eq('verification', 'approved')
-            .gte('created_at', r.since + 'T00:00:00')
-            .lte('created_at', r.until + 'T23:59:59.999');
-          if (kategori !== 'Semua') query = query.eq('kategori_promo', kategori);
-          return query.limit(10000);
-        };
-        const [curRes, prevRes] = await Promise.all([q(range), q(prevR)]);
-        if (curRes.error) throw new Error(curRes.error.message);
-        rows = curRes.data;
-        prevRows = prevRes.error ? null : prevRes.data;   // gagal → perbandingan "—", halaman tetap jalan
-      }
+      // Lead approved dalam periode (cohort by created_at) + periode pembanding — pola query Dashboard
+      const cols = 'status, followed_up, closing_amount, kategori_promo, sales, created_at, domicile, deal_date, campaign_ref(name)';
+      const q = (r) => {
+        let query = supabase
+          .from('leads')
+          .select(cols)
+          .eq('verification', 'approved')
+          .gte('created_at', r.since + 'T00:00:00')
+          .lte('created_at', r.until + 'T23:59:59.999');
+        if (kategori !== 'Semua') query = query.eq('kategori_promo', kategori);
+        return query.limit(10000);
+      };
+      const [curRes, prevRes] = await Promise.all([q(range), q(prevR)]);
+      if (curRes.error) throw new Error(curRes.error.message);
+      rows = curRes.data;
+      prevRows = prevRes.error ? null : prevRes.data;   // gagal → perbandingan "—", halaman tetap jalan
       if (token !== fetchToken.current) return;
       setAn(buildLeadsAnalysis(rows, prevRows, range, prevR));
       setUpdatedAt(new Date());
@@ -632,9 +613,6 @@ export default function LeadsInsightsPage() {
         <div className="rg-top-title">
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <h1 className="rg-h1">Analytics &amp; Insights</h1>
-            {/* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */}
-            {demo && <DemoChip />}
-            {/* ═══ END PREVIEW-ONLY ═══ */}
           </div>
           <div className="rg-ctx">{ctxLine}</div>
         </div>
@@ -723,12 +701,6 @@ export default function LeadsInsightsPage() {
           </div>
         </div>)}
       </div>
-
-      {/* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */}
-      {DEMO_ALLOWED && role === 'admin' && !isMobile && (
-        <PreviewPanel note="Also applies here — the same made-up leads as Dashboard & Leads List. Tip: “Last month” compares a heavier month; “Last 7 days” shows the no-deals state." />
-      )}
-      {/* ═══ END PREVIEW-ONLY ═══ */}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-/* ══ LEADS HUB — LEADS LIST + BLACK BOX, redesain "Ridgeline" (PREVIEW LOKAL, 28 Sep 2026) ══
+/* ══ LEADS HUB — LEADS LIST + BLACK BOX, redesain "Ridgeline" (LIVE 28 Sep 2026) ══
    Nuansa sama dengan Dashboard Ads Hub & Leads Hub: top bar judul + konteks | aksi,
    toolbar pil 40px, tabel di kartu cangkang + panel dalam, chip warna per status &
    per sales, dialog & bar melayang skin. Skin: app/ridgeline.css + app/leads-ridgeline.css
@@ -37,12 +37,6 @@ import { DATE_PRESETS_DASHBOARD } from '../../components/DateFilterContext';
 import { STATUSES, SALES, CATEGORIES, kategoriLabel } from '../../components/leadsConfig';
 import { dashboardFontVars } from '../../components/dashboardFonts';
 import { fmtRangeShort, fmtClock } from '../../components/rgKit';
-/* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */
-import PreviewPanel from '../../components/PreviewPanel';
-import { demoLeadsList, demoLeadsInboxCount, demoLeadsPatch, demoLeadsSync } from '../../components/demoDashboard';
-import { DEMO_ALLOWED, useDemoMode, DemoChip, demoDelay } from '../../components/demoMode';
-const isDemoId = id => String(id).startsWith('demo-');
-/* ═══ END PREVIEW-ONLY ═══ */
 
 const PAGE_SIZE = 100;
 const COLS_KEY = 'wd-leads-cols-hidden';
@@ -354,11 +348,6 @@ export default function LeadsListPage() {
   const [selected, setSelected] = useState(() => new Set());
   const [page, setPage] = useState(1);
 
-  /* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ (saklar Demo data bersama — app/components/demoMode.js;
-     lead dummy + semua perubahan hanya di memori, tabel Supabase tidak disentuh) */
-  const demo = useDemoMode();
-  /* ═══ END PREVIEW-ONLY ═══ */
-
   // Slot top bar mobile (refresh via portal, pola halaman lain)
   const [topbarSlot, setTopbarSlot] = useState(null);
   useEffect(() => {
@@ -418,14 +407,6 @@ export default function LeadsListPage() {
     const token = ++fetchToken.current;
     setLoading(true); setError(null);
     const verif = activeTab === 'inbox' ? 'unverified' : 'approved';
-    /* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */
-    if (demo) {
-      await demoDelay(300);
-      if (token !== fetchToken.current) return;
-      setRows(demoLeadsList(verif)); setUpdatedAt(new Date()); setLoading(false);
-      return;
-    }
-    /* ═══ END PREVIEW-ONLY ═══ */
     const { data, error } = await supabase
       .from('leads')
       .select('*, campaign_ref(name)')
@@ -436,23 +417,20 @@ export default function LeadsListPage() {
     if (error) setError(error.message);
     else { setRows(data || []); setUpdatedAt(new Date()); }
     setLoading(false);
-  }, [tab, demo]);
+  }, [tab]);
 
   const fetchInboxCount = useCallback(async () => {
     if (!isAdmin) return;
-    /* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */
-    if (demo) { setInboxCount(demoLeadsInboxCount()); return; }
-    /* ═══ END PREVIEW-ONLY ═══ */
     const { count } = await supabase
       .from('leads')
       .select('id', { count: 'exact', head: true })
       .eq('verification', 'unverified');
     setInboxCount(count || 0);
-  }, [isAdmin, demo]);
+  }, [isAdmin]);
 
   useEffect(() => {
     if (!role) return;
-    // Ganti tab / sumber data → kosongkan tabel dulu (skeleton). Baris tab lama JANGAN tampil
+    // Ganti tab → kosongkan tabel dulu (skeleton). Baris tab lama JANGAN tampil
     // dengan tombol tab baru (mis. Approve/Reject di atas lead yang sudah approved).
     setRows(null);
     fetchRows();
@@ -464,9 +442,6 @@ export default function LeadsListPage() {
 
   /* ── Tulis ke tabel leads (satu id → eq, banyak → in; sama dgn v3.0) ── */
   async function dbUpdate(ids, patch) {
-    /* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */
-    if (ids.length && ids.every(isDemoId)) { await demoDelay(120); demoLeadsPatch(ids, patch); return null; }
-    /* ═══ END PREVIEW-ONLY ═══ */
     const query = supabase.from('leads').update(patch);
     const { error } = ids.length === 1 ? await query.eq('id', ids[0]) : await query.in('id', ids);
     return error;
@@ -477,16 +452,10 @@ export default function LeadsListPage() {
     if (syncing) return;
     setSyncing(true);
     try {
-      let inserted;
-      /* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */
-      if (demo) { await demoDelay(900); inserted = demoLeadsSync(); } else
-      /* ═══ END PREVIEW-ONLY ═══ */
-      {
-        const res  = await authFetch('/api/leads', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'sync' }) });
-        const json = await res.json();
-        if (json.error) throw new Error(json.error);
-        inserted = json.inserted;
-      }
+      const res  = await authFetch('/api/leads', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'sync' }) });
+      const json = await res.json();
+      if (json.error) throw new Error(json.error);
+      const inserted = json.inserted;
       showToast(`Sync complete — ${inserted} new lead${inserted === 1 ? '' : 's'} in Black Box`);
       await fetchRows();
       await fetchInboxCount();
@@ -731,9 +700,6 @@ export default function LeadsListPage() {
         <div className="rg-top-title">
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <h1 className="rg-h1">Leads List</h1>
-            {/* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */}
-            {demo && <DemoChip />}
-            {/* ═══ END PREVIEW-ONLY ═══ */}
           </div>
           <div className="rg-ctx">{ctxLine}</div>
         </div>
@@ -1189,12 +1155,6 @@ export default function LeadsListPage() {
           </div>
         </div>
       )}
-
-      {/* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */}
-      {DEMO_ALLOWED && isAdmin && !isMobile && selected.size === 0 && (
-        <PreviewPanel note="Also applies here. Status, sales, follow-up, notes, approve & sync only change this browser — nothing is saved." />
-      )}
-      {/* ═══ END PREVIEW-ONLY ═══ */}
     </div>
   );
 }

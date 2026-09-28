@@ -17,11 +17,6 @@ import TodoPanel from '../components/TodoPanel';
 import TodoDetail from '../components/TodoDetail';
 import { dashboardFontVars } from '../components/dashboardFonts';
 import { RgDialog } from '../components/rgKit';
-/* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */
-import PreviewPanel from '../components/PreviewPanel';
-import { DEMO_ALLOWED, useDemoMode, DemoChip } from '../components/demoMode';
-import { demoNotesDb, isDemoNotesId } from '../components/demoNotes';
-/* ═══ END PREVIEW-ONLY ═══ */
 
 /* ─────────────────────────────────────────────────────────────
    NOTES — catatan pribadi admin (halaman penuh, /notes)
@@ -34,7 +29,7 @@ import { demoNotesDb, isDemoNotesId } from '../components/demoNotes';
    innerHTML editor HANYA di-set ulang saat catatan yang dibuka
    berganti, JANGAN saat mengetik, kalau tidak kursor melompat ke awal.
 
-   Redesain "Ridgeline" (Sep 2026, PREVIEW LOKAL): skin .rg + notes-ridgeline.css
+   Redesain "Ridgeline" (LIVE 28 Sep 2026): skin .rg + notes-ridgeline.css
    (prefix .rgn-). Kartu Notes & To Do di kolom kiri, kartu editor di kanan;
    susunan, fitur & semua logika editor TIDAK berubah.
    ───────────────────────────────────────────────────────────── */
@@ -186,13 +181,7 @@ export default function NotesPage() {
 
   /* ── To Do (ala Microsoft To Do) — data via useTodos, panel di bawah daftar catatan,
         detail tugas menggantikan editor di kanan saat sebuah tugas dipilih ── */
-  /* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ (saklar Demo data bersama — demoMode.js; saat nyala
-     semua baca/tulis Notes & To Do ke memori (demoNotes.js), tabel Supabase tidak disentuh.
-     Saat dicabut: hapus 2 baris ini, ganti `db.` → `supabase.` dan `useTodos(role === 'admin')`) */
-  const demo = useDemoMode();
-  const db = demo ? demoNotesDb : supabase;
-  /* ═══ END PREVIEW-ONLY ═══ */
-  const td = useTodos(role === 'admin', demo ? demoNotesDb : undefined);
+  const td = useTodos(role === 'admin');
   const [todoView, setTodoView] = useState('myday');
   const [selectedTaskId, setSelectedTaskId] = useState(null);
   const [todoH, setTodoH] = useState(TODO_DEFAULT);
@@ -324,14 +313,14 @@ export default function NotesPage() {
   const load = useCallback(async () => {
     // Coba ambil dengan kolom sort_order; kalau kolomnya belum ada (SQL update
     // belum dijalankan), fallback ke query lama supaya Notes tetap jalan.
-    let { data, error: err } = await db
+    let { data, error: err } = await supabase
       .from('notes')
       .select('id,title,content,pinned,updated_at,sort_order')
       .order('updated_at', { ascending: false });
     let hasOrderCol = true;
     if (err && (err.code === '42703' || /sort_order/i.test(err.message || ''))) {
       hasOrderCol = false;
-      ({ data, error: err } = await db
+      ({ data, error: err } = await supabase
         .from('notes')
         .select('id,title,content,pinned,updated_at')
         .order('pinned', { ascending: false })
@@ -353,15 +342,13 @@ export default function NotesPage() {
     // dihapus / belum pernah ada → catatan paling atas seperti biasa.
     const savedId = localStorage.getItem(ACTIVE_KEY);
     const restored = savedId && sorted.some(n => n.id === savedId) ? savedId : null;
-    // catatan yang sedang dibuka dipertahankan HANYA kalau masih ada di data baru
-    // (mis. saklar Demo data dinyalakan/dimatikan → id lama tidak berlaku lagi)
-    setActiveId(prev => (prev && sorted.some(n => n.id === prev) ? prev : restored || sorted[0]?.id || null));
-  }, [db]);
+    setActiveId(prev => prev || restored || sorted[0]?.id || null);
+  }, []);
 
   // Simpan catatan aktif tiap berganti — satu tempat, mencakup semua jalur
   // (klik daftar, catatan baru, hapus catatan aktif, dst.)
   useEffect(() => {
-    if (activeId && !isDemoNotesId(activeId)) localStorage.setItem(ACTIVE_KEY, activeId); // PREVIEW-ONLY: `&& !isDemoNotesId(activeId)` dibuang saat demo dicabut
+    if (activeId) localStorage.setItem(ACTIVE_KEY, activeId);
   }, [activeId]);
 
   useEffect(() => { if (role === 'admin') load(); }, [role, load]);
@@ -408,7 +395,7 @@ export default function NotesPage() {
     clearTimeout(saveTimer.current);
     const id = activeId;
     saveTimer.current = setTimeout(async () => {
-      const { error: err } = await db.from('notes').update(patch).eq('id', id);
+      const { error: err } = await supabase.from('notes').update(patch).eq('id', id);
       if (err) { setError(err.message); setStatus(''); return; }
       setStatus('saved');
       setNotes(prev => (prev || []).map(n => (n.id === id ? { ...n, updated_at: new Date().toISOString() } : n)));
@@ -417,7 +404,7 @@ export default function NotesPage() {
   }
 
   async function createNote() {
-    const { data, error: err } = await db
+    const { data, error: err } = await supabase
       .from('notes')
       .insert({ title: 'Untitled note', content: '' })
       .select(canReorder ? 'id,title,content,pinned,updated_at,sort_order' : 'id,title,content,pinned,updated_at')
@@ -433,7 +420,7 @@ export default function NotesPage() {
   }
 
   async function removeNote(id) {
-    const { error: err } = await db.from('notes').delete().eq('id', id);
+    const { error: err } = await supabase.from('notes').delete().eq('id', id);
     if (err) { setError(err.message); return; }
     const rest = (notes || []).filter(n => n.id !== id);
     setNotes(rest);
@@ -466,7 +453,7 @@ export default function NotesPage() {
     const next = !n.pinned;
     expandGroup(next ? 'pinned' : 'all');   // grup tujuan dibuka biar catatannya kelihatan pindah
     setNotes(prev => (prev || []).map(x => (x.id === n.id ? { ...x, pinned: next } : x)));
-    const { error: err } = await db.from('notes').update({ pinned: next }).eq('id', n.id);
+    const { error: err } = await supabase.from('notes').update({ pinned: next }).eq('id', n.id);
     if (err) setError(err.message);
   }
 
@@ -493,7 +480,7 @@ export default function NotesPage() {
     setNotes(prev => {
       const list = (prev || []).map((n, i) => ({ ...n, sort_order: i }));
       // Simpan idempotent — aman walau updater sempat jalan dua kali (StrictMode)
-      Promise.all(list.map(n => db.from('notes').update({ sort_order: n.sort_order }).eq('id', n.id)))
+      Promise.all(list.map(n => supabase.from('notes').update({ sort_order: n.sort_order }).eq('id', n.id)))
         .then(results => {
           const bad = results.find(r => r.error);
           if (bad) setError(bad.error.message);
@@ -981,9 +968,6 @@ export default function NotesPage() {
           <div style={{ minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <h1 className="rg-h1">Notes</h1>
-              {/* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */}
-              {demo && <DemoChip />}
-              {/* ═══ END PREVIEW-ONLY ═══ */}
             </div>
             <div className="rg-ctx">{ctxLine}</div>
           </div>
@@ -1234,12 +1218,6 @@ export default function NotesPage() {
             : <>It will be removed from every device. This can’t be undone.</>}
         </RgDialog>
       )}
-
-      {/* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ */}
-      {DEMO_ALLOWED && !isMobile && (
-        <PreviewPanel note="Also applies here. Notes & To Do show made-up content — typing, pinning and deleting only change this browser. Your real notes are untouched." />
-      )}
-      {/* ═══ END PREVIEW-ONLY ═══ */}
     </div>
   );
 }

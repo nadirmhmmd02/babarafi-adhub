@@ -1,5 +1,5 @@
 /* ══════════════════════════════════════════════════════════════════════
-   LOGIN — redesain "Ridgeline" (28 Sep 2026, PREVIEW LOKAL). Dasar skin di
+   LOGIN — redesain "Ridgeline" (LIVE 28 Sep 2026). Dasar skin di
    app/ridgeline.css (.rg). Prefix khusus: .rgin-
    Keputusan Nadir 28 Sep 2026: kartu di tengah (susunan lama), tema IKUT tema
    terakhir di perangkat itu (data-theme dari skrip no-flash di layout.js — tidak
@@ -111,16 +111,10 @@
 .rgin-foot > span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .rgin-foot svg { color: var(--rg-t3); }
 
-/* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ (bar pratinjau di /preview-login) */
-.rgin-preview { position: fixed; top: 16px; left: 16px; z-index: 5; display: flex; align-items: center; gap: 8px; }
-/* ═══ END PREVIEW-ONLY ═══ */
-
 @media (max-width: 480px) {
   .rgin { justify-content: flex-start; padding-top: 48px; }
   /* iPhone meng-zoom halaman saat kolom < 16px diketuk — isian dibuat 16px di HP */
   .rgin-input input { font-size: 16px; }
-  /* PREVIEW-ONLY — JANGAN DI-PUSH: bar pratinjau pindah ke bawah (tidak menutupi kartu) */
-  .rgin-preview { top: auto; bottom: 16px; right: 16px; flex-wrap: wrap; }
   .rgin-well { padding: 22px 18px 20px; }
   .rgin-foot { flex-direction: column; align-items: flex-start; gap: 4px; }
 }

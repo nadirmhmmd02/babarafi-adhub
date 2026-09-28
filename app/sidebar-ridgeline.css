@@ -38,6 +38,8 @@
   --sb-fly-line: #DCDCD6;
   --sb-shadow: 0 16px 40px rgba(22,22,22,0.16);
   --sb-drag: rgba(22,22,22,0.14);
+  --sb-guide: #D0D0C9;              /* garis pemandu isi grup */
+  --sb-sub-active: rgba(22,22,22,0.06);
   /* Saffron sebagai TEKS/GARIS di permukaan terang terlalu pucat (1,8:1) →
      versi gelap untuk huruf avatar & ring fokus (4,5:1 di #EAEAE6) */
   --sb-acc-ink: #935F0A;
@@ -65,6 +67,8 @@ html[data-theme="dark"] .sb {
   --sb-fly-line: #333333;
   --sb-shadow: 0 20px 50px rgba(0,0,0,0.5);
   --sb-drag: rgba(255,255,255,0.14);
+  --sb-guide: #363636;
+  --sb-sub-active: rgba(255,255,255,0.07);
   --sb-acc-ink: #EDA844;
   color-scheme: dark;
 }
@@ -130,7 +134,6 @@ aside.sb.is-collapsed .sb-panel { opacity: 0; }
 
 .sb-nav { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 12px 12px; scrollbar-width: none; }
 .sb-nav::-webkit-scrollbar { display: none; }
-.sb-sec + .sb-sec { margin-top: 18px; }
 .sb-label {
   padding: 0 14px 7px; font-size: 11px; font-weight: 500; letter-spacing: 0.06em;
   text-transform: uppercase; color: var(--sb-label); white-space: nowrap;
@@ -155,6 +158,62 @@ aside.sb.is-collapsed .sb-panel { opacity: 0; }
   animation: sbBarIn .3s cubic-bezier(.22,1,.36,1);
 }
 @keyframes sbBarIn { from { transform: translateY(-50%) scaleY(0); } }
+
+/* ══ GRUP MENU YANG BISA DILIPAT (28 Sep 2026, dari referensi Nadir) ══
+   Kepala grup = pil dengan panah; terbuka → pil terisi + panah menghadap atas.
+   Isi grup menjorok dengan garis pemandu tipis; halaman aktif = latar samar +
+   garis Saffron yang menempel DI ATAS garis pemandu. Grup tertutup yang berisi
+   halaman aktif diberi titik Saffron supaya posisi tetap kelihatan. */
+.sb-grp + .sb-grp { margin-top: 6px; }
+.sb-grp-head {
+  width: 100%; height: 40px; display: flex; align-items: center; gap: 8px;
+  padding: 0 12px 0 14px; border-radius: 999px; border: 1px solid transparent;
+  background: transparent; cursor: pointer; text-align: left;
+  font: inherit; font-size: 14px; letter-spacing: -0.01em; color: var(--sb-item);
+  transition: background-color .18s ease, color .18s ease, border-color .18s ease;
+}
+.sb-grp-head:hover { background: var(--sb-hover); color: var(--sb-item-hover); }
+.sb-grp.is-here .sb-grp-head { color: var(--sb-item-hover); font-weight: 500; }
+.sb-grp.is-open .sb-grp-head {
+  background: var(--sb-pill); border-color: var(--sb-pill-line);
+  color: var(--sb-item-hover); font-weight: 500;
+}
+.sb-grp-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sb-grp-dot {
+  width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; background: var(--sb-acc);
+  animation: sbDotIn .25s cubic-bezier(.22,1,.36,1);
+}
+@keyframes sbDotIn { from { opacity: 0; transform: scale(0); } }
+.sb-grp-chev {
+  flex-shrink: 0; color: var(--sb-icon);
+  transition: transform .3s cubic-bezier(.22,1,.36,1), color .18s ease;
+}
+.sb-grp-head:hover .sb-grp-chev { color: var(--sb-icon-hover); }
+.sb-grp.is-open .sb-grp-chev { transform: rotate(-180deg); color: var(--sb-item-hover); }
+
+/* Lipat: baris grid 0fr ↔ 1fr (tinggi isi tidak perlu diukur) */
+.sb-grp-body {
+  display: grid; grid-template-rows: 0fr;
+  transition: grid-template-rows .3s cubic-bezier(.22,1,.36,1);
+}
+.sb-grp.is-open .sb-grp-body { grid-template-rows: 1fr; }
+.sb-grp-inner { min-height: 0; overflow: hidden; }
+.sb-grp-list {
+  position: relative; margin: 6px 0 4px 22px; padding-left: 10px;
+  opacity: 0; transform: translateY(-4px);
+  transition: opacity .2s ease, transform .3s cubic-bezier(.22,1,.36,1);
+}
+.sb-grp.is-open .sb-grp-list { opacity: 1; transform: none; }
+.sb-grp-list::before {
+  content: ''; position: absolute; left: 0; top: 3px; bottom: 3px; width: 1px;
+  background: var(--sb-guide);
+}
+.sb-grp-list .sb-item { height: 34px; padding: 0 12px; font-size: 13.5px; }
+.sb-grp-list .sb-item.is-active {
+  background: var(--sb-sub-active); border-color: transparent;
+}
+/* Garis aksen pindah ke garis pemandu (tengahnya pas di atas garis 1px) */
+.sb-grp-list .sb-item.is-active::before { left: -12px; width: 3px; height: 20px; border-radius: 3px; }
 
 .sb-user {
   display: flex; align-items: center; gap: 10px; margin: 0 12px 16px; padding: 10px 12px;

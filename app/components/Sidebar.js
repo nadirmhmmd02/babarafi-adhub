@@ -13,6 +13,7 @@ import {
   NotebookPen,
   MapPinned,
   Menu,
+  ChevronDown,
 } from 'lucide-react';
 import { useAuth } from './AuthContext';
 import { dashboardFontVars } from './dashboardFonts';
@@ -68,6 +69,10 @@ export function navSectionsFor(role) {
    REL IKON (menu · ikon per hub · logout) + PANEL MENU teks. Diciutkan (default saat
    web pertama dibuka) = hanya rel; hover/fokus ikon hub → flyout daftar halaman hub
    itu, jadi Campaigns/Calendar/dll tetap satu gerakan. Lebar panel bisa digeser.
+   Di panel, tiap hub = GRUP yang bisa dilipat (tombol panah, 28 Sep 2026) —
+   semua tertutup saat web pertama dibuka; grup berisi halaman aktif diberi
+   titik Saffron selama tertutup. Status buka-tutup bertahan saat pindah
+   halaman (Sidebar tidak remount), reset saat browser di-refresh.
    ───────────────────────────────────────────────────────────── */
 const HUB_ICON   = { 'Ads Hub': Megaphone, 'Leads Hub': Users, 'Maps Hub': MapPinned };
 const ROLE_LABEL = { admin: 'Admin', user: 'Viewer', marketing: 'Marketing' };
@@ -85,6 +90,7 @@ export default function Sidebar() {
   const [panelWidth, setPanelWidth] = useState(PANEL_DEFAULT);
   const [animate, setAnimate]     = useState(true);
   const [fly, setFly]             = useState(null); // { key, top } — flyout saat collapsed
+  const [openGroups, setOpenGroups] = useState({}); // { [hubKey]: true } — kosong = semua tertutup
   const dragging  = useRef(false);
   const asideRef  = useRef(null);
   const flyTimer  = useRef(null);
@@ -102,6 +108,10 @@ export default function Sidebar() {
     return pathname === href;
   }
   const activeHub = hubs.find(h => h.items.some(i => isActive(i.href)))?.key;
+
+  function toggleGroup(key) {
+    setOpenGroups(g => ({ ...g, [key]: !g[key] }));
+  }
 
   function toggleCollapse() {
     setAnimate(true);
@@ -224,12 +234,28 @@ export default function Sidebar() {
         </div>
 
         <nav className="sb-nav" aria-label="Pages">
-          {hubs.map(h => (
-            <div key={h.key} className="sb-sec">
-              <div className="sb-label">{h.label}</div>
-              {renderItems(h.items)}
-            </div>
-          ))}
+          {hubs.map(h => {
+            const open = !!openGroups[h.key];
+            const here = h.key === activeHub;
+            const bodyId = 'sb-grp-' + h.key.toLowerCase().replace(/\s+/g, '-');
+            return (
+              <div key={h.key} className={`sb-grp${open ? ' is-open' : ''}${here ? ' is-here' : ''}`}>
+                <button type="button" className="sb-grp-head" onClick={() => toggleGroup(h.key)}
+                  aria-expanded={open} aria-controls={bodyId}>
+                  <span className="sb-grp-name">{h.label}</span>
+                  {here && !open && <span className="sb-grp-dot" aria-hidden="true" />}
+                  <ChevronDown size={16} className="sb-grp-chev" aria-hidden="true" />
+                </button>
+                {/* Lipat via grid-template-rows 0fr↔1fr (pola grup Notes) — inert
+                    saat tertutup supaya link tersembunyi tidak ikut kena Tab */}
+                <div id={bodyId} className="sb-grp-body" inert={!open}>
+                  <div className="sb-grp-inner">
+                    <div className="sb-grp-list">{renderItems(h.items)}</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </nav>
 
         {user && (

@@ -36,7 +36,9 @@
   --rg-traffic: #C9661A;
   --rg-conv: #0E9486;
   --rg-other: #A3A39D;
-  --rg-spend: #2E78C7;
+  /* Spend digeser dari #2E78C7 (28 Sep 2026): di mode grafik "All" keempat garis tampil
+     bersamaan dan biru lama terlalu mirip ungu Awareness (validator dataviz: ΔE 14,3 < 15) */
+  --rg-spend: #096CB5;
   --rg-tint-pos: rgba(14,148,134,0.17);
   --rg-tint-neg: rgba(207,54,60,0.14);
   --rg-tint-neu: rgba(22,22,22,0.05);
@@ -79,7 +81,7 @@ html[data-theme="dark"] .rg {
   --rg-traffic: #D9782A;
   --rg-conv: #10A393;
   --rg-other: #6E6E6E;
-  --rg-spend: #4A90E2;
+  --rg-spend: #2F97EF; /* dulu #4A90E2 — lihat catatan di token terang */
   --rg-tint-pos: rgba(16,163,147,0.32);
   --rg-tint-neg: rgba(242,106,110,0.26);
   --rg-tint-neu: rgba(255,255,255,0.07);
@@ -324,8 +326,11 @@ button.rg-foot:hover .rg-foot-arrow { transform: translateX(3px); }
   font-size: 12px; color: var(--rg-t2); white-space: nowrap;
 }
 .rg-kpi-sub > span:last-child { overflow: hidden; text-overflow: ellipsis; }
-.rg-spark { position: relative; flex: 1; min-height: 32px; margin: 8px -14px 0; }
-.rg-spark svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+/* Sparkline mengisi sisa tinggi panel (min 52px). Geometrinya dihitung dalam piksel
+   asli (KpiSpark di app/page.js): garis di pita 10px dari atas s.d. 16px dari bawah,
+   jadi titik akhir bercincin tidak pernah terpotong tepi panel (revisi 28 Sep 2026). */
+.rg-spark { position: relative; flex: 1; min-height: 52px; margin: 10px -14px 0; }
+.rg-spark svg { position: absolute; inset: 0; overflow: visible; }
 .rg-spark-line { animation: wdDrawLine .9s cubic-bezier(.22,1,.36,1) backwards; }
 .rg-spark-dot {
   position: absolute; width: 9px; height: 9px; border-radius: 50%; transform: translate(-50%, -50%);
@@ -368,6 +373,15 @@ button.rg-foot:hover .rg-foot-arrow { transform: translateX(3px); }
 @container (max-width: 200px) {
   .rg-bars { display: none; }
 }
+/* Desktop, baris tengah pendek: jarak di dalam sel dirapatkan supaya 2 baris sel tetap
+   muat tanpa tumpang-tindih — diukur dari tinggi panel sendiri (container query).
+   Hanya desktop: di HP tinggi kartu mengikuti isi, jadi tidak boleh size-contained. */
+.rg:not(.is-mobile) .rg-eff { container: rg-eff / size; }
+@container rg-eff (max-height: 190px) {
+  .rg-eff-cell  { padding: 7px 0; }
+  .rg-eff-value { margin-top: 4px; }
+  .rg-eff-scope { margin-top: 5px; }
+}
 .rg-eff-cell:nth-child(odd)  { padding-right: 18px; }
 .rg-eff-cell:nth-child(even) { padding-left: 18px; }
 .rg-eff-cell:nth-child(-n+2) { border-bottom: 1px solid var(--rg-line-soft); }
@@ -392,7 +406,10 @@ button.rg-foot:hover .rg-foot-arrow { transform: translateX(3px); }
   flex: 1; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center;
   gap: 24px; padding: 12px 20px 12px 16px; overflow: hidden;
 }
-.rg-donut { position: relative; width: var(--d, 172px); aspect-ratio: 1; flex-shrink: 0; }
+.rg-donut { position: relative; width: var(--d, 172px); aspect-ratio: 1; flex-shrink: 0; container-type: inline-size; }
+/* Desktop: donut ikut tinggi panel (maks 172px) → tidak terpotong saat baris tengah pendek */
+.rg:not(.is-mobile) .rg-split { container: rg-split / size; }
+.rg:not(.is-mobile) .rg-donut { width: min(var(--d, 172px), 100cqh); }
 .rg-donut svg {
   width: 100%; height: 100%; overflow: visible; transform: rotate(-90deg);
   animation: rgDonutIn .8s cubic-bezier(.22,1,.36,1) backwards;
@@ -403,10 +420,12 @@ button.rg-foot:hover .rg-foot-arrow { transform: translateX(3px); }
   position: absolute; inset: 0; pointer-events: none; text-align: center;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
 }
-.rg-donut-label { font-size: 12px; color: var(--rg-t2); }
-.rg-donut-value { margin-top: 4px; font-size: 15px; font-weight: 500; color: var(--rg-t1); }
+/* Teks tengah ikut skala lebar donut (cqi) — "Rp 19.133.334" dulu menabrak cincin
+   karena lubang donut hanya ±67% lebarnya */
+.rg-donut-label { font-size: min(12px, 7cqi); color: var(--rg-t2); }
+.rg-donut-value { margin-top: 4px; font-size: min(15px, 7.4cqi); font-weight: 500; color: var(--rg-t1); }
 .rg-donut-chip {
-  margin-top: 7px; padding: 2px 9px; border-radius: 999px; font-size: 11.5px;
+  margin-top: 7px; padding: 2px 9px; border-radius: 999px; font-size: min(11.5px, 6.6cqi);
   background: var(--rg-hover); color: var(--rg-t2);
 }
 .rg-legend { display: flex; flex-direction: column; gap: 16px; min-width: 0; container-type: inline-size; }
@@ -447,11 +466,22 @@ button.rg-foot:hover .rg-foot-arrow { transform: translateX(3px); }
   box-shadow: 0 1px 2px rgba(0,0,0,0.12);
 }
 .rg-seg-key { width: 9px; height: 2px; border-radius: 2px; flex-shrink: 0; }
-.rg-chart-well { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+/* Kunci tombol "All": 4 garis mini bertumpuk = legenda kecil keempat seri */
+.rg-seg-multi { display: inline-flex; flex-direction: column; gap: 1.5px; flex-shrink: 0; }
+.rg-seg-multi > i { display: block; width: 9px; height: 1.5px; border-radius: 1px; }
+.rg-seg-short { display: none; }
+.rg-chart-well { flex: 1; display: flex; flex-direction: column; overflow: hidden; container-type: inline-size; }
 .rg-stats { display: flex; gap: 32px; padding: 14px 18px 0; flex-wrap: wrap; row-gap: 10px; flex-shrink: 0; }
 .rg-stat-label { font-size: 12px; color: var(--rg-t2); }
 .rg-stat-value { display: flex; align-items: baseline; gap: 7px; margin-top: 5px; font-size: 18px; font-weight: 500; color: var(--rg-t1); white-space: nowrap; }
 .rg-stat-sub { font-family: var(--font-geist), sans-serif; font-size: 12px; font-weight: 400; letter-spacing: 0; color: var(--rg-t2); }
+/* Mode "All": baris statistik = legenda (kunci garis + nama + rata-rata harian).
+   Hover satu item → garis lain meredup, jadi garis mana milik siapa langsung kelihatan. */
+.rg-stat-key { transition: opacity .18s ease; }
+.rg-stat-key.is-dim { opacity: .42; }
+.rg-stat-key .rg-stat-label { display: flex; align-items: center; gap: 7px; }
+.rg-stat-note { margin-left: auto; align-self: flex-end; padding-bottom: 3px; font-size: 12px; color: var(--rg-t3); white-space: nowrap; }
+@container (max-width: 820px) { .rg-stat-note { display: none; } }
 .rg-plot { position: relative; flex: 1; min-height: 110px; margin: 8px 12px 6px 6px; cursor: crosshair; }
 .rg-plot > svg { position: absolute; inset: 0; overflow: visible; }
 .rg-gridline { stroke: var(--rg-grid); stroke-width: 1; stroke-dasharray: 3 5; }
@@ -464,6 +494,13 @@ button.rg-foot:hover .rg-foot-arrow { transform: translateX(3px); }
 .rg-crosshair { stroke: var(--rg-t2); stroke-width: 1; stroke-dasharray: 3 4; }
 .rg-area { animation: wdFadeIn .6s ease backwards; }
 .rg-line { animation: wdDrawLine .8s cubic-bezier(.22,1,.36,1) backwards; }
+.rg-mline { transition: opacity .2s ease; }
+.rg-mline.is-dim { opacity: .22; }
+/* Label nama di ujung garis (mode "All"). Teks memakai warna teks, identitas dibawa
+   garis penghubung berwarna seri (pedoman dataviz: teks tidak memakai warna data). */
+.rg-endlabel { font-size: 11.5px; font-weight: 500; fill: var(--rg-t2); letter-spacing: -0.005em; }
+.rg-endlabel-g { transition: opacity .2s ease; animation: wdFadeIn .3s ease .8s backwards; }
+.rg-endlabel-g.is-dim { opacity: .3; }
 .rg-pt { stroke: var(--rg-well); stroke-width: 2; }
 .rg-tipcard {
   position: absolute; z-index: 5; min-width: 176px; padding: 5px; border-radius: 12px;
@@ -536,9 +573,15 @@ button.rg-foot:hover .rg-foot-arrow { transform: translateX(3px); }
   flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px;
   padding: 0 16px 16px; overflow-y: auto; overflow-x: hidden;
 }
-.rg-row-kpi { flex: 0 1 190px; min-height: 172px; max-height: 214px; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
-.rg-row-mid { flex: 1 1 236px; min-height: 226px; max-height: 330px; display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 12px; }
-.rg-row-bot { flex: 1.8 1 300px; min-height: 290px; max-height: 580px; display: grid; grid-template-columns: minmax(0, 2.15fr) minmax(0, 1fr); gap: 12px; }
+/* Revisi 28 Sep 2026 (permintaan Nadir):
+   - KPI lebih tinggi supaya sparkline tampil utuh — min 216 = kepala 40 + angka & delta
+     + sparkline ≥52 + kaki 36 (dulu 172–214 → sparkline terjepit ±29px & terpotong).
+   - Baris tengah 2 kolom SAMA LEBAR → garis batasnya tepat di tengah kanvas.
+   - Min baris tengah & bawah dipangkas sedikit sebagai kompensasi (donut & sel efisiensi
+     sudah menyesuaikan tinggi panel lewat container query). */
+.rg-row-kpi { flex: 0 1 232px; min-height: 216px; max-height: 248px; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.rg-row-mid { flex: 1 1 236px; min-height: 210px; max-height: 330px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.rg-row-bot { flex: 1.8 1 300px; min-height: 270px; max-height: 580px; display: grid; grid-template-columns: minmax(0, 2.15fr) minmax(0, 1fr); gap: 12px; }
 
 /* ══ MOBILE (≤767px): tata letak lama (carousel KPI, susun vertikal) ══ */
 .rg.is-mobile .rg-top { flex-direction: column; align-items: stretch; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--rg-line); }
@@ -553,6 +596,15 @@ button.rg-foot:hover .rg-foot-arrow { transform: translateX(3px); }
 .rg.is-mobile .rg-chart-head { flex-wrap: wrap; row-gap: 8px; padding-bottom: 8px; }
 .rg.is-mobile .rg-chart-head .rg-segs { order: 3; width: 100%; margin-left: 0 !important; }
 .rg.is-mobile .rg-chart-head .rg-segs button { flex: 1; justify-content: center; padding: 0 6px; }
+/* HP: statistik grafik lebih rapat supaya cukup 2 baris (dulu 3 baris → plot terjepit,
+   sumbu tanggal terpotong) */
+.rg.is-mobile .rg-stats { column-gap: 18px; row-gap: 8px; }
+.rg.is-mobile .rg-stat-value { font-size: 16px; }
+/* HP: 5 tombol metrik harus muat selebar kartu → tanpa kunci warna, "Impressions" → "Impr." */
+.rg.is-mobile .rg-segs .rg-seg-key,
+.rg.is-mobile .rg-segs .rg-seg-multi { display: none; }
+.rg.is-mobile .rg-seg-long  { display: none; }
+.rg.is-mobile .rg-seg-short { display: inline; }
 /* HP: tanpa meter batang (sama seperti kartu 4C mobile lama), cakupan boleh turun baris */
 .rg.is-mobile .rg-eff-cell > .rg-bars { display: none; }
 .rg.is-mobile .rg-eff-scope { flex-wrap: wrap; row-gap: 3px; white-space: normal; }

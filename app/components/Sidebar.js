@@ -14,7 +14,6 @@ import {
   MapPinned,
   Menu,
 } from 'lucide-react';
-import Logo from './Logo';
 import { useAuth } from './AuthContext';
 import { dashboardFontVars } from './dashboardFonts';
 import '../sidebar-ridgeline.css';
@@ -89,16 +88,6 @@ export default function Sidebar() {
   const dragging  = useRef(false);
   const asideRef  = useRef(null);
   const flyTimer  = useRef(null);
-
-  /* ═══ PREVIEW-ONLY — JANGAN DI-PUSH ═══ (aksen pilihan di panel Preview Dashboard
-     tetap berlaku saat pindah halaman / refresh; aksen final nanti ditanam di CSS) */
-  useEffect(() => {
-    try {
-      const a = localStorage.getItem('wd-preview-accent');
-      if (a) document.documentElement.dataset.accent = a;
-    } catch {}
-  }, []);
-  /* ═══ END PREVIEW-ONLY ═══ */
 
   // Hub = section menu; Notes (admin) jadi "hub" sendiri di rel
   const hubs = navSectionsFor(role).map(s => ({
@@ -229,8 +218,8 @@ export default function Sidebar() {
 
       {/* ══ PANEL MENU ══ */}
       <div className="sb-panel" style={{ width: panelWidth + 'px' }} aria-hidden={collapsed} inert={collapsed}>
+        {/* Nama brand saja — logo dihapus (permintaan Nadir 28 Sep 2026) */}
         <div className="sb-brand">
-          <Logo size={24} color="var(--sb-acc)" />
           <span className="sb-brand-name">Baba Rafi <span>Ad Hub</span></span>
         </div>
 

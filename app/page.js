@@ -287,35 +287,57 @@ function InfoTip({ text, align }) {
   );
 }
 
-/* ─── Sparkline kartu KPI: kurva + titik akhir bercincin + garis jatuh putus-putus ─── */
+/* ─── Sparkline kartu KPI: kurva + titik akhir bercincin + garis jatuh putus-putus ───
+   Revisi 28 Sep 2026: dulu digambar dalam persen (viewBox 0–100) di pita ±29px, titik
+   akhir yang rendah terpotong tepi bawah panel. Sekarang diukur dalam piksel asli
+   (ResizeObserver): garis berada di pita SPARK_T dari atas s.d. SPARK_B dari bawah,
+   titik terakhir berhenti SPARK_R dari tepi kanan → cincin titik selalu utuh. */
+const SPARK_T = 10, SPARK_B = 16, SPARK_R = 18;
 function KpiSpark({ data }) {
   const gid = useId().replace(/:/g, '');
+  const ref = useRef(null);
+  const [box, setBox] = useState({ w: 0, h: 0 });
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([e]) => {
+      setBox({ w: Math.round(e.contentRect.width), h: Math.round(e.contentRect.height) });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   const vals = (data || []).filter(v => v != null && v >= 0);
-  if (vals.length < 2) return <div className="rg-spark" />;
-  const max = Math.max(...vals), min = Math.min(...vals), rng = max - min || 1;
-  // Titik terakhir berhenti di 91% lebar supaya titik bercincin + garis jatuhnya
-  // tidak terpotong tepi panel (seperti titik "hari ini" di kartu referensi).
-  const pts = vals.map((v, i) => ({ x: (i / (vals.length - 1)) * 91, y: 88 - ((v - min) / rng) * 74 }));
-  const d = monotonePath(pts);
-  const last = pts[pts.length - 1];
-  return (
-    <div className="rg-spark" aria-hidden="true">
-      <svg viewBox="0 0 100 100" preserveAspectRatio="none">
+  const { w, h } = box;
+  let body = null;
+  if (vals.length >= 2 && w > SPARK_R && h > SPARK_T + SPARK_B) {
+    const max = Math.max(...vals), min = Math.min(...vals);
+    const band = h - SPARK_T - SPARK_B;
+    const pts = vals.map((v, i) => ({
+      x: (i / (vals.length - 1)) * (w - SPARK_R),
+      // Nilai datar (semua sama) → garis di tengah pita, bukan menempel di dasar
+      y: SPARK_T + (max > min ? (1 - (v - min) / (max - min)) * band : band / 2),
+    }));
+    const d = monotonePath(pts);
+    const last = pts[pts.length - 1];
+    body = (<>
+      <svg width={w} height={h}>
         <defs>
           <linearGradient id={`${gid}-g`} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" style={{ stopColor: 'var(--rg-tone)', stopOpacity: 0.26 }} />
             <stop offset="100%" style={{ stopColor: 'var(--rg-tone)', stopOpacity: 0 }} />
           </linearGradient>
         </defs>
-        <path d={`${d}L${last.x},100L0,100Z`} fill={`url(#${gid}-g)`} className="rg-area" />
-        <path d={d} fill="none" pathLength="1" strokeDasharray="1" vectorEffect="non-scaling-stroke"
+        <path d={`${d}L${last.x.toFixed(1)},${h}L0,${h}Z`} fill={`url(#${gid}-g)`} className="rg-area" />
+        <path d={d} fill="none" pathLength="1" strokeDasharray="1"
           className="rg-spark-line"
-          style={{ stroke: 'var(--rg-tone)', strokeWidth: 1.6, strokeLinecap: 'round', strokeLinejoin: 'round' }} />
+          style={{ stroke: 'var(--rg-tone)', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round' }} />
       </svg>
-      <span className="rg-spark-drop" style={{ left: `${last.x}%`, top: `${last.y}%` }} />
-      <span className="rg-spark-dot" style={{ left: `${last.x}%`, top: `${last.y}%` }} />
-    </div>
-  );
+      <span className="rg-spark-drop" style={{ left: last.x, top: last.y }} />
+      <span className="rg-spark-dot" style={{ left: last.x, top: last.y }} />
+    </>);
+  }
+  return <div ref={ref} className="rg-spark" aria-hidden="true">{body}</div>;
 }
 
 /* ─── Kartu KPI (anatomi kartu proyek referensi: header · panel bergradasi · footer) ─── */
@@ -547,7 +569,7 @@ function SkelCard({ lines = 2, style }) {
 function DashboardSkeleton({ isMobile }) {
   if (isMobile) return (
     <>
-      <SkelCard style={{ height: 196, flexShrink: 0 }} />
+      <SkelCard style={{ height: 216, flexShrink: 0 }} />
       <SkelCard lines={3} style={{ height: 230, flexShrink: 0 }} />
       <SkelCard lines={4} style={{ height: 300, flexShrink: 0 }} />
     </>
@@ -1218,7 +1240,8 @@ export default function DashboardPage() {
             scrollSnapType:'x mandatory', margin:'0 -16px', padding:'2px 16px',
           }}>
             {kpis.map((k, i) => (
-              <div key={k.label} className={busy} style={{ minWidth:'76%', flexShrink:0, scrollSnapAlign:'center', height:'196px' }}>
+              // 216px (dulu 196): sparkline butuh ≥52px supaya titik akhirnya tidak terpotong
+              <div key={k.label} className={busy} style={{ minWidth:'76%', flexShrink:0, scrollSnapAlign:'center', height:'216px' }}>
                 <KpiCard {...k} prevLabel={prevLabel} delay={i * 55} />
               </div>
             ))}
@@ -1229,7 +1252,8 @@ export default function DashboardPage() {
           <div className={busy} style={{ flexShrink:0 }}>
             <SpendCard segs={donutSegs} total={donutTotal.value} hover={hoverSeg} setHover={setHoverSeg} delay={260} fill={false} />
           </div>
-          <div className={busy} style={{ height:'340px', flexShrink:0 }}>
+          {/* 380px (dulu 340): baris tombol metrik + statistik 2 baris + plot tanpa memotong sumbu tanggal */}
+          <div className={busy} style={{ height:'380px', flexShrink:0 }}>
             <AreaChart data={chartData} dates={chartDates} today={todayIdx} since={chartSince} delay={300} />
           </div>
           <div className={busy} style={{ flexShrink:0, display:'flex', flexDirection:'column' }}>

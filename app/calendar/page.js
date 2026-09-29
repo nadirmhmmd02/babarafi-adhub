@@ -21,6 +21,7 @@ import { supabase } from '../supabase';
 import { useAuth } from '../components/AuthContext';
 import useIsMobile from '../components/useIsMobile';
 import { dashboardFontVars } from '../components/dashboardFonts';
+import { MenuGlide } from '../components/rgKit';
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const OBJ_ORDER = ['Awareness','Traffic','Conversion'];
@@ -492,6 +493,7 @@ export default function CalendarPage() {
         return (
           <div data-wd-status="drop" className="rg-menu rgk-statusmenu" role="menu"
             style={{ position:'fixed', left: statusDrop.x, top: statusDrop.y, zIndex: 60 }}>
+            <MenuGlide />
             {STATUSES.map(s => {
               const isCur = s === c.status;
               return (

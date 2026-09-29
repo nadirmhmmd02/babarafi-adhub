@@ -39,7 +39,7 @@ import { STATUSES, SALES, CATEGORIES, kategoriLabel } from '../components/leadsC
 import { useLeadsFilter, DATE_PRESETS_DASHBOARD } from '../components/DateFilterContext';
 import { dashboardFontVars } from '../components/dashboardFonts';
 import {
-  fmtRangeShort, fmtClock, fmtPct1, toneOf, Delta, InfoTip, DatePill, KpiSpark, previousRange,
+  fmtRangeShort, fmtClock, fmtPct1, toneOf, Delta, InfoTip, DatePill, KpiSpark, previousRange, MenuGlide,
 } from '../components/rgKit';
 
 /* ─── Format angka — PENUH gaya Indonesia (sama dengan Dashboard Ads Hub) ─── */
@@ -397,6 +397,7 @@ function CategoryPill({ value, onChange }) {
       {open && (
         <div style={{ position: 'absolute', top: 46, left: '50%', transform: 'translateX(-50%)', zIndex: 50 }}>
           <div className="rg-menu" role="menu" style={{ minWidth: 240 }}>
+            <MenuGlide />
             {opts.map(o => (
               <button key={o.value} type="button" role="menuitemradio" aria-checked={o.value === value}
                 className={`rg-menu-item${o.value === value ? ' is-on' : ''}`}

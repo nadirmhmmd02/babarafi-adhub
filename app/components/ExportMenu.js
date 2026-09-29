@@ -10,7 +10,7 @@ import { useAuth } from './AuthContext';
 import { authFetch } from '../supabase';
 import { dashboardFontVars } from './dashboardFonts';
 import { monotonePath } from './AreaChart';
-import { fmtRangeShort, toneOf, fmtPct1 } from './rgKit';
+import { fmtRangeShort, toneOf, fmtPct1, MenuGlide } from './rgKit';
 import { buildReportData, monthChunks, isWholeMonths, monthToken } from './reportData';
 
 /* ─────────────────────────────────────────────────────────────
@@ -66,7 +66,6 @@ const UI_BRS    = 'var(--br-strong)';
 const UI_TXT    = 'var(--t1)';
 const UI_SUB    = 'var(--t2)';
 const UI_MUTE   = 'var(--t3)';
-const UI_HOVER  = 'var(--hover)';
 
 /* ─── Format — ANGKA PENUH biar sama dgn dashboard (Rp 1.440.076) ─── */
 function fmtSpendFull(n) { return 'Rp ' + Math.round(n || 0).toLocaleString('id-ID'); }
@@ -613,7 +612,10 @@ export default function ExportMenu({
         <div style={{
           background: UI_CARD, border: `1px solid ${UI_BORDER}`, borderRadius: '14px', minWidth: canSplit ? '244px' : '190px',
           boxShadow: 'var(--pop-shadow)', animation: 'wdScaleIn 0.15s cubic-bezier(0.4,0,0.2,1)', overflow: 'hidden', padding: '6px',
+          transformOrigin: 'top center',
         }}>
+          {/* Sorot hover format = pil yang meluncur (MenuGlide) */}
+          <MenuGlide />
           {canSplit && (
             <>
               <div style={{ fontSize: '12px', fontWeight: 600, letterSpacing: '0.8px', color: UI_MUTE, textTransform: 'uppercase', padding: '6px 10px 6px' }}>
@@ -645,11 +647,12 @@ export default function ExportMenu({
           ].map(o => {
             const Ic = o.icon;
             return (
-              <div key={o.type} onClick={() => handleFormat(o.type)} style={{
+              <div key={o.type} data-glide-item="" onClick={() => handleFormat(o.type)} style={{
                 display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 10px', borderRadius: '9px', cursor: 'pointer', fontSize: '13px', color: UI_SUB,
+                transition: 'color 0.12s',
               }}
-                onMouseEnter={e => { e.currentTarget.style.background = UI_HOVER; e.currentTarget.style.color = UI_TXT; }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = UI_SUB; }}
+                onMouseEnter={e => { e.currentTarget.style.color = UI_TXT; }}
+                onMouseLeave={e => { e.currentTarget.style.color = UI_SUB; }}
               >
                 <Ic size={16} />
                 <span style={{ flex: 1 }}>{o.label}</span>

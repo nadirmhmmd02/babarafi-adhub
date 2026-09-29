@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { ChevronDown, Check, Layers } from 'lucide-react';
+import { MenuGlide } from './rgKit';
 
 /* ─────────────────────────────────────────────────────────────
    PLATFORM SELECTOR — WILL OF D
@@ -91,14 +92,16 @@ export default function PlatformSelector({ selected, onSelect }) {
           minWidth: '200px', padding: '6px',
           background: 'var(--cd)', border: '1px solid var(--br)',
           borderRadius: '14px', boxShadow: 'var(--pop-shadow)',
-          animation: 'wdScaleIn 0.15s cubic-bezier(0.4,0,0.2,1)',
+          animation: 'wdScaleIn 0.15s cubic-bezier(0.4,0,0.2,1)', transformOrigin: 'top center',
           display: 'flex', flexDirection: 'column', gap: '2px',
         }}>
+          {/* Sorot hover = pil yang meluncur antar baris (MenuGlide), bukan latar per baris */}
+          <MenuGlide />
           {PLATFORMS.map(p => {
             const active = p.id === selected.id;
             const Icon = p.Icon;
             return (
-              <div key={p.id}
+              <div key={p.id} data-glide-item=""
                 onClick={() => { onSelect(p); setOpen(false); }}
                 style={{
                   display: 'flex', alignItems: 'center', gap: '10px',
@@ -109,8 +112,6 @@ export default function PlatformSelector({ selected, onSelect }) {
                   background: active ? 'var(--cal-accent)' : 'transparent',
                   transition: 'background 0.12s',
                 }}
-                onMouseEnter={e => { if (!active) e.currentTarget.style.background = 'var(--hover)'; }}
-                onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent'; }}
               >
                 <Icon size={15} color={active ? 'var(--cal-accent-fg)' : undefined} />
                 <span style={{ flex: 1 }}>{p.label}</span>

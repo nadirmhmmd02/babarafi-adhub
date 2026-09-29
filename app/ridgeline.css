@@ -369,6 +369,99 @@ html[data-theme="dark"] .rg .rg-btn-primary:hover:not(:disabled) { filter: brigh
 .rg-btn-ghost:hover { background: var(--rg-hover); color: var(--rg-t1); }
 .rg-btn.is-busy { cursor: wait; }
 
+/* ══ TOMBOL TAHAN (components/HoldButton.js — adaptasi "Hold Button" React Bits) ══
+   Tekan & tahan → isi warna merayap dari kiri (ujung bergelombang), dilepas → surut.
+   --hb-p (0→1) ditulis JS tiap frame; --hb-w/--hb-h = ukuran tombol (ResizeObserver).
+   Label digambar 3× (dasar, di dalam isi, di gelombang) supaya warna teks "terbalik"
+   tepat di garis isi. */
+.rg-hold {
+  --hb-tone: var(--rg-neg); --hb-fill: var(--rg-neg-fill); --hb-fill-tx: var(--rg-neg-fill-tx);
+  --hb-wave: 5px; --hb-w: 0px; --hb-h: 0px; --hb-p: 0; --hb-cycles: 1;
+  --hb-hold: 1200ms; --hb-release: 220ms;
+  --hb-ease: cubic-bezier(.23,1,.32,1);
+  position: relative; isolation: isolate; flex-shrink: 0;
+  display: inline-grid; place-items: center;
+  height: 38px; padding: 0 18px; margin: 0; border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--hb-tone) 42%, var(--rg-pill-line));
+  background: color-mix(in srgb, var(--hb-tone) 10%, var(--rg-pill));
+  color: var(--hb-tone); font-family: inherit; font-size: 13px; font-weight: 600; line-height: 1;
+  white-space: nowrap; cursor: pointer; outline: none;
+  user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+  transition: transform .16s var(--hb-ease), background-color .15s ease, box-shadow var(--hb-release) var(--hb-ease);
+}
+.rg-hold.is-pos { --hb-tone: var(--rg-pos); --hb-fill: var(--rg-pos-fill); --hb-fill-tx: var(--rg-pos-fill-tx); }
+@media (hover: hover) and (pointer: fine) {
+  .rg-hold:not(:disabled):hover { background: color-mix(in srgb, var(--hb-tone) 16%, var(--rg-pill)); }
+}
+.rg-hold[data-phase="holding"][data-input="pointer"] { transform: scale(.97); }
+.rg-hold[data-phase="holding"], .rg-hold[data-phase="done"] {
+  box-shadow: 0 8px 26px -8px color-mix(in srgb, var(--hb-fill) 75%, transparent);
+}
+.rg-hold[data-phase="holding"] {
+  transition: transform .16s var(--hb-ease), background-color .15s ease, box-shadow var(--hb-hold) linear;
+}
+.rg-hold[data-phase="done"] { cursor: wait; }
+.rg-hold:focus-visible { outline: 2px solid var(--hb-fill); outline-offset: 3px; }
+.rg-hold:disabled { opacity: .45; cursor: default; pointer-events: none; }
+.rg-hold[data-nudge] { animation: rgHoldNudge .38s ease; }
+@keyframes rgHoldNudge {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-3px); }
+  50% { transform: translateX(3px); }
+  75% { transform: translateX(-2px); }
+}
+.rg-hold-pulse {
+  position: absolute; inset: 0; z-index: 0; border-radius: inherit; pointer-events: none; opacity: 0;
+}
+.rg-hold[data-phase="done"] .rg-hold-pulse { animation: rgHoldPulse .6s var(--hb-ease) forwards; }
+@keyframes rgHoldPulse {
+  from { opacity: 1; box-shadow: 0 0 0 0 color-mix(in srgb, var(--hb-fill) 55%, transparent); }
+  to   { opacity: 0; box-shadow: 0 0 0 12px color-mix(in srgb, var(--hb-fill) 0%, transparent); }
+}
+.rg-hold-label { position: relative; z-index: 2; display: grid; place-items: center; }
+.rg-hold-label > span {
+  grid-area: 1 / 1; display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
+  transition: opacity .2s ease, filter .2s ease;
+}
+.rg-hold-nudge, .rg-hold-done { opacity: 0; filter: blur(2px); }
+.rg-hold[data-nudge] .rg-hold-idle { opacity: 0; filter: blur(2px); }
+.rg-hold[data-nudge] .rg-hold-nudge { opacity: 1; filter: none; }
+.rg-hold[data-phase="done"] .rg-hold-idle, .rg-hold[data-phase="done"] .rg-hold-nudge { opacity: 0; filter: blur(2px); }
+.rg-hold[data-phase="done"] .rg-hold-done { opacity: 1; filter: none; }
+.rg-hold[data-phase="done"] .rg-hold-spin { animation: wdSpin .8s linear infinite; }
+.rg-hold-clip {
+  position: absolute; inset: 0; z-index: 3; pointer-events: none;
+  clip-path: inset(0 round 999px);
+}
+.rg-hold-fill, .rg-hold-crest {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  background: var(--hb-fill); color: var(--hb-fill-tx);
+}
+.rg-hold-fill {
+  clip-path: inset(0 calc((1 - var(--hb-p)) * (100% + 0.75 * var(--hb-wave)) - var(--hb-p) * 0.25 * var(--hb-wave)) 0 0);
+}
+.rg-hold-crest {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='200' viewBox='0 0 20 200' preserveAspectRatio='none'%3E%3Cpath d='M0 0H10C18 8 18 25.3 10 33.3S2 58.7 10 66.7S18 92 10 100S2 125.3 10 133.3S18 158.7 10 166.7S2 192 10 200H0Z'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='200' viewBox='0 0 20 200' preserveAspectRatio='none'%3E%3Cpath d='M0 0H10C18 8 18 25.3 10 33.3S2 58.7 10 66.7S18 92 10 100S2 125.3 10 133.3S18 158.7 10 166.7S2 192 10 200H0Z'/%3E%3C/svg%3E");
+  -webkit-mask-repeat: repeat-y; mask-repeat: repeat-y;
+  -webkit-mask-size: var(--hb-wave) calc(var(--hb-h) * 2); mask-size: var(--hb-wave) calc(var(--hb-h) * 2);
+  -webkit-mask-position-x: calc(-1 * var(--hb-wave) + var(--hb-p) * (var(--hb-w) + var(--hb-wave)));
+  mask-position-x: calc(-1 * var(--hb-wave) + var(--hb-p) * (var(--hb-w) + var(--hb-wave)));
+  -webkit-mask-position-y: calc(-1 * var(--hb-p) * var(--hb-cycles) * var(--hb-h));
+  mask-position-y: calc(-1 * var(--hb-p) * var(--hb-cycles) * var(--hb-h));
+}
+@media (prefers-reduced-motion: reduce) {
+  .rg-hold { transform: none !important; animation: none !important; }
+  .rg-hold-fill { clip-path: inset(0); opacity: 0; transition: opacity var(--hb-release) ease; }
+  .rg-hold-crest { display: none; }
+  .rg-hold[data-phase="holding"] .rg-hold-fill, .rg-hold[data-phase="done"] .rg-hold-fill {
+    opacity: 1; transition: opacity var(--hb-hold) linear;
+  }
+  .rg-hold-pulse { animation: none !important; }
+  .rg-hold-label > span { filter: none !important; }
+}
+
 /* ══ CHIP (objektif, status, label kecil) ══ */
 .rg-chip {
   display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px;
@@ -418,6 +511,33 @@ button.rg-chip:hover { border-color: currentColor; }
 .rg-menu-hint { margin-left: auto; padding-left: 12px; font-size: 11.5px; color: var(--rg-t3); white-space: nowrap; }
 .rg-menu-item.is-neg, .rg-menu-item.is-neg .rg-menu-ico { color: var(--rg-neg); }
 .rg-menu-foot { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--rg-line-soft); }
+/* Menu tumbuh dari SUDUT tombolnya (bukan dari tengah) — rasa "Glide Select" */
+.rg-menu-pos.is-down.is-left .rg-menu  { transform-origin: top left; }
+.rg-menu-pos.is-down.is-right .rg-menu { transform-origin: top right; }
+.rg-menu-pos.is-up.is-left .rg-menu    { transform-origin: bottom left; }
+.rg-menu-pos.is-up.is-right .rg-menu   { transform-origin: bottom right; }
+
+/* ── Pil sorot MELUNCUR (MenuGlide di rgKit — adaptasi "Glide Select" React Bits) ──
+   Satu pil di belakang item yang pindah mulus mengikuti kursor; item jadi transparan
+   supaya sorotnya tidak dobel. Warna pil = --rg-range (sedikit lebih tegas dari hover). */
+.rg-glide {
+  position: absolute; top: 0; left: 0; z-index: 0; width: 0; height: 0;
+  border-radius: 9px; background: var(--rg-range, rgba(128,128,128,0.12));
+  opacity: 0; pointer-events: none;
+  /* hanya transform yang meluncur; ukuran pil langsung ikut item (item satu menu hampir
+     selalu sama lebar & tinggi, jadi tidak terlihat meloncat) */
+  transition: transform .22s cubic-bezier(.23,1,.32,1), opacity .15s ease, background-color .15s ease;
+}
+.rg-glide.is-neg { background: color-mix(in srgb, var(--rg-neg) 13%, transparent); }
+.rg-glide ~ .rg-menu-item, .rg-glide ~ * .rg-menu-item, .rg-glide ~ [data-glide-item] { position: relative; z-index: 1; }
+.rg-glide ~ .rg-menu-item:hover, .rg-glide ~ .rg-menu-item.is-on,
+.rg-glide ~ * .rg-menu-item:hover, .rg-glide ~ [data-glide-item]:hover { background: transparent; }
+@media (prefers-reduced-motion: reduce) { .rg-glide { transition: opacity .15s ease; } }
+
+/* Label tombol menu berganti halus setelah memilih (RgMenu set data-swap) */
+.rg-menu-wrap[data-swap] > button > .rg-menu-label { animation: rgSwap .18s ease; }
+@keyframes rgSwap { from { opacity: .5; filter: blur(2px); } }
+@media (prefers-reduced-motion: reduce) { .rg-menu-wrap[data-swap] > button > .rg-menu-label { animation: none; } }
 .rg-clip { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ══ FORM ══ */

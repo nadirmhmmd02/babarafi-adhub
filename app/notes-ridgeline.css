@@ -157,16 +157,47 @@
 }
 .rgn-circle {
   display: inline-flex; padding: 0; border: 0; border-radius: 50%; flex-shrink: 0; margin-top: 1px;
-  background: transparent; color: var(--rg-t3); cursor: pointer; transition: color .15s ease, transform .15s ease;
+  background: transparent; color: var(--rg-t3); cursor: pointer;
+  transition: color .15s ease, transform .16s cubic-bezier(.23,1,.32,1);
 }
 .rgn-circle:hover { color: var(--rg-t1); transform: scale(1.1); }
+.rgn-circle:active { transform: scale(.9); }
 .rgn-circle.is-done, .rgn-circle.is-done:hover { color: var(--rg-pos); }
+
+/* ── "Spring Check" (components/springCheck.js): nilai --sc-* ditulis tiap frame oleh
+   pegas di elemen baris; lingkaran = ukuran ikon lucide Circle lama (inset 2/24) ── */
+.sc-circle { position: relative; display: inline-block; flex-shrink: 0; }
+.sc-box {
+  position: absolute; inset: 8.33%; border-radius: 50%; overflow: hidden;
+  display: grid; place-items: center;
+  box-shadow: inset 0 0 0 var(--sc-ring, 1.5px) currentColor;
+  transform: scale(var(--sc-box, 1));
+}
+.sc-fill {
+  position: absolute; inset: 0; border-radius: inherit;
+  background: var(--rg-pos); transform: scale(var(--sc-fill, 0));
+}
+.sc-tick { position: relative; width: 64%; height: 64%; overflow: visible; }
+.sc-tick path {
+  fill: none; stroke: var(--rg-pos-fill-tx); stroke-width: 3.2;
+  stroke-linecap: round; stroke-linejoin: round; stroke-dashoffset: var(--sc-tick, 1);
+}
+.sc-strike {
+  position: relative; display: inline-block; max-width: 100%; vertical-align: top;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sc-word { opacity: var(--sc-word, 1); }
+.sc-rule {
+  position: absolute; left: 0; right: 0; top: 54%; height: 1.5px; border-radius: 2px;
+  background: var(--rg-t2); transform: scaleX(var(--sc-rule, 0)); transform-origin: left center;
+  pointer-events: none;
+}
+
 .rgn-task-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .rgn-task-title {
   font-size: 13px; font-weight: 500; color: var(--rg-t1); line-height: 1.4;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.rgn-task.is-done .rgn-task-title { color: var(--rg-t3); font-weight: 400; text-decoration: line-through; }
 .rgn-task-meta { display: flex; flex-wrap: wrap; gap: 3px 10px; font-size: 11.5px; color: var(--rg-t2); }
 .rgn-task-meta > span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
 .rgn-due.is-today { color: var(--rg-t1); font-weight: 600; }
@@ -297,7 +328,12 @@ html[data-theme="dark"] .rg .wd-note-editor [style*="background-color"]:not([sty
   font-family: inherit; font-size: 20px; font-weight: 600; letter-spacing: -0.02em; color: var(--rg-t1);
 }
 .rg .rgn-task-input:focus-visible, .rg .rgn-step input:focus-visible { outline: none; }
-.rgn-task-input.is-done { color: var(--rg-t3); text-decoration: line-through; }
+/* Judul & step selesai: coretan memudar masuk (warna garis ditransisikan), bukan loncat */
+.rgn-task-input, .rgn-step input {
+  text-decoration: line-through; text-decoration-color: transparent;
+  transition: color .25s ease, text-decoration-color .25s ease;
+}
+.rgn-task-input.is-done { color: var(--rg-t3); text-decoration-color: var(--rg-t3); }
 .rgn-task-input::placeholder { color: var(--rg-t3); }
 .rgn-steps { display: flex; flex-direction: column; gap: 1px; }
 .rgn-step { display: flex; align-items: center; gap: 10px; min-height: 38px; padding: 0 6px 0 10px; border-radius: 11px; transition: background-color .12s ease; }
@@ -307,7 +343,7 @@ html[data-theme="dark"] .rg .wd-note-editor [style*="background-color"]:not([sty
   font-family: inherit; font-size: 13.5px; color: var(--rg-t1);
 }
 .rgn-step input::placeholder { color: var(--rg-t3); }
-.rgn-step.is-done input { color: var(--rg-t3); text-decoration: line-through; }
+.rgn-step.is-done input { color: var(--rg-t3); text-decoration-color: var(--rg-t3); }
 .rgn-step .rgn-circle { margin-top: 0; }
 .rgn-step.is-add > svg { color: var(--rg-t2); flex-shrink: 0; margin: 0 1px; }
 .rgn-step .rgn-step-x { opacity: 0; width: 26px; height: 26px; }

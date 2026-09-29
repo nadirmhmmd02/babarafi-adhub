@@ -36,7 +36,7 @@ import DateFilterPopup from '../../components/DateFilterPopup';
 import { DATE_PRESETS_DASHBOARD } from '../../components/DateFilterContext';
 import { STATUSES, SALES, CATEGORIES, kategoriLabel } from '../../components/leadsConfig';
 import { dashboardFontVars } from '../../components/dashboardFonts';
-import { fmtRangeShort, fmtClock } from '../../components/rgKit';
+import { fmtRangeShort, fmtClock, MenuGlide } from '../../components/rgKit';
 
 const PAGE_SIZE = 100;
 const COLS_KEY = 'wd-leads-cols-hidden';
@@ -140,6 +140,7 @@ function useMenu() {
 function MenuList({ options, value, onPick, footer, minWidth = 180 }) {
   return (
     <div className="rg-menu" role="menu" style={{ minWidth }}>
+      <MenuGlide />
       {options.map(o => {
         const isCheck = o.checked != null;
         const on = isCheck ? o.checked : (value !== undefined && o.value === value);

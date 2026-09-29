@@ -23,6 +23,7 @@ import useIsMobile from '../components/useIsMobile';
 import DateFilterPopup from '../components/DateFilterPopup';
 import CampaignModal from '../components/CampaignModal';
 import CombineModal from '../components/CombineModal';
+import HoldButton from '../components/HoldButton';
 import { dashboardFontVars } from '../components/dashboardFonts';
 import { presetToRange, fmtRangeShort, fmtClock, DatePill } from '../components/rgKit';
 import { authFetch } from '../supabase';
@@ -891,16 +892,20 @@ export default function CampaignsPage() {
                 <button type="button" className="rg-btn rg-btn-ghost" onClick={() => setActionModal(null)} disabled={actionBusy}>
                   Cancel
                 </button>
-                <button type="button"
-                  className={`rg-btn ${isStatus ? (stopping ? 'rg-btn-danger' : 'rg-btn-success') : 'rg-btn-primary'}${actionBusy ? ' is-busy' : ''}`}
-                  onClick={executeAction} disabled={actionBusy || budgetInvalid}>
-                  {actionBusy && <RefreshCw size={13} style={{ animation: 'wdSpin 0.8s linear infinite' }} />}
-                  {actionBusy
-                    ? 'Processing…'
-                    : isStatus
-                      ? (stopping ? 'Yes, stop' : 'Yes, run')
-                      : 'Save budget'}
-                </button>
+                {/* Stop/Run langsung ke Meta → tombol TAHAN (anti kepencet); budget tetap klik biasa */}
+                {isStatus ? (
+                  <HoldButton tone={stopping ? 'neg' : 'pos'} busy={actionBusy} onHold={executeAction}
+                    busyLabel={stopping ? 'Stopping…' : 'Starting…'}>
+                    {stopping ? 'Hold to stop' : 'Hold to run'}
+                  </HoldButton>
+                ) : (
+                  <button type="button"
+                    className={`rg-btn rg-btn-primary${actionBusy ? ' is-busy' : ''}`}
+                    onClick={executeAction} disabled={actionBusy || budgetInvalid}>
+                    {actionBusy && <RefreshCw size={13} style={{ animation: 'wdSpin 0.8s linear infinite' }} />}
+                    {actionBusy ? 'Processing…' : 'Save budget'}
+                  </button>
+                )}
               </div>
             </div>
           </div>

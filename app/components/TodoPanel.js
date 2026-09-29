@@ -2,11 +2,17 @@
 
 import { useState, useMemo, useRef, useEffect } from 'react';
 import {
-  ListTodo, Sun, Star, CalendarDays, Inbox, Circle, CircleCheck, Plus,
+  ListTodo, Sun, Star, CalendarDays, Inbox, Plus,
   ChevronRight, Check, Pencil, Trash2, CircleAlert, Minus, ChevronUp,
 } from 'lucide-react';
 import { RgMenu, RgDialog } from './rgKit';
 import { TODO_LIST_COLORS, todayStr, dueLabel, isOverdue } from './useTodos';
+import { useSpringCheck, CheckCircle, StrikeText } from './springCheck';
+import { playDoneSound } from './todoSound';
+
+// Jeda sebelum tugas yang dicentang pindah ke "Completed" — cukup untuk animasi
+// centang + garis coret terlihat utuh (seperti Microsoft To Do)
+const DONE_MOVE_MS = 550;
 
 /* ─────────────────────────────────────────────────────────────
    TODO PANEL — daftar tugas ala Microsoft To Do, kartu di bagian
@@ -314,21 +320,49 @@ function TaskRow({ t, td, view, isSel, onSelect, onPress, onEnter, isDragging = 
   const overdue = !t.done && isOverdue(t.due_date);
   const dueIsToday = t.due_date === todayStr();
   const hasMeta = (inMyDay && view !== 'myday') || t.due_date || steps.length > 0;
+
+  /* Centang ala Microsoft To Do: klik → bunyi + animasi pegas langsung, tugas baru
+     disimpan & pindah ke "Completed" setelah DONE_MOVE_MS. Klik lagi selama jeda =
+     batal. Baris keburu hilang (ganti view) → langsung disimpan, klik tidak hilang. */
+  const [pending, setPending] = useState(false);
+  const pendingTimer = useRef(0);
+  const commitRef = useRef(null);
+  commitRef.current = () => td.toggleDone(t, { sound: false });
+  useEffect(() => () => {
+    if (pendingTimer.current) { clearTimeout(pendingTimer.current); commitRef.current(); }
+  }, []);
+  function onCheck(e) {
+    e.stopPropagation();
+    if (t.done) { td.toggleDone(t); return; }
+    if (pendingTimer.current) {
+      clearTimeout(pendingTimer.current);
+      pendingTimer.current = 0;
+      setPending(false);
+      return;
+    }
+    playDoneSound();
+    setPending(true);
+    pendingTimer.current = setTimeout(() => { pendingTimer.current = 0; commitRef.current(); }, DONE_MOVE_MS);
+  }
+  const shownDone = t.done || pending;
+  const rowRef = useSpringCheck(shownDone);
+
   return (
     <div
-      className={`rgn-task${isSel ? ' is-sel' : ''}${isDragging ? ' is-drag' : ''}${t.done ? ' is-done' : ''}`}
+      ref={rowRef}
+      className={`rgn-task${isSel ? ' is-sel' : ''}${isDragging ? ' is-drag' : ''}${shownDone ? ' is-done' : ''}`}
       onClick={() => onSelect(t.id)}
       onMouseDown={onPress ? (e) => onPress(t.id, e) : undefined}
       onMouseEnter={onEnter ? () => onEnter(t.id) : undefined}
       title={canDrag ? 'Click to open · press & drag to reorder' : undefined}
     >
-      <button type="button" className={`rgn-circle${t.done ? ' is-done' : ''}`}
-        onClick={e => { e.stopPropagation(); td.toggleDone(t); }}
-        title={t.done ? 'Mark as not done' : 'Mark as done'} aria-label={t.done ? 'Mark as not done' : 'Mark as done'}>
-        {t.done ? <CircleCheck size={17} /> : <Circle size={17} />}
+      <button type="button" className={`rgn-circle${shownDone ? ' is-done' : ''}`} onClick={onCheck}
+        role="checkbox" aria-checked={shownDone}
+        title={shownDone ? 'Mark as not done' : 'Mark as done'} aria-label={shownDone ? 'Mark as not done' : 'Mark as done'}>
+        <CheckCircle size={17} />
       </button>
       <div className="rgn-task-main">
-        <span className="rgn-task-title">{t.title || 'Untitled task'}</span>
+        <span className="rgn-task-title"><StrikeText>{t.title || 'Untitled task'}</StrikeText></span>
         {hasMeta && (
           <span className="rgn-task-meta">
             {inMyDay && view !== 'myday' && <span><Sun size={11} /> My Day</span>}

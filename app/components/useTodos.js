@@ -97,8 +97,10 @@ export default function useTodos(enabled) {
     timers.current[id] = setTimeout(send, TEXT_DEBOUNCE_MS);
   }
 
-  const toggleDone  = (t) => {
-    if (!t.done) playDoneSound();   // bunyi "berhasil" hanya saat menandai selesai
+  // sound:false → bunyi sudah diputar pemanggil (baris To Do: bunyi saat klik, simpan
+  // setelah animasi centang selesai)
+  const toggleDone  = (t, { sound = true } = {}) => {
+    if (!t.done && sound) playDoneSound();   // bunyi "berhasil" hanya saat menandai selesai
     updateTask(t.id, { done: !t.done, done_at: !t.done ? new Date().toISOString() : null });
   };
   const toggleStar  = (t) => updateTask(t.id, { starred: !t.starred });

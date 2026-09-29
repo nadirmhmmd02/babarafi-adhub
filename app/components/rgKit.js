@@ -9,7 +9,7 @@
    menu pilihan (RgMenu) & dialog (RgDialog) — dipakai halaman Notes.
    ───────────────────────────────────────────────────────────── */
 
-import { useState, useRef, useEffect, useId } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useId } from 'react';
 import { ArrowUp, ArrowDown, Info, Calendar, ChevronDown, Check, X } from 'lucide-react';
 import { monotonePath } from './AreaChart';
 
@@ -118,10 +118,60 @@ export function DatePill({ open, onToggle, isMobile, isCustom, presetLabel, mobi
   );
 }
 
+/* ─── Pil sorot yang MELUNCUR antar item menu (efek "Glide Select" React Bits, Micro) ───
+   Taruh <MenuGlide /> sebagai anak PERTAMA kotak menu (.rg-menu atau kotak menu lain).
+   Event didelegasikan di kotak itu: hover / fokus keyboard pada item → pil pindah mulus
+   (transform + ukuran), kursor keluar menu → pil pulang ke item terpilih (.is-on /
+   [data-glide-on]) atau memudar kalau tidak ada. Item = .rg-menu-item atau
+   [data-glide-item]; latar hover bawaan item dimatikan di CSS (.rg-glide ~ …). */
+const GLIDE_ITEM = '.rg-menu-item, [data-glide-item]';
+export function MenuGlide() {
+  const ref = useRef(null);
+  useLayoutEffect(() => {
+    const pill = ref.current;
+    const menu = pill?.parentElement;
+    if (!menu) return undefined;
+    // pil diposisikan relatif thd kotak menu (menu fixed/absolute sudah jadi patokan)
+    if (getComputedStyle(menu).position === 'static') menu.style.position = 'relative';
+    let shown = false;
+    const place = item => {
+      if (!item) { pill.style.opacity = '0'; shown = false; return; }
+      const jump = !shown;                     // muncul pertama kali: langsung di tempat, tanpa meluncur
+      if (jump) pill.style.transition = 'none';
+      pill.style.transform = `translate(${item.offsetLeft}px, ${item.offsetTop}px)`;
+      pill.style.width = `${item.offsetWidth}px`;
+      pill.style.height = `${item.offsetHeight}px`;
+      pill.classList.toggle('is-neg', item.classList.contains('is-neg'));
+      if (jump) { void pill.offsetWidth; pill.style.transition = ''; }
+      pill.style.opacity = '1';
+      shown = true;
+    };
+    const home = () => menu.querySelector('.rg-menu-item.is-on, [data-glide-on]');
+    const itemOf = e => {
+      const it = e.target.closest?.(GLIDE_ITEM);
+      return it && menu.contains(it) && !it.disabled ? it : null;
+    };
+    const onOver = e => { const it = itemOf(e); if (it) place(it); };
+    const onLeave = () => place(home());
+    const onFocus = e => { const it = itemOf(e); if (it && it.matches(':focus-visible')) place(it); };
+    place(home());
+    menu.addEventListener('pointerover', onOver);
+    menu.addEventListener('pointerleave', onLeave);
+    menu.addEventListener('focusin', onFocus);
+    return () => {
+      menu.removeEventListener('pointerover', onOver);
+      menu.removeEventListener('pointerleave', onLeave);
+      menu.removeEventListener('focusin', onFocus);
+    };
+  }, []);
+  return <span ref={ref} className="rg-glide" aria-hidden="true" />;
+}
+
 /* Menu pilihan: tombol (default pil) + daftar .rg-menu. Lapisan POSISI (.rg-menu-pos)
    dipisah dari lapisan ANIMASI (.rg-menu wdScaleIn) — kalau digabung popup "loncat".
    Klik di luar (guard contains) / Esc menutup. Opsi: { value, label, Icon?, dot?, hint?, tone? }.
-   `footer` boleh fungsi (close) => node, untuk tombol aksi di kaki menu. Dipakai Notes (To Do). */
+   `footer` boleh fungsi (close) => node, untuk tombol aksi di kaki menu. Dipakai Notes (To Do).
+   Pil sorot meluncur (MenuGlide) + label tombol "berganti" halus setelah memilih (data-swap). */
 export function RgMenu({
   options, value, onSelect, label, icon: Icon, dot, title, disabled,
   className = 'rg-pill', align = 'left', direction = 'down', minWidth = 180,
@@ -139,7 +189,8 @@ export function RgMenu({
   }, [open]);
   const close = () => setOpen(false);
   return (
-    <div ref={ref} className={`rg-menu-wrap${block ? ' is-block' : ''}`}>
+    <div ref={ref} className={`rg-menu-wrap${block ? ' is-block' : ''}`}
+      onAnimationEnd={e => { if (e.animationName === 'rgSwap') delete ref.current?.dataset.swap; }}>
       <button type="button" className={className} aria-expanded={open} aria-haspopup="menu"
         title={title} disabled={disabled} onClick={() => setOpen(o => !o)}>
         {Icon && <Icon size={15} />}
@@ -150,13 +201,14 @@ export function RgMenu({
       {open && (
         <div className={`rg-menu-pos is-${direction} is-${align}`}>
           <div className="rg-menu" role="menu" style={{ minWidth }}>
+            <MenuGlide />
             {options.map(o => {
               const on = value !== undefined && o.value === value;
               const OIcon = o.Icon;
               return (
                 <button key={String(o.value)} type="button" role="menuitemradio" aria-checked={on}
                   className={`rg-menu-item${on ? ' is-on' : ''}${o.tone ? ` is-${o.tone}` : ''}`}
-                  onClick={() => { onSelect(o.value); close(); }}>
+                  onClick={() => { if (!on && ref.current) ref.current.dataset.swap = ''; onSelect(o.value); close(); }}>
                   {OIcon && <OIcon size={15} className="rg-menu-ico" />}
                   {o.dot && <span className="rg-menu-dot" style={{ background: o.dot }} />}
                   <span className="rg-menu-label">{o.label}</span>

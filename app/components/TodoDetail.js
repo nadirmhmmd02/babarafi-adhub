@@ -2,10 +2,11 @@
 
 import { useState } from 'react';
 import {
-  Circle, CircleCheck, Star, Sun, CalendarDays, Inbox, Plus, X, Trash2, ChevronLeft, ListTodo,
+  Star, Sun, CalendarDays, Inbox, Plus, X, Trash2, ChevronLeft, ListTodo,
 } from 'lucide-react';
 import { RgMenu } from './rgKit';
 import { todayStr, addDays, dueLabel, isOverdue } from './useTodos';
+import { useSpringCheck, CheckCircle } from './springCheck';
 
 /* ─────────────────────────────────────────────────────────────
    TODO DETAIL — isi kartu kanan saat sebuah tugas dipilih (menggantikan
@@ -21,9 +22,26 @@ function fmtDate(iso) {
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
+/* Satu baris step — di level modul (bukan di dalam TodoDetail) supaya tidak di-remount
+   tiap render; tiap baris punya pegas centangnya sendiri (springCheck.js) */
+function StepRow({ t, s, td, xBtn }) {
+  const rowRef = useSpringCheck(s.done);
+  return (
+    <div ref={rowRef} className={`rgn-step${s.done ? ' is-done' : ''}`}>
+      <button type="button" className={`rgn-circle${s.done ? ' is-done' : ''}`} onClick={() => td.toggleStep(t, s.id)}
+        role="checkbox" aria-checked={s.done} aria-label={s.done ? 'Mark step as not done' : 'Mark step as done'}>
+        <CheckCircle size={16} />
+      </button>
+      <input value={s.title} onChange={e => td.renameStep(t, s.id, e.target.value)} aria-label="Step" />
+      {xBtn(() => td.removeStep(t, s.id), 'Remove step', 'rgn-step-x')}
+    </div>
+  );
+}
+
 export default function TodoDetail({ task: t, td, onRequestDelete, isMobile, onBack, onClose }) {
   const [stepDraft, setStepDraft] = useState('');
   const [pickDate, setPickDate] = useState(false);
+  const titleRef = useSpringCheck(!!t.done);
 
   const steps = t.steps || [];
   const inMyDay = t.my_day_date === todayStr();
@@ -78,10 +96,11 @@ export default function TodoDetail({ task: t, td, onRequestDelete, isMobile, onB
       <div className="rg-well rgn-detail">
         <div className="rgn-detail-scroll">
           {/* Judul: selesai + judul + bintang */}
-          <div className="rgn-detail-title">
+          <div ref={titleRef} className="rgn-detail-title">
             <button type="button" className={`rgn-circle${t.done ? ' is-done' : ''}`} onClick={() => td.toggleDone(t)}
+              role="checkbox" aria-checked={t.done}
               title={t.done ? 'Mark as not done' : 'Mark as done'} aria-label={t.done ? 'Mark as not done' : 'Mark as done'}>
-              {t.done ? <CircleCheck size={24} /> : <Circle size={24} />}
+              <CheckCircle size={24} />
             </button>
             <input
               className={`rgn-task-input${t.done ? ' is-done' : ''}`}
@@ -98,16 +117,7 @@ export default function TodoDetail({ task: t, td, onRequestDelete, isMobile, onB
 
           {/* Steps */}
           <div className="rgn-steps">
-            {steps.map(s => (
-              <div key={s.id} className={`rgn-step${s.done ? ' is-done' : ''}`}>
-                <button type="button" className={`rgn-circle${s.done ? ' is-done' : ''}`} onClick={() => td.toggleStep(t, s.id)}
-                  aria-label={s.done ? 'Mark step as not done' : 'Mark step as done'}>
-                  {s.done ? <CircleCheck size={16} /> : <Circle size={16} />}
-                </button>
-                <input value={s.title} onChange={e => td.renameStep(t, s.id, e.target.value)} aria-label="Step" />
-                {xBtn(() => td.removeStep(t, s.id), 'Remove step', 'rgn-step-x')}
-              </div>
-            ))}
+            {steps.map(s => <StepRow key={s.id} t={t} s={s} td={td} xBtn={xBtn} />)}
             <label className="rgn-step is-add">
               <Plus size={16} />
               <input

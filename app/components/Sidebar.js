@@ -95,12 +95,15 @@ export default function Sidebar() {
   const asideRef  = useRef(null);
   const flyTimer  = useRef(null);
 
-  // Hub = section menu; Notes (admin) jadi "hub" sendiri di rel
+  // Hub = section menu; Workspace (admin: Notes + To Do) jadi "hub" sendiri di rel
   const hubs = navSectionsFor(role).map(s => ({
     key: s.label, label: s.label, icon: HUB_ICON[s.label] || LayoutDashboard, items: s.items,
   }));
   if (role === 'admin') {
-    hubs.push({ key: 'Workspace', label: 'Workspace', icon: NotebookPen, items: [{ href: '/notes', label: 'Notes' }] });
+    hubs.push({
+      key: 'Workspace', label: 'Workspace', icon: NotebookPen,
+      items: [{ href: '/notes', label: 'Notes' }, { href: '/todo', label: 'To Do' }],
+    });
   }
 
   function isActive(href) {
@@ -206,9 +209,9 @@ export default function Sidebar() {
             return (
               <Link key={h.key} href={h.items[0].href}
                 className={`sb-circle sb-hub${on ? ' is-active' : ''}`}
-                aria-label={h.key === 'Workspace' ? 'Notes' : h.label}
+                aria-label={h.label}
                 aria-current={on ? 'true' : undefined}
-                title={collapsed ? undefined : (h.key === 'Workspace' ? 'Notes' : h.label)}
+                title={collapsed ? undefined : h.label}
                 onMouseEnter={e => openFly(h, e.currentTarget)} onMouseLeave={closeFlySoon}
                 onFocus={e => openFly(h, e.currentTarget)} onBlur={closeFlySoon}>
                 <Icon size={18} />

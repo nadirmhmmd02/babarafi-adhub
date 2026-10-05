@@ -9,8 +9,8 @@ import { todayStr, addDays, dueLabel, isOverdue } from './useTodos';
 import { useSpringCheck, CheckCircle } from './springCheck';
 
 /* ─────────────────────────────────────────────────────────────
-   TODO DETAIL — isi kartu kanan saat sebuah tugas dipilih (menggantikan
-   editor catatan). Isi ala Microsoft To Do: judul + selesai + bintang,
+   TODO DETAIL — isi kartu detail di halaman To Do (/todo) saat sebuah
+   tugas dipilih. Isi ala Microsoft To Do: judul + selesai + bintang,
    Steps (sub-tugas), Add to My Day, Due date, pindah List, catatan,
    footer created + hapus.
    Redesain "Ridgeline" (Sep 2026): kepala kartu (Task · daftar · tutup) +

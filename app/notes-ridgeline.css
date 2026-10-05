@@ -1,9 +1,11 @@
 /* ══════════════════════════════════════════════════════════════════════
-   NOTES — redesain "Ridgeline" (LIVE 28 Sep 2026). Dasar (token, kartu
-   cangkang+panel, pil, menu, dialog, form, state) di app/ridgeline.css. Prefix: .rgn-
-   SUSUNAN & FITUR TIDAK BERUBAH: kartu Notes (cari + Pinned/All notes) & kartu To Do
-   di kolom kiri (lebar & tinggi bisa digeser, To Do bisa di-minimize), editor /
-   detail tugas di kanan. Isi halaman netral — aksen Saffron hanya di sidebar.
+   NOTES + TO DO (Workspace) — redesain "Ridgeline" (LIVE 28 Sep 2026). Dasar (token,
+   kartu cangkang+panel, pil, menu, dialog, form, state) di app/ridgeline.css. Prefix: .rgn-
+   Halaman Notes: kartu Notes (cari + Pinned/All notes) di kolom kiri (lebar bisa
+   digeser), editor di kanan. Sejak 5 Okt 2026 To Do jadi halaman sendiri (/todo):
+   bagian "TO DO" & "DETAIL TUGAS" di file ini dipakai halaman itu (ikut meng-import
+   file ini); tata letak halamannya di todo-ridgeline.css (.rgt-).
+   Isi halaman netral — aksen Saffron hanya di sidebar.
    ══════════════════════════════════════════════════════════════════════ */
 
 /* Warna khusus Notes: link = biru "info" (satu-satunya teks berwarna di catatan,
@@ -14,30 +16,16 @@
 .rgn-body { flex: 1; min-height: 0; display: flex; padding: 0 16px 16px; }
 .rgn-side { display: flex; flex-direction: column; min-height: 0; flex-shrink: 0; }
 .rgn-notes { flex: 1; min-height: 150px; }
-/* To Do menempel di dasar kolom: minimize = tinggi menyusut ke kepala kartu
-   (tampak "turun & mengecil ke bawah"); transisi dimatikan saat pembatas digeser */
-.rgn-todo { flex-shrink: 0; min-height: 0; transition: height .34s cubic-bezier(.4,0,.2,1); }
-/* Tinggi To Do tersimpan bisa lebih besar dari layar yang sedang dipakai (mis. diatur di
-   monitor besar, dibuka di laptop) → dijepit supaya kartu Notes tetap ≥150px + celah 12px */
-.rg:not(.is-mobile) .rgn-todo { max-height: calc(100% - 162px); }
-.rgn-todo.is-min { overflow: hidden; }
-.rgn-todo.is-dragging { transition: none; }
 .rgn-editor { flex: 1; min-width: 0; min-height: 0; }
 
 /* Pembatas geser = celah 12px antar kartu; pegangan pil muncul saat disentuh/digeser */
-.rgn-vsplit, .rgn-hsplit { position: relative; flex-shrink: 0; }
-.rgn-vsplit { width: 12px; cursor: col-resize; }
-.rgn-hsplit { height: 12px; cursor: row-resize; }
-.rgn-hsplit.is-off { cursor: default; }
-.rgn-vsplit::after, .rgn-hsplit::after {
-  content: ''; position: absolute; left: 50%; top: 50%; border-radius: 999px;
+.rgn-vsplit { position: relative; flex-shrink: 0; width: 12px; cursor: col-resize; }
+.rgn-vsplit::after {
+  content: ''; position: absolute; left: 50%; top: 50%; width: 4px; height: 44px; border-radius: 999px;
   background: var(--rg-t3); opacity: 0; transform: translate(-50%, -50%);
   transition: opacity .15s ease;
 }
-.rgn-vsplit::after { width: 4px; height: 44px; }
-.rgn-hsplit::after { width: 44px; height: 4px; }
-.rgn-vsplit:hover::after, .rgn-vsplit.is-drag::after,
-.rgn-hsplit:not(.is-off):hover::after, .rgn-hsplit.is-drag::after { opacity: .75; }
+.rgn-vsplit:hover::after, .rgn-vsplit.is-drag::after { opacity: .75; }
 
 /* Kepala kartu: jumlah kecil di samping judul */
 .rgn-count { font-size: 12px; color: var(--rg-t2); white-space: nowrap; }
@@ -128,19 +116,16 @@
 .rgn-grip:hover { color: var(--rg-t1); }
 .rgn-skel { padding: 8px 12px; display: flex; flex-direction: column; gap: 7px; }
 
-/* ══ TO DO ══ */
-.rgn-todo-in { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+/* ══ TO DO (halaman /todo — isi kartu tugas, components/TodoPanel.js) ══ */
 .rgn-todo-head { gap: 6px; }
-/* Judul & jumlah tidak boleh terpotong — pil view yang mengalah (nama daftar dielipsis) */
-.rgn-todo-head .rg-title, .rgn-todo-head .rgn-count { flex-shrink: 0; }
+/* Jumlah tidak boleh terpotong — nama view / pil view yang mengalah (dielipsis) */
+.rgn-todo-head .rgn-count { flex-shrink: 0; }
 .rgn-todo-head .rg-menu-wrap { flex-shrink: 1; min-width: 0; }
 .rgn-todo-head .rgn-view { max-width: 100%; }
-.rgn-min { width: 26px; height: 26px; margin-left: 2px; }
 .rg .rgn-view {
   height: 30px; padding: 0 10px 0 11px; gap: 6px; font-size: 12.5px; max-width: 170px; min-width: 0; flex-shrink: 1;
 }
-.rgn-todo-well { flex: 1; display: flex; flex-direction: column; overflow: hidden; transition: opacity .22s ease; }
-.rgn-todo.is-min .rgn-todo-well { opacity: 0; }
+.rgn-todo-well { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 .rgn-tasks { flex: 1; min-height: 0; overflow-y: auto; padding: 2px 8px 10px; display: flex; flex-direction: column; gap: 1px; }
 .rgn-task {
   position: relative; display: flex; align-items: flex-start; gap: 9px; flex-shrink: 0;
@@ -317,7 +302,7 @@ html[data-theme="dark"] .rg .wd-note-editor [style*="background-color"]:not([sty
 .rgn-err > span { flex: 1; min-width: 0; }
 .rgn-err .rg-btn { height: 30px; padding: 0 12px; font-size: 12px; }
 
-/* ══ DETAIL TUGAS (menggantikan editor) ══ */
+/* ══ DETAIL TUGAS (halaman /todo — components/TodoDetail.js) ══ */
 .rgn-crumb { display: inline-flex; align-items: center; gap: 6px; min-width: 0; font-size: 12px; color: var(--rg-t2); white-space: nowrap; }
 .rgn-detail { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 .rgn-detail-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 20px 22px 22px; display: flex; flex-direction: column; gap: 16px; }

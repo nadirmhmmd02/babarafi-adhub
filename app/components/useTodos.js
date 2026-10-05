@@ -5,7 +5,7 @@ import { supabase } from '../supabase';
 import { playDoneSound, playStepSound } from './todoSound';
 
 /* ─────────────────────────────────────────────────────────────
-   useTodos — lapisan data To-Do (halaman Notes, admin).
+   useTodos — lapisan data To-Do (halaman To Do /todo, admin).
    Tabel Supabase: todo_lists + todos (lihat supabase-todo-setup.sql).
    Semua update OPTIMISTIK (layar berubah dulu, DB menyusul); field teks
    (title/notes) di-debounce 600ms per tugas supaya tidak spam request.

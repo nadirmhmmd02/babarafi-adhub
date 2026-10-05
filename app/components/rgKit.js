@@ -170,7 +170,7 @@ export function MenuGlide() {
 /* Menu pilihan: tombol (default pil) + daftar .rg-menu. Lapisan POSISI (.rg-menu-pos)
    dipisah dari lapisan ANIMASI (.rg-menu wdScaleIn) — kalau digabung popup "loncat".
    Klik di luar (guard contains) / Esc menutup. Opsi: { value, label, Icon?, dot?, hint?, tone? }.
-   `footer` boleh fungsi (close) => node, untuk tombol aksi di kaki menu. Dipakai Notes (To Do).
+   `footer` boleh fungsi (close) => node, untuk tombol aksi di kaki menu. Dipakai halaman To Do.
    Pil sorot meluncur (MenuGlide) + label tombol "berganti" halus setelah memilih (data-swap). */
 export function RgMenu({
   options, value, onSelect, label, icon: Icon, dot, title, disabled,

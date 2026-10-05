@@ -12,9 +12,6 @@ import { useAuth, homeFor } from '../components/AuthContext';
 import { supabase } from '../supabase';
 import useIsMobile from '../components/useIsMobile';
 import ThemeToggle from '../components/ThemeToggle';
-import useTodos from '../components/useTodos';
-import TodoPanel from '../components/TodoPanel';
-import TodoDetail from '../components/TodoDetail';
 import { dashboardFontVars } from '../components/dashboardFonts';
 import { RgDialog } from '../components/rgKit';
 
@@ -30,8 +27,9 @@ import { RgDialog } from '../components/rgKit';
    berganti, JANGAN saat mengetik, kalau tidak kursor melompat ke awal.
 
    Redesain "Ridgeline" (LIVE 28 Sep 2026): skin .rg + notes-ridgeline.css
-   (prefix .rgn-). Kartu Notes & To Do di kolom kiri, kartu editor di kanan;
-   susunan, fitur & semua logika editor TIDAK berubah.
+   (prefix .rgn-). Kartu Notes di kolom kiri, kartu editor di kanan.
+   To Do yang dulu menumpang di sini (panel bawah kolom kiri + detail tugas
+   di kanan) PINDAH jadi halaman sendiri /todo pada 5 Okt 2026.
    ───────────────────────────────────────────────────────────── */
 
 const HIGHLIGHTS = [
@@ -47,12 +45,6 @@ const AUTOSAVE_MS = 700;
    garisnya transparan, hanya kursor yang berubah saat disentuh. */
 const LIST_MIN = 240, LIST_MAX = 520, LIST_DEFAULT = 300;
 const LIST_W_KEY = 'wd-notes-list-w';
-/* Tinggi panel To Do di bawah daftar catatan — juga bisa digeser (row-resize) */
-const TODO_MIN = 150, TODO_MAX = 640, TODO_DEFAULT = 320;
-const TODO_H_KEY = 'wd-notes-todo-h';
-const TODO_MIN_KEY = 'wd-notes-todo-min';   // '1' = panel To Do di-minimize (tinggal header)
-const TODO_HEADER_H = 50;                   // tinggi kartu To Do saat minimized = kepala kartu (40) + cangkang (4+4) + garis (1+1)
-const NOTES_MIN_H = 150;                    // kartu Notes di atasnya tidak boleh tergencet lebih kecil dari ini
 const GROUPS_KEY = 'wd-notes-groups-min';   // grup daftar catatan yang dilipat { pinned, all }
 const ACTIVE_KEY = 'wd-notes-active-id';    // catatan terakhir dibuka — dibuka lagi setelah refresh
 
@@ -159,7 +151,7 @@ export default function NotesPage() {
   const [mobileView, setMobileView] = useState('list'); // mobile: 'list' | 'editor'
 
   // Grup daftar catatan (PINNED / ALL NOTES) bisa dilipat — isi "tersedot" ke atas
-  // masuk ke header grup (kebalikan arah To Do), diingat di localStorage.
+  // masuk ke header grup, diingat di localStorage.
   const [groupMin, setGroupMin] = useState({ pinned: false, all: false });
 
   // Geser urutan catatan (drag handle di daftar). canReorder = false kalau kolom
@@ -176,36 +168,18 @@ export default function NotesPage() {
   // Lebar kolom daftar (drag) — diingat di localStorage supaya tidak reset tiap buka
   const [listWidth, setListWidth] = useState(LIST_DEFAULT);
   const [listDragging, setListDragging] = useState(false);
-  const sideRef = useRef(null);          // kolom kiri (kartu Notes + To Do)
+  const sideRef = useRef(null);          // kolom kiri (kartu Notes)
   const draggingRef = useRef(false);
-
-  /* ── To Do (ala Microsoft To Do) — data via useTodos, panel di bawah daftar catatan,
-        detail tugas menggantikan editor di kanan saat sebuah tugas dipilih ── */
-  const td = useTodos(role === 'admin');
-  const [todoView, setTodoView] = useState('myday');
-  const [selectedTaskId, setSelectedTaskId] = useState(null);
-  const [todoH, setTodoH] = useState(TODO_DEFAULT);
-  const [todoMin, setTodoMin] = useState(false);
-  const [todoDragging, setTodoDragging] = useState(false);   // matikan transisi tinggi saat digeser
-  const draggingTodoRef = useRef(false);
-  const selectedTask = useMemo(() => (td.todos || []).find(t => t.id === selectedTaskId) || null, [td.todos, selectedTaskId]);
 
   useEffect(() => {
     const saved = parseInt(localStorage.getItem(LIST_W_KEY) || '', 10);
     // lebar lama di luar rentang baru (min naik 210→240) dijepit, bukan dibuang
     if (saved > 0) setListWidth(Math.min(LIST_MAX, Math.max(LIST_MIN, saved)));
-    const savedH = parseInt(localStorage.getItem(TODO_H_KEY) || '', 10);
-    if (savedH >= TODO_MIN && savedH <= TODO_MAX) setTodoH(savedH);
-    if (localStorage.getItem(TODO_MIN_KEY) === '1') setTodoMin(true);
     try {
       const g = JSON.parse(localStorage.getItem(GROUPS_KEY) || '{}');
       setGroupMin({ pinned: !!g.pinned, all: !!g.all });
     } catch { /* nilai rusak → pakai default terbuka */ }
   }, []);
-
-  function toggleTodoMin() {
-    setTodoMin(v => { localStorage.setItem(TODO_MIN_KEY, v ? '0' : '1'); return !v; });
-  }
 
   function toggleGroup(id) {
     setGroupMin(prev => {
@@ -229,17 +203,6 @@ export default function NotesPage() {
 
   useEffect(() => {
     function onMove(e) {
-      if (draggingTodoRef.current && sideRef.current) {
-        // Geser pembatas kartu Notes ↔ kartu To Do (tinggi To Do = jarak kursor ke dasar kolom);
-        // kartu Notes di atasnya disisakan minimal NOTES_MIN_H + celah 12px
-        const r = sideRef.current.getBoundingClientRect();
-        const max = Math.max(TODO_MIN, Math.min(TODO_MAX, r.height - NOTES_MIN_H - 12));
-        let h = r.bottom - e.clientY;
-        if (h < TODO_MIN) h = TODO_MIN;
-        if (h > max) h = max;
-        setTodoH(h);
-        return;
-      }
       if (!draggingRef.current || !sideRef.current) return;
       const left = sideRef.current.getBoundingClientRect().left;
       let w = e.clientX - left;
@@ -248,13 +211,6 @@ export default function NotesPage() {
       setListWidth(w);
     }
     function onUp() {
-      if (draggingTodoRef.current) {
-        draggingTodoRef.current = false;
-        setTodoDragging(false);
-        document.body.style.userSelect = '';
-        document.body.style.cursor = '';
-        setTodoH(h => { localStorage.setItem(TODO_H_KEY, String(Math.round(h))); return h; });
-      }
       if (!draggingRef.current) return;
       draggingRef.current = false;
       setListDragging(false);
@@ -278,24 +234,8 @@ export default function NotesPage() {
     document.body.style.cursor = 'col-resize';
     e.preventDefault();
   }
-  function startTodoDrag(e) {
-    if (todoMin) return;   // saat minimized pembatas tidak bisa digeser
-    draggingTodoRef.current = true;
-    setTodoDragging(true);
-    document.body.style.userSelect = 'none';
-    document.body.style.cursor = 'row-resize';
-    e.preventDefault();
-  }
 
-  /* Pilih tugas → panel kanan jadi detail tugas; pilih catatan → kembali editor.
-     loadedIdRef di-reset supaya editor (yang sempat unmount) mengisi ulang innerHTML. */
-  function selectTask(id) {
-    setSelectedTaskId(id);
-    loadedIdRef.current = null;
-    if (isMobile) setMobileView('editor');
-  }
   function selectNote(id) {
-    setSelectedTaskId(null);
     setActiveId(id);
     if (isMobile) setMobileView('editor');
   }
@@ -353,9 +293,11 @@ export default function NotesPage() {
 
   useEffect(() => { if (role === 'admin') load(); }, [role, load]);
 
-  /* Isi editor HANYA saat catatan aktif berganti */
+  /* Isi editor HANYA saat catatan aktif berganti. Editor sedang tidak dirender
+     (HP: sedang di daftar) → penanda di-reset, supaya editor yang muncul lagi
+     diisi ulang walau catatannya sama (elemen barunya kosong). */
   useEffect(() => {
-    if (!editorRef.current) return;
+    if (!editorRef.current) { loadedIdRef.current = null; return; }
     if (loadedIdRef.current === activeId) return;
     // URL polos di catatan lama ikut dijadikan link saat catatan dibuka
     editorRef.current.innerHTML = linkifyHtml(active?.content || '');
@@ -365,7 +307,7 @@ export default function NotesPage() {
     // PALING BAWAH supaya tulisan terbaru langsung kelihatan (rAF: tunggu layout).
     const ed = editorRef.current;
     requestAnimationFrame(() => { ed.scrollTop = ed.scrollHeight; });
-  }, [activeId, active, mobileView, selectedTaskId]);
+  }, [activeId, active, mobileView]);
 
   useEffect(() => () => clearTimeout(saveTimer.current), []);
 
@@ -412,7 +354,6 @@ export default function NotesPage() {
     if (err) { setError(err.message); return; }
     setNotes(prev => [data, ...(prev || [])]);
     expandGroup('all');   // catatan baru masuk All notes — pastikan grupnya terbuka
-    setSelectedTaskId(null);
     setActiveId(data.id);
     loadedIdRef.current = null;
     setMobileView('editor');
@@ -428,22 +369,12 @@ export default function NotesPage() {
     if (activeId === id) { setActiveId(rest[0]?.id || null); loadedIdRef.current = null; }
   }
 
-  /* Eksekusi konfirmasi hapus — confirmDelete = { kind: 'note'|'task'|'list', item } */
+  /* Eksekusi konfirmasi hapus — confirmDelete = catatan yang mau dihapus */
   async function confirmDeleteNow() {
-    const c = confirmDelete;
-    if (!c || deleting) return;
+    if (!confirmDelete || deleting) return;
     setDeleting(true);   // tombol dialog terkunci selama proses (anti klik dobel)
     try {
-      if (c.kind === 'note') { await removeNote(c.item.id); return; }
-      if (c.kind === 'task') {
-        await td.removeTask(c.item.id);
-        if (selectedTaskId === c.item.id) { setSelectedTaskId(null); loadedIdRef.current = null; if (isMobile) setMobileView('list'); }
-      } else if (c.kind === 'list') {
-        await td.removeList(c.item.id);
-        if (todoView === `list:${c.item.id}`) setTodoView('tasks');
-        if (selectedTask && selectedTask.list_id === c.item.id) { setSelectedTaskId(null); loadedIdRef.current = null; }
-      }
-      setConfirmDelete(null);
+      await removeNote(confirmDelete.id);
     } finally {
       setDeleting(false);
     }
@@ -835,14 +766,7 @@ export default function NotesPage() {
 
   const showList   = !isMobile || mobileView === 'list';
   const showEditor = !isMobile || mobileView === 'editor';
-  const openTasks  = td.todos && !td.error ? td.todos.filter(t => !t.done).length : null;
   const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
-
-  // Tutup detail tugas → kembali ke editor catatan (loadedIdRef di-reset supaya innerHTML diisi ulang)
-  function closeTask() {
-    setSelectedTaskId(null);
-    loadedIdRef.current = null;
-  }
 
   const ctxLine = notes === null
     ? <span>Loading notes…</span>
@@ -853,10 +777,6 @@ export default function NotesPage() {
           <span className="rg-ctx-sep" aria-hidden="true" />
         </>)}
         <span>{plural(notes.length, 'note')}</span>
-        {openTasks !== null && (<>
-          <span className="rg-ctx-sep" aria-hidden="true" />
-          <span>{plural(openTasks, 'open task')}</span>
-        </>)}
         {!isMobile && (<>
           <span className="rg-ctx-sep" aria-hidden="true" />
           <span>Synced across your devices</span>
@@ -871,9 +791,9 @@ export default function NotesPage() {
 
   /* Baris catatan — dirender lewat FUNGSI biasa (bukan komponen di dalam komponen):
      komponen yang didefinisikan di dalam render di-remount tiap ketikan (animasi &
-     hover ikut reset). Pola sama dengan groupHeader/groupBody & TaskRow. */
+     hover ikut reset). Pola sama dengan groupHeader/groupBody. */
   const renderNoteRow = (n) => {
-    const isActive = n.id === activeId && !selectedTaskId && (!isMobile || mobileView === 'editor');
+    const isActive = n.id === activeId && (!isMobile || mobileView === 'editor');
     const preview = plainText(n.content).slice(0, 90);
     const showHandle = !isMobile && canReorder;
     return (
@@ -914,7 +834,7 @@ export default function NotesPage() {
             <Pin size={13} fill={n.pinned ? 'currentColor' : 'none'} />
           </button>
           <button type="button" className="rgn-note-act is-del"
-            onClick={e => { e.stopPropagation(); setConfirmDelete({ kind: 'note', item: n }); }}
+            onClick={e => { e.stopPropagation(); setConfirmDelete(n); }}
             title="Delete note" aria-label="Delete note">
             <Trash2 size={13} />
           </button>
@@ -931,7 +851,7 @@ export default function NotesPage() {
      Dipanggil sebagai FUNGSI biasa (bukan komponen JSX) supaya elemennya tidak
      di-remount tiap render — kalau remount, transisi lipatnya tidak jalan.
      Animasi tinggi pakai grid-template-rows 1fr→0fr: isi grup "tersedot" ke atas
-     masuk ke header (kebalikan arah minimize To Do), keluar lagi ke bawah saat dibuka. */
+     masuk ke header, keluar lagi ke bawah saat dibuka. */
   const groupHeader = (id, label, count) => {
     const min = isGroupMin(id);
     return (
@@ -948,12 +868,6 @@ export default function NotesPage() {
       <div className="rgn-group-in">{children}</div>
     </div>
   );
-
-  const deleteTitle = confirmDelete?.kind === 'task' ? 'Delete this task?'
-    : confirmDelete?.kind === 'list' ? 'Delete this list?' : 'Delete this note?';
-  const deleteName = !confirmDelete ? ''
-    : confirmDelete.kind === 'list' ? confirmDelete.item.name
-    : (confirmDelete.item.title || (confirmDelete.kind === 'task' ? 'Untitled task' : 'Untitled note'));
 
   return (
     <div className={`rg rg-page rgn ${dashboardFontVars}${isMobile ? ' is-mobile' : ''}`}>
@@ -987,7 +901,7 @@ export default function NotesPage() {
       {/* ══ ISI ══ */}
       <div className="rgn-body">
 
-        {/* ── Kolom kiri: kartu Notes + kartu To Do ── */}
+        {/* ── Kolom kiri: kartu Notes ── */}
         {showList && (
           <div ref={sideRef} className="rgn-side" style={isMobile ? undefined : { width: `${listWidth}px` }}>
             <section className="rg-card rgn-notes rg-rise" aria-label="Notes">
@@ -1034,33 +948,6 @@ export default function NotesPage() {
                 </div>
               </div>
             </section>
-
-            {/* Pembatas kartu Notes ↔ To Do (desktop: geser atas-bawah) */}
-            {!isMobile && (
-              <div className={`rgn-hsplit${todoMin ? ' is-off' : ''}${todoDragging ? ' is-drag' : ''}`}
-                onMouseDown={startTodoDrag} title={todoMin ? undefined : 'Drag to resize'} aria-hidden="true" />
-            )}
-
-            {/* Kartu To Do (ala Microsoft To Do) — minimize ala Windows: tinggi menyusut ke
-                kepala kartu (menempel di dasar kolom → tampak turun & mengecil ke bawah) */}
-            <section
-              className={`rg-card rgn-todo rg-rise${todoMin ? ' is-min' : ''}${todoDragging ? ' is-dragging' : ''}`}
-              style={{ height: todoMin ? `${TODO_HEADER_H}px` : isMobile ? '44%' : `${todoH}px`, animationDelay: '40ms' }}
-              aria-label="To Do"
-            >
-              <TodoPanel
-                td={td}
-                view={todoView}
-                setView={setTodoView}
-                selectedId={selectedTaskId}
-                onSelect={selectTask}
-                onRequestDeleteList={(l) => setConfirmDelete({ kind: 'list', item: l })}
-                isMobile={isMobile}
-                minimized={todoMin}
-                onToggleMinimize={toggleTodoMin}
-                compact={!isMobile && listWidth < 272}
-              />
-            </section>
           </div>
         )}
 
@@ -1070,20 +957,11 @@ export default function NotesPage() {
             title="Drag to resize" aria-hidden="true" />
         )}
 
-        {/* ── Kartu kanan: editor catatan / detail tugas ── */}
+        {/* ── Kartu kanan: editor catatan ── */}
         {showEditor && (
-          <section className="rg-card rgn-editor rg-rise" style={{ animationDelay: '80ms' }}
-            aria-label={selectedTask ? 'Task details' : 'Note editor'}>
-            {selectedTask ? (
-              <TodoDetail
-                key={selectedTask.id}
-                task={selectedTask}
-                td={td}
-                onRequestDelete={(t) => setConfirmDelete({ kind: 'task', item: t })}
-                onClose={closeTask}
-                isMobile={isMobile}
-              />
-            ) : active ? (
+          <section className="rg-card rgn-editor rg-rise" style={{ animationDelay: '40ms' }}
+            aria-label="Note editor">
+            {active ? (
               <>
                 <div className="rg-head rgn-ed-head">
                   <div className="rgn-toolbar" role="toolbar" aria-label="Formatting">
@@ -1196,13 +1074,13 @@ export default function NotesPage() {
         )}
       </div>
 
-      {/* ══ KONFIRMASI HAPUS (catatan / tugas / daftar) — Esc & klik latar menutup ══ */}
+      {/* ══ KONFIRMASI HAPUS CATATAN — Esc & klik latar menutup ══ */}
       {confirmDelete && (
         <RgDialog
           icon={Trash2}
           tone="neg"
-          title={deleteTitle}
-          sub={deleteName}
+          title="Delete this note?"
+          sub={confirmDelete.title || 'Untitled note'}
           onClose={() => setConfirmDelete(null)}
           busy={deleting}
           width={400}
@@ -1213,9 +1091,7 @@ export default function NotesPage() {
             </button>
           </>}
         >
-          {confirmDelete.kind === 'list'
-            ? <>The list and <strong>all tasks inside it</strong> will be removed from every device. This can’t be undone.</>
-            : <>It will be removed from every device. This can’t be undone.</>}
+          It will be removed from every device. This can’t be undone.
         </RgDialog>
       )}
     </div>

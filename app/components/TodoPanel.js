@@ -3,10 +3,10 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import {
   ListTodo, Sun, Star, CalendarDays, Inbox, Plus,
-  ChevronRight, Check, Pencil, Trash2, CircleAlert, Minus, ChevronUp,
+  ChevronRight, Check, Pencil, Trash2, CircleAlert,
 } from 'lucide-react';
-import { RgMenu, RgDialog } from './rgKit';
-import { TODO_LIST_COLORS, todayStr, dueLabel, isOverdue } from './useTodos';
+import { RgMenu } from './rgKit';
+import { todayStr, dueLabel, isOverdue } from './useTodos';
 import { useSpringCheck, CheckCircle, StrikeText } from './springCheck';
 import { playDoneSound } from './todoSound';
 
@@ -15,12 +15,14 @@ import { playDoneSound } from './todoSound';
 const DONE_MOVE_MS = 550;
 
 /* ─────────────────────────────────────────────────────────────
-   TODO PANEL — daftar tugas ala Microsoft To Do, kartu di bagian
-   bawah kolom kiri halaman Notes. Tampilan (view):
-   My Day · Important · Planned · Tasks (bawaan) · daftar kustom.
-   Klik tugas → detailnya tampil di panel kanan (TodoDetail).
-   Redesain "Ridgeline" (Sep 2026): kepala kartu (judul · jumlah · minimize ·
-   pil view) + panel dalam (tambah tugas · daftar). Styling di notes-ridgeline.css.
+   TODO PANEL — isi kartu tugas di halaman To Do (/todo), ala Microsoft
+   To Do. Tampilan (view): My Day · Important · Planned · Tasks (bawaan) ·
+   daftar kustom. Desktop: view dipilih dari kartu "Lists" di kiri halaman,
+   kepala kartu ini menampilkan nama view + ganti nama/hapus daftar kustom.
+   HP (viewMenu): tidak ada kartu Lists → view dipilih dari menu pil di
+   kepala kartu. Klik tugas → detailnya tampil di kartu kanan (TodoDetail).
+   Dialog daftar baru/ganti nama & konfirmasi hapus ada di app/todo/page.js.
+   Styling di notes-ridgeline.css (.rgn-task* dst.) + todo-ridgeline.css.
    ───────────────────────────────────────────────────────────── */
 
 export const BUILTIN_VIEWS = [
@@ -54,14 +56,21 @@ export function tasksForView(todos, view) {
   });
 }
 
+/* Teks saat view belum punya tugas sama sekali: [judul, keterangan] */
+const EMPTY_COPY = {
+  myday:     ['Focus on your day', 'Add what you want to get done today. My Day starts fresh every morning.'],
+  important: ['No important tasks', 'Star a task to keep it within reach here.'],
+  planned:   ['Nothing planned', 'Tasks with a due date show up here, sorted by deadline.'],
+};
+const EMPTY_DEFAULT = ['No tasks yet', 'Type in the box above and press Enter to add one.'];
+
 export default function TodoPanel({
-  td, view, setView, selectedId, onSelect, onRequestDeleteList, isMobile,
-  minimized = false, onToggleMinimize, compact = false,
+  td, view, setView, selectedId, onSelect, isMobile,
+  onNewList, onRenameList, onRequestDeleteList, viewMenu = false,
 }) {
   const { lists, todos, error } = td;
   const [draft, setDraft] = useState('');
   const [showDone, setShowDone] = useState(false);
-  const [listEdit, setListEdit] = useState(null);   // null | { mode:'new'|'rename', id, name, color }
 
   /* ── Geser urutan tugas (tekan kiri di baris → kursor tangan → geser atas/bawah) ──
      Tanpa HTML5 drag: mousedown di baris mencatat titik awal; begitu bergerak >5px jadi
@@ -122,6 +131,7 @@ export default function TodoPanel({
   }
 
   const meta = viewMeta(view, lists);
+  const ViewIcon = meta.Icon;
   const inView = useMemo(() => tasksForView(todos, view), [todos, view]);
   const open = useMemo(() => {
     const o = inView.filter(t => !t.done);
@@ -144,25 +154,13 @@ export default function TodoPanel({
     });
   }
 
-  async function commitListEdit() {
-    if (!listEdit) return;
-    const name = listEdit.name.trim();
-    if (!name) { setListEdit(null); return; }
-    if (listEdit.mode === 'new') {
-      const l = await td.createList(name, listEdit.color);
-      if (l) setView(listViewId(l.id));
-    } else {
-      await td.updateList(listEdit.id, { name, color: listEdit.color });
-    }
-    setListEdit(null);
-  }
-
   const viewOptions = [
     ...BUILTIN_VIEWS.map(v => ({ value: v.id, label: v.label, Icon: v.Icon })),
     ...lists.map(l => ({ value: listViewId(l.id), label: l.name, dot: l.color || 'var(--rg-t3)' })),
   ];
 
   const openCount = open.length;
+  const [emptyTitle, emptyText] = meta.list ? EMPTY_DEFAULT : (EMPTY_COPY[view] || EMPTY_DEFAULT);
   const rowProps = (t) => ({
     t, td, view, isSel: t.id === selectedId, onSelect: clickRow,
     onPress: t.done ? null : pressRow, onEnter: t.done ? null : enterRow,
@@ -170,50 +168,54 @@ export default function TodoPanel({
   });
 
   return (
-    <div className="rgn-todo-in">
-      {/* Kepala kartu — tinggi kartu saat minimized = kepala ini saja (TODO_HEADER_H di notes/page.js) */}
+    <>
+      {/* Kepala kartu — desktop: nama view · jumlah · aksi daftar kustom; HP: menu pil view */}
       <div className="rg-head rgn-todo-head">
-        <span className="rg-head-ico"><ListTodo size={15} /></span>
-        <span className="rg-title">To Do</span>
-        {todos !== null && !error && !compact && <span className="rgn-count rg-mono">{openCount} open</span>}
-        {/* Minimize / restore ala Windows — di antara judul dan pilihan view */}
-        {onToggleMinimize && (
-          <button type="button" className="rg-iconbtn rgn-min" onClick={onToggleMinimize}
-            title={minimized ? 'Restore To Do' : 'Minimize To Do'} aria-label={minimized ? 'Restore To Do' : 'Minimize To Do'}
-            aria-expanded={!minimized}>
-            {minimized ? <ChevronUp size={14} strokeWidth={2.25} /> : <Minus size={14} strokeWidth={2.25} />}
-          </button>
-        )}
+        {viewMenu ? (
+          <RgMenu
+            className="rg-pill rgn-view"
+            label={meta.label}
+            icon={ViewIcon || undefined}
+            dot={ViewIcon ? undefined : (meta.color || 'var(--rg-t3)')}
+            options={viewOptions}
+            value={view}
+            onSelect={setView}
+            align="left"
+            minWidth={210}
+            title="Choose a view"
+            footer={(close) => (<>
+              <button type="button" className="rg-menu-item" onClick={() => { close(); onNewList(); }}>
+                <Plus size={15} className="rg-menu-ico" /><span>New list</span>
+              </button>
+              {meta.list && (
+                <button type="button" className="rg-menu-item" onClick={() => { close(); onRenameList(meta.list); }}>
+                  <Pencil size={15} className="rg-menu-ico" /><span>Rename list</span>
+                </button>
+              )}
+              {meta.list && (
+                <button type="button" className="rg-menu-item is-neg" onClick={() => { close(); onRequestDeleteList(meta.list); }}>
+                  <Trash2 size={15} className="rg-menu-ico" /><span>Delete list</span>
+                </button>
+              )}
+            </>)}
+          />
+        ) : (<>
+          <span className="rg-head-ico">
+            {ViewIcon ? <ViewIcon size={15} /> : <span className="rg-menu-dot" style={{ background: meta.color || 'var(--rg-t3)' }} />}
+          </span>
+          <span className="rg-title">{meta.label}</span>
+        </>)}
+        {todos !== null && !error && <span className="rgn-count rg-mono">{openCount} open</span>}
         <span style={{ flex: 1 }} />
-        {/* Menu view membuka ke ATAS — kartu To Do ada di dasar layar */}
-        <RgMenu
-          className="rg-pill rgn-view"
-          label={meta.label}
-          icon={meta.Icon || undefined}
-          dot={meta.Icon ? undefined : (meta.color || 'var(--rg-t3)')}
-          options={viewOptions}
-          value={view}
-          onSelect={setView}
-          align="right"
-          direction="up"
-          minWidth={210}
-          title="Choose a view"
-          footer={(close) => (<>
-            <button type="button" className="rg-menu-item" onClick={() => { close(); setListEdit({ mode: 'new', id: null, name: '', color: TODO_LIST_COLORS[1] }); }}>
-              <Plus size={15} className="rg-menu-ico" /><span>New list</span>
-            </button>
-            {meta.list && (
-              <button type="button" className="rg-menu-item" onClick={() => { close(); setListEdit({ mode: 'rename', id: meta.list.id, name: meta.list.name, color: meta.list.color }); }}>
-                <Pencil size={15} className="rg-menu-ico" /><span>Rename list</span>
-              </button>
-            )}
-            {meta.list && (
-              <button type="button" className="rg-menu-item is-neg" onClick={() => { close(); onRequestDeleteList(meta.list); }}>
-                <Trash2 size={15} className="rg-menu-ico" /><span>Delete list</span>
-              </button>
-            )}
-          </>)}
-        />
+        {!viewMenu && view === 'myday' && (
+          <span className="rgn-count">{new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
+        )}
+        {!viewMenu && meta.list && (<>
+          <button type="button" className="rg-iconbtn" onClick={() => onRenameList(meta.list)}
+            title="Rename list" aria-label="Rename list"><Pencil size={13} /></button>
+          <button type="button" className="rg-iconbtn rgt-del" onClick={() => onRequestDeleteList(meta.list)}
+            title="Delete list" aria-label="Delete list"><Trash2 size={13} /></button>
+        </>)}
       </div>
 
       <div className="rg-well rgn-todo-well">
@@ -227,7 +229,6 @@ export default function TodoPanel({
               onKeyDown={e => { if (e.key === 'Enter') quickAdd(); }}
               placeholder={`Add a task${meta.list ? ` to ${meta.label}` : view === 'myday' ? ' to My Day' : ''}…`}
               aria-label="Add a task"
-              tabIndex={minimized ? -1 : undefined}
             />
             {draft.trim() && (
               <button type="button" className="rgn-field-go" onClick={quickAdd} title="Add task" aria-label="Add task">
@@ -237,8 +238,7 @@ export default function TodoPanel({
           </label>
         )}
 
-        {/* Daftar tugas — saat minimized tetap dirender (ikut terpotong animasi tinggi) tapi tak bisa di-scroll */}
-        <div className={`rgn-tasks${dragId ? ' is-dragmode' : ''}`} style={minimized ? { overflowY: 'hidden' } : undefined}>
+        <div className={`rgn-tasks${dragId ? ' is-dragmode' : ''}`}>
           {error?.missing && (
             <div className="rgn-hint" style={{ display: 'flex', gap: 8 }}>
               <CircleAlert size={14} style={{ flexShrink: 0, marginTop: 2 }} />
@@ -252,8 +252,10 @@ export default function TodoPanel({
             </div>
           )}
           {!error && todos !== null && open.length === 0 && done.length === 0 && (
-            <div className="rgn-hint">
-              {view === 'myday' ? 'My Day is empty — add what you want to focus on today.' : 'No tasks here yet.'}
+            <div className="rg-empty rgn-empty">
+              <span className="rgn-empty-ico">{ViewIcon ? <ViewIcon size={20} /> : <ListTodo size={20} />}</span>
+              <strong>{emptyTitle}</strong>
+              <span>{emptyText}</span>
             </div>
           )}
           {open.map(t => <TaskRow key={t.id} {...rowProps(t)} />)}
@@ -268,47 +270,7 @@ export default function TodoPanel({
           )}
         </div>
       </div>
-
-      {/* Daftar baru / ganti nama — dialog skin */}
-      {listEdit && (
-        <RgDialog
-          icon={listEdit.mode === 'new' ? Plus : Pencil}
-          title={listEdit.mode === 'new' ? 'New list' : 'Rename list'}
-          sub="To Do"
-          onClose={() => setListEdit(null)}
-          width={380}
-          foot={<>
-            <button type="button" className="rg-btn rg-btn-ghost" onClick={() => setListEdit(null)}>Cancel</button>
-            <button type="button" className="rg-btn rg-btn-primary" disabled={!listEdit.name.trim()} onClick={commitListEdit}>
-              {listEdit.mode === 'new' ? 'Create list' : 'Save'}
-            </button>
-          </>}
-        >
-          <div className="rgn-dlg">
-            <div className="rg-field">
-              <label className="rg-label" htmlFor="rgn-list-name">Name</label>
-              <input id="rgn-list-name" className="rg-input" autoFocus value={listEdit.name}
-                onChange={e => setListEdit(le => ({ ...le, name: e.target.value }))}
-                onKeyDown={e => { if (e.key === 'Enter') commitListEdit(); }}
-                placeholder={listEdit.mode === 'new' ? 'e.g. Campaign ops' : 'List name'} />
-            </div>
-            <div className="rg-field">
-              <span className="rg-label">Color</span>
-              <div className="rgn-swatches">
-                {TODO_LIST_COLORS.map(c => {
-                  const on = listEdit.color === c;
-                  return (
-                    <button key={c} type="button" className={`rgn-swatch${on ? ' is-on' : ''}`} style={{ '--c': c }}
-                      aria-pressed={on} aria-label={`Color ${c}`} title={c}
-                      onClick={() => setListEdit(le => ({ ...le, color: on ? null : c }))} />
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </RgDialog>
-      )}
-    </div>
+    </>
   );
 }
 

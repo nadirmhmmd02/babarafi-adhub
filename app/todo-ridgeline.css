@@ -7,11 +7,17 @@
    Dasar skin (token, kartu, pil, menu, dialog) di app/ridgeline.css.
    ══════════════════════════════════════════════════════════════════════ */
 
-/* ══ TATA LETAK ══ */
+/* ══ TATA LETAK ══
+   Celah antar kartu = pembatas geser .rgn-vsplit (notes-ridgeline.css — sama persis
+   dengan halaman Notes: 12px, pegangan pil muncul saat disentuh/digeser). Lebar kartu
+   Lists = inline style dari page.js; lebar kartu detail = --rgt-detail-w. */
 .rgt-body { flex: 1; min-height: 0; display: flex; padding: 0 16px 16px; }
-.rgt-nav { width: clamp(208px, 17vw, 248px); flex-shrink: 0; }
+/* Desktop: body jadi container supaya lebar kartu samping bisa dijepit relatif terhadap
+   lebar ISI halaman (cqw) — lebar hasil geser yang tersimpan dari monitor besar tidak
+   menggencet kartu tugas di layar kecil. 30 / 44 = NAV_CAP / DETAIL_CAP di page.js. */
+.rg:not(.is-mobile) .rgt-body { container-type: inline-size; }
+.rgt-nav { flex-shrink: 0; max-width: 30cqw; }
 .rgt-main { flex: 1; min-width: 0; }
-.rgt-nav + .rgt-main { margin-left: 12px; }
 
 /* ══ KARTU LISTS ══ */
 .rgt-nav-well { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
@@ -63,23 +69,20 @@
    overflow:hidden; saat tertutup lebarnya tinggal padding kanan 16px yang
    dinetralkan margin kanan −16px. */
 .rgt-slot {
-  --rgt-detail-w: clamp(320px, 30vw, 420px);
+  --rgt-detail-w: clamp(320px, 30vw, 420px);   /* bawaan; diganti inline begitu pembatasnya digeser */
+  --rgt-detail-eff: min(var(--rgt-detail-w), 44cqw);
   box-sizing: border-box; flex-shrink: 0; display: flex; overflow: hidden; pointer-events: none;
   width: 16px; margin: -12px -16px -16px 0; padding: 12px 16px 16px 0;
   transition: width .34s cubic-bezier(.22,1,.36,1);
 }
-.rgt-slot.is-open { width: calc(var(--rgt-detail-w) + 28px); }
+.rgt-slot.is-open { width: calc(var(--rgt-detail-eff) + 28px); }   /* pembatas 12 + kartu + tepi 16 */
+.rgt-slot.is-dragging { transition: none; }   /* lebar mengikuti kursor langsung saat pembatas digeser */
+.rgt-dsplit { pointer-events: auto; }
 .rgt-detail {
-  width: var(--rgt-detail-w); margin-left: 12px; flex-shrink: 0; pointer-events: auto;
+  width: var(--rgt-detail-eff); flex-shrink: 0; pointer-events: auto;
   opacity: 0; transition: opacity .2s ease;
 }
 .rgt-slot.is-open .rgt-detail { opacity: 1; }
-
-/* Layar desktop sempit (tablet mendatar): kartu samping dirampingkan supaya kartu tugas tetap lega */
-@media (max-width: 1023px) {
-  .rgt-nav { width: 184px; }
-  .rgt-slot { --rgt-detail-w: 300px; }
-}
 
 /* ══ MOBILE (≤767px) — satu kolom: kartu tugas ↔ detail ══ */
 .rg.is-mobile .rgt-body { padding: 16px; }

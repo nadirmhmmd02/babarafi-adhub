@@ -30,6 +30,17 @@ import { RgDialog } from '../components/rgKit';
 
 const DETAIL_CLOSE_MS = 340;   // = lama transisi lebar .rgt-slot (todo-ridgeline.css)
 
+/* Pembatas antar kartu bisa DIGESER — pola & tampilan sama dengan halaman Notes
+   (.rgn-vsplit: celah 12px, pegangan pil muncul saat disentuh). Lebar kartu Lists &
+   kartu detail diingat di localStorage. Batas atas juga dijaga CSS (30cqw / 44cqw di
+   todo-ridgeline.css) supaya kartu tugas tidak tergencet kalau lebar tersimpan dibuka
+   di layar yang lebih kecil — NAV_CAP / DETAIL_CAP harus sama dengan angka di CSS. */
+const NAV_MIN = 200, NAV_MAX = 420, NAV_DEFAULT = 248;
+const NAV_W_KEY = 'wd-todo-nav-w';
+const DETAIL_MIN = 320, DETAIL_MAX = 620;
+const DETAIL_W_KEY = 'wd-todo-detail-w';
+const NAV_CAP = 0.30, DETAIL_CAP = 0.44;
+
 export default function TodoPage() {
   const { role, ready } = useAuth();
   const router = useRouter();
@@ -41,6 +52,66 @@ export default function TodoPage() {
   const [listEdit, setListEdit] = useState(null);         // null | { mode:'new'|'rename', id, name, color }
   const [confirmDelete, setConfirmDelete] = useState(null); // null | { kind:'task'|'list', item }
   const [deleting, setDeleting] = useState(false);
+
+  // Lebar kartu Lists & kartu detail (geser pembatas) — diingat di localStorage
+  const [navW, setNavW] = useState(NAV_DEFAULT);
+  const [detailW, setDetailW] = useState(null);       // null = lebar bawaan CSS
+  const [splitDrag, setSplitDrag] = useState(null);   // 'nav' | 'detail' | null — pembatas yang sedang digeser
+  const bodyRef = useRef(null);
+  const splitRef = useRef(null);                      // { which, startX, startW, min, max, last }
+
+  useEffect(() => {
+    const savedNav = parseInt(localStorage.getItem(NAV_W_KEY) || '', 10);
+    if (savedNav > 0) setNavW(Math.min(NAV_MAX, Math.max(NAV_MIN, savedNav)));
+    const savedDetail = parseInt(localStorage.getItem(DETAIL_W_KEY) || '', 10);
+    if (savedDetail > 0) setDetailW(Math.min(DETAIL_MAX, Math.max(DETAIL_MIN, savedDetail)));
+  }, []);
+
+  useEffect(() => {
+    function onMove(e) {
+      const d = splitRef.current;
+      if (!d) return;
+      // Lists melebar ke kanan, detail melebar ke kiri
+      const delta = e.clientX - d.startX;
+      const w = Math.round(Math.min(d.max, Math.max(d.min, d.which === 'nav' ? d.startW + delta : d.startW - delta)));
+      d.last = w;
+      if (d.which === 'nav') setNavW(w); else setDetailW(w);
+    }
+    function onUp() {
+      const d = splitRef.current;
+      if (!d) return;
+      splitRef.current = null;
+      setSplitDrag(null);
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+      if (d.last != null) localStorage.setItem(d.which === 'nav' ? NAV_W_KEY : DETAIL_W_KEY, String(d.last));
+    }
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, []);
+
+  // Lebar awal diukur dari kartunya (bukan dari state) supaya geseran mulus tanpa loncat
+  // walau lebar sedang dijepit CSS. Kursor body ikut diganti selama menggeser.
+  function startSplit(which, e) {
+    const body = bodyRef.current;
+    const card = body?.querySelector(which === 'nav' ? '.rgt-nav' : '.rgt-detail');
+    if (!body || !card) return;
+    const inner = body.getBoundingClientRect().width - 32;   // lebar isi halaman (tepi 16px kiri-kanan)
+    const min = which === 'nav' ? NAV_MIN : DETAIL_MIN;
+    const cap = which === 'nav' ? Math.min(NAV_MAX, inner * NAV_CAP) : Math.min(DETAIL_MAX, inner * DETAIL_CAP);
+    splitRef.current = {
+      which, startX: e.clientX, startW: card.getBoundingClientRect().width,
+      min, max: Math.max(min, cap), last: null,
+    };
+    setSplitDrag(which);
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'col-resize';
+    e.preventDefault();
+  }
 
   const selectedTask = useMemo(
     () => (td.todos || []).find(t => t.id === selectedTaskId) || null,
@@ -225,11 +296,11 @@ export default function TodoPage() {
       </header>
 
       {/* ══ ISI ══ */}
-      <div className="rgt-body">
+      <div ref={bodyRef} className="rgt-body">
 
         {/* ── Kartu Lists: pilih view (desktop) ── */}
         {!isMobile && (
-          <section className="rg-card rgt-nav rg-rise" aria-label="Lists">
+          <section className="rg-card rgt-nav rg-rise" style={{ width: `${navW}px` }} aria-label="Lists">
             <div className="rg-head">
               <span className="rg-head-ico"><ListTodo size={15} /></span>
               <span className="rg-title">Lists</span>
@@ -249,6 +320,12 @@ export default function TodoPage() {
               </div>
             </div>
           </section>
+        )}
+
+        {/* ── Pembatas geser kartu Lists ↔ kartu tugas (desktop) ── */}
+        {!isMobile && (
+          <div className={`rgn-vsplit${splitDrag === 'nav' ? ' is-drag' : ''}`} onMouseDown={e => startSplit('nav', e)}
+            title="Drag to resize" aria-hidden="true" />
         )}
 
         {/* ── Kartu tugas ── */}
@@ -278,12 +355,16 @@ export default function TodoPage() {
             </section>
           )
         ) : (
-          <div className={`rgt-slot${detailOpen ? ' is-open' : ''}`} inert={!detailOpen}>
-            {detailTask && (
+          <div className={`rgt-slot${detailOpen ? ' is-open' : ''}${splitDrag === 'detail' ? ' is-dragging' : ''}`}
+            style={detailW ? { '--rgt-detail-w': `${detailW}px` } : undefined} inert={!detailOpen}>
+            {detailTask && (<>
+              {/* Pembatas geser kartu tugas ↔ kartu detail — ikut meluncur bersama kartunya */}
+              <div className={`rgn-vsplit rgt-dsplit${splitDrag === 'detail' ? ' is-drag' : ''}`}
+                onMouseDown={e => startSplit('detail', e)} title="Drag to resize" aria-hidden="true" />
               <section className="rg-card rgt-detail" aria-label="Task details">
                 {detail(detailTask)}
               </section>
-            )}
+            </>)}
           </div>
         )}
       </div>

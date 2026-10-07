@@ -16,7 +16,7 @@ Riwayat chat lama sudah **DIHAPUS Nadir (7 Okt 2026)**. Konteks hanya ada di fil
 4. **Pembuka khas Nadir:** "sampai mana kita / cek PR / next project apa" → jawab dari status-terkini + bagian BELUM/PENDING di bawah. "Baca dulu memory ku" → ringkas posisi terakhir singkat, lalu tunggu instruksi.
 5. **Selesai kerja / Nadir bilang "update memori":** perbarui file ini (struktur, fitur, pending), `status-terkini-adhub.md`, dan tambah 1 baris di `riwayat-chat-adhub.md`.
 
-Folder lokal project = `Desktop\babarafi-adhub` (diganti nama dari `dashboard-ads` pada 7 Okt 2026; repo GitHub & domain Vercel tetap `dashboard-ads`). Jangan ganti nama/pindah folder ini lagi tanpa memindah memori Claude — memori terikat ke path folder.
+Folder lokal project = `Desktop\babarafi-adhub` (diganti nama dari `dashboard-ads` pada 7 Okt 2026). Repo GitHub juga diganti nama jadi `babarafi-adhub` (7 Okt 2026 — supaya label project di sidebar aplikasi Claude ikut berubah; label diambil dari nama repo, bukan nama folder). Domain Vercel TETAP `dashboard-ads-babarafi.vercel.app`. Jangan ganti nama/pindah folder ini lagi tanpa memindah memori Claude — memori terikat ke path folder.
 
 ---
 
@@ -37,7 +37,7 @@ Folder lokal project = `Desktop\babarafi-adhub` (diganti nama dari `dashboard-ad
 
 - **Next.js 16** (App Router, JavaScript — NO TypeScript, no `src` dir, **Turbopack aktif**). Styling: CSS variables di `globals.css` + inline style (bukan Tailwind class-based, walau Tailwind ada).
 - **Icon: `lucide-react`.** CATATAN: versi lucide ini MINIM brand icon — `Facebook`, `Chrome` TIDAK ADA. Meta = `Square` (fill biru), Google = `Globe`. Selalu cek icon ada sebelum pakai.
-- **GitHub:** `nadirmhmmd02/dashboard-ads` (branch `main`, trunk-based — tiap commit langsung ke main).
+- **GitHub:** `nadirmhmmd02/babarafi-adhub` (sebelum 7 Okt 2026: `dashboard-ads`; URL lama otomatis dialihkan GitHub) (branch `main`, trunk-based — tiap commit langsung ke main).
 - **Hosting:** Vercel — live `https://dashboard-ads-babarafi.vercel.app` (auto-deploy tiap push; domain diganti Nadir 17 Jul 2026, alamat lama dashboard-ads-six sudah mati).
 - **Database:** Supabase (ref `tduskxqmsqcgurvxnjzo`, region Tokyo) — dipakai halaman Calendar + Suggestions.
 - **Meta Ads API:** Graph v19.0, account `act_433644183932983`.

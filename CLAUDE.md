@@ -16,7 +16,7 @@ Riwayat chat lama sudah **DIHAPUS Nadir (7 Okt 2026)**. Konteks hanya ada di fil
 4. **Pembuka khas Nadir:** "sampai mana kita / cek PR / next project apa" → jawab dari status-terkini + bagian BELUM/PENDING di bawah. "Baca dulu memory ku" → ringkas posisi terakhir singkat, lalu tunggu instruksi.
 5. **Selesai kerja / Nadir bilang "update memori":** perbarui file ini (struktur, fitur, pending), `status-terkini-adhub.md`, dan tambah 1 baris di `riwayat-chat-adhub.md`.
 
-Folder lokal project = `Desktop\babarafi-adhub` (diganti nama dari `dashboard-ads` pada 7 Okt 2026). Repo GitHub juga diganti nama jadi `babarafi-adhub` (7 Okt 2026 — supaya label project di sidebar aplikasi Claude ikut berubah; label diambil dari nama repo, bukan nama folder). Domain Vercel TETAP `dashboard-ads-babarafi.vercel.app`. Jangan ganti nama/pindah folder ini lagi tanpa memindah memori Claude — memori terikat ke path folder.
+Folder lokal project = `Desktop\babarafi-adhub` (diganti nama dari `dashboard-ads` pada 7 Okt 2026). Repo GitHub juga diganti nama jadi `babarafi-adhub` (7 Okt 2026). Label grup project bawaan di sidebar aplikasi Claude TETAP "dashboard-ads" (diingat aplikasinya sendiri, tidak bisa diganti dari project) → sesi AdHub dipindah ke grup sidebar custom "babarafi-adhub" (lihat memori `sidebar-grup-adhub`). Domain Vercel TETAP `dashboard-ads-babarafi.vercel.app`. Jangan ganti nama/pindah folder ini lagi tanpa memindah memori Claude — memori terikat ke path folder.
 
 ---
 

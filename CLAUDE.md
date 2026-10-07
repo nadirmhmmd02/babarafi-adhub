@@ -6,14 +6,29 @@ Desain LIVE sejak 28 Sep 2026 = **redesain 2 "Ridgeline"** (kanvas charcoal netr
 
 ---
 
+## ▶ MULAI DI SINI (setiap sesi baru)
+
+Riwayat chat lama sudah **DIHAPUS Nadir (7 Okt 2026)**. Konteks hanya ada di file ini + memori Claude di `C:\Users\Nadir.Muhammad\.claude\projects\C--Users-Nadir-Muhammad-Desktop-dashboard-ads\memory\` (indeks `MEMORY.md` termuat otomatis). Sebelum mengerjakan apa pun:
+
+1. **Baca memori inti:** `status-terkini-adhub.md` (posisi terakhir, PR, yang ditunggu) → `cara-kerja-nadir.md` (alur sesi) → `nadir-profil.md`. Kalau Nadir tanya "dulu kita bahas X di mana/kapan" → `riwayat-chat-adhub.md`.
+2. **Cek posisi kode:** `git status` + `git log --oneline -10` — cocokkan dengan commit live di status-terkini.
+3. **Topik bukan AdHub** (website baru, review/data iklan, Google Maps outlet, landing page) → `peta-project-nadir.md`; arahkan Nadir ke folder/sesi project itu, jangan kerjakan atau deploy dari sini.
+4. **Pembuka khas Nadir:** "sampai mana kita / cek PR / next project apa" → jawab dari status-terkini + bagian BELUM/PENDING di bawah. "Baca dulu memory ku" → ringkas posisi terakhir singkat, lalu tunggu instruksi.
+5. **Selesai kerja / Nadir bilang "update memori":** perbarui file ini (struktur, fitur, pending), `status-terkini-adhub.md`, dan tambah 1 baris di `riwayat-chat-adhub.md`.
+
+Jangan ganti nama/pindah folder `Desktop\dashboard-ads` — memori Claude terikat ke path folder ini.
+
+---
+
 ## SIAPA & GAYA KERJA
 
 - **User: Nadir** — Performance Marketing specialist di Kebab Turki Baba Rafi (PT Baba Rafi Internasional). GitHub: `nadirmhmmd02`.
 - **TIDAK TEKNIS.** Selalu butuh instruksi/penjelasan super eksplisit dan sabar. Kalau memberi langkah manual, gunakan format jelas: "Buka file X → Ctrl+A → hapus → paste ini → Ctrl+S".
 - **Workflow deploy:** default **langsung commit → push ke GitHub → Vercel auto-deploy**, TANPA nunggu konfirmasi. Pengecualian: kalau Nadir bilang "test di lokal dulu", baru test di localhost & tunggu approval sebelum push. (Lihat memory [[deploy-workflow]].)
-- **JANGAN langsung coding** kalau user masih mode ngumpulin requirement. Tunggu user bilang siap.
+- **JANGAN langsung coding** kalau user masih mode ngumpulin requirement. Tunggu user bilang siap ("kerjakan / gas").
+- **Kerjakan hanya yang diminta** — jangan tarik data/observasi/riset tambahan tanpa diminta (teguran Nadir 2 Sep 2026). Lihat memory [[fokus-yang-diminta]].
 - **Kalau ada keputusan penting, TANYA dulu — jangan asumsi sendiri.**
-- Bahasa campur Indonesia-Inggris santai oke.
+- Bahasa campur Indonesia-Inggris santai oke. **Penjelasan & progres ke Nadir = bahasa Indonesia; semua teks UI AdHub = bahasa Inggris.**
 - `.claude/` JANGAN ikut di-commit (config lokal).
 
 ---
@@ -192,9 +207,9 @@ Preset di kiri + kalender 2 bulan di kanan (pilih range langsung) + footer Cance
 - ✅ Campaigns: tabel per grup (Awareness→Traffic→Conversion), subtotal toggle (default hidden), kolom Total Spend. Status "Stop" (bukan "Paused"), tampilan non-active normal (tidak abu-abu), urutan active di atas.
 - ✅ Export laporan PDF/JPG 16:9 (admin-only) — hasil export mengikuti tema dashboard yang sedang aktif (terang → laporan terang, gelap → laporan gelap), per 4 Agu 2026.
 - ✅ Light/Dark mode (CSS var, satu source of truth di AuthContext), toggle di header dashboard + campaigns. Animasi fade transition saat swap tema.
-- ✅ Auth + Role (admin=`Dozan`, user=`user`) + route guard.
+- ✅ Auth + Role + route guard (awal Jul 2026 login client-side; sejak 17 Jul 2026 Supabase Auth 3 role — lihat AUTH & ROLE).
 - ✅ Rebranding logo **WILL OF D** di sidebar, login, export, favicon. Brand di samping logo (Sidebar + MobileNav): **"Baba Rafi Ad Hub" untuk SEMUA role** (per 16 Jul 2026 — "WILL OF D" tinggal codename dev di kode). Title tab browser: "Baba Rafi Ad Hub".
-- ✅ Font resmi: **Plus Jakarta Sans** via next/font di layout.js (redesain tahap 1).
+- ✅ Font: **Plus Jakarta Sans** via next/font di layout.js (redesain tahap 1, Jul 2026) — sejak Ridgeline 28 Sep 2026 font utama = Geist + Geist Mono (`dashboardFonts.js`); PJS tinggal untuk bagian lama (MobileNav dll.).
 - ✅ Redesain tahap 2 (17 Jul 2026, LIVE): palet forest/lime dua tema di seluruh web (dashboard, campaigns, calendar, reports, login, export PDF) + strip CPM/CPC/CPL/CTR jadi 4 kartu terpisah di Dashboard desktop. Kartu hero gelap Total Spend DITOLAK.
 - ✅ Redesain tahap 3 FINAL (17 Jul 2026, LIVE — proyek redesain SELESAI, Nadir puas): Dashboard = header card mengambang + sparkline di 4 kartu C + donut 236px + spacing compact (gap 10px, tepi 16px). Nuansa yang sama diterapkan ke SEMUA halaman (desktop; mobile tetap): Campaigns & Calendar (topbar jadi card, tabel radius 18 + shadow, padding compact), Reports & LeadsPlaceholder (header card + padding compact). Redesain layout berikutnya hanya kalau Nadir dapat ide baru.
 - ✅ Suggestions (Supabase tabel `suggestions`): user kirim saran via floating button + popup (slide-up, click outside to close); admin lihat+hapus saran via ikon di header dashboard (dengan red dot unread indicator + Clear all).
@@ -202,13 +217,13 @@ Preset di kiri + kalender 2 bulan di kanan (pilih range langsung) + footer Cance
 - ✅ Hitung gabungan campaign (`CombineModal.js`): checkbox per row → floating bar bawah (count + total spend live + Calculate Total) → popup Combined Performance (hero total spend, delivery, cost efficiency, included campaigns + share bar).
 - ✅ Kolom Campaign resizable: handle drag di batas kolom Campaign|Status (150–620px), nama panjang terpotong ellipsis + tooltip. Sidebar default collapsed saat web pertama dibuka.
 - ✅ Compare Periods (Ads Hub): bandingkan 2 periode berdurasi sama, 9 metrik + % perubahan + jumlah campaign & breakdown objektif. Lihat `CompareModal.js`.
-- ✅ Notes admin (HALAMAN `/notes`, link di Sidebar atas logout): catatan pribadi tersinkron antar device via Supabase — butuh `supabase-notes-setup.sql` dijalankan dulu.
+- ✅ Notes admin (HALAMAN `/notes`, link kini di hub Workspace sidebar): catatan pribadi tersinkron antar device via Supabase — butuh `supabase-notes-setup.sql` dijalankan dulu.
 - ✅ Popup toolbar dashboard rata tengah terhadap tombolnya (Platform selector & Export). CATATAN TEKNIS: lapisan POSISI (`translateX(-50%)`) WAJIB dipisah dari lapisan ANIMASI (`wdScaleIn`/`wdSlideUp` pakai transform) — kalau digabung, popup nongol meleset dulu baru lompat. Pola sama dipakai bulk bar Leads List.
 - ✅ Platform selector di toolbar dashboard (Meta Ads default; Google/TikTok/All Platforms tampil placeholder "under development"). Registry di `PlatformSelector.js`.
 - ✅ Typography system (`typography.js`) diterapkan ke Dashboard + Reports — ukuran visual tidak berubah, cuma distandarkan lewat token.
 - ✅ Analytics & Insights v1 (route /reports, icon Sparkles): Performance Score gauge + insight cards otomatis dari data Meta real (insightEngine.js), filter periode, severity critical→warning→positive→info, desktop grid 3 kolom / mobile stack.
 - ✅ Kontrol iklan admin-only di Campaigns: kolom Actions (setelah Status) dengan tombol Stop/Run (ACTIVE↔PAUSED, popup konfirmasi merah/hijau — konfirmasinya tombol TAHAN "Hold to stop/run" sejak 29 Sep 2026, lihat HoldButton.js) + Edit Daily Budget (popup input format Rupiah, min Rp 10.000, level campaign sesuai SOP Nadir — TIDAK PERNAH level ad set). Setelah sukses: update lokal optimistik + toast. Role user tidak melihat kolom ini. Status Ended tidak bisa di-run lagi. Endpoint POST /api/meta sudah diamankan server-side (admin only, via Supabase Auth token).
-- ✅ Sidebar dua section: "ADS HUB" (menu lama) + "LEADS HUB" (Dashboard, Leads List, Analytics & Insights — 3 halaman placeholder "under development" via LeadsPlaceholder.js). Berlaku desktop (Sidebar) & mobile (drawer MobileNav). Nama produk fix: **"Baba Rafi Ad Hub"** (pakai spasi). Leads Hub beneran = rencana v3.0 (lihat BRD/PRD Nadir).
+- ✅ Sidebar dua section: "ADS HUB" (menu lama) + "LEADS HUB" (Dashboard, Leads List, Analytics & Insights — awalnya placeholder 16 Jul 2026, kini SEMUA sudah dibangun; LeadsPlaceholder.js sudah dihapus). Berlaku desktop (Sidebar) & mobile (drawer MobileNav). Nama produk fix: **"Baba Rafi Ad Hub"** (pakai spasi). Sidebar kini juga punya Maps Hub + Workspace (admin).
 - ✅ **MAPS HUB LIVE & SUDAH DIPAKAI (21 Agu 2026)** — SQL dijalankan, env `MAPS_SHEET_ID` di Vercel, sync pertama 486 outlet sukses, geocode kota selesai. Pelajaran teknis sesi itu: (a) z-index Leaflet (pane 400/kontrol 1000) menimpa modal → kartu peta WAJIB `zIndex:0` sebagai stacking context, modal 1200/toast 1300; (b) sidebar patah-patah di /maps → tabel `tableLayout:fixed` + render 100 baris (Show all) + `contain:'layout paint'` di kartu peta & tabel + Leaflet `invalidateSize` via ResizeObserver; (c) Nominatim ±2,5 detik/request → batch geocode BERBASIS WAKTU (40 detik) bukan jumlah, klien retry otomatis. Ide tertunda (popup Tipe Outlet/Jam Buka, deteksi outlet tutup, tab MITRA) ada di `MAPS-HUB-PLAN.md` Section 9 — jangan dikerjakan tanpa diminta.
 - ✅ Versi mobile (≤767px, desktop tak berubah): top bar hamburger→drawer, KPI carousel swipe scroll-snap, strip 2x2, analytics stack, date filter bottom sheet. Top bar dashboard (kanan→kiri): Suggestions · theme · Refresh · Export icon (via portal ke slot MobileNav). Campaigns: refresh di top bar, filter rata kanan. Calendar: tanpa theme toggle, tombol rata kanan, tabel Gantt scroll horizontal (minWidth 920px).
 
@@ -223,9 +238,14 @@ Preset di kiri + kalender 2 bulan di kanan (pilih range langsung) + footer Cance
 - [ ] Integrasi Google Ads / TikTok Ads / All Platforms (selector sudah ada, masih placeholder).
 - [ ] Notifikasi lonceng — placeholder. (Tombol Export di Calendar SUDAH DIHAPUS 4 Agu 2026 atas permintaan Nadir — jangan dimunculkan lagi tanpa diminta.)
 - [ ] Verifikasi akurasi angka vs Meta Ads Manager.
+- [ ] Maps Hub ide tertunda — `MAPS-HUB-PLAN.md` Section 9 (Nadir: "skip dulu").
+
+**Ide yang BELUM diputuskan Nadir** (muncul dari diskusi strategi iklan 28 Sep 2026 — tawarkan hanya kalau relevan, lihat memory [[rencana-campaign-okt-2026]]):
+- Kategori **"Bundling"** di `leadsConfig.js` + deteksi nama di `api/leads/route.js` kalau campaign paket bundling 3 outlet Rp250 jt jalan (tanpa itu lead masuk Uncategorized). Campaign lead baru juga WAJIB bernama "PROSPEK"/"KONVERSI" supaya terhitung.
+- Fitur **tambah lead manual** di Leads List (lead WhatsApp tidak otomatis masuk Leads Hub).
 
 ---
 
-## CATATAN VERIFIKASI (sesi ini)
+## CATATAN VERIFIKASI
 
-Tool screenshot preview SERING timeout di environment ini. Kalau begitu, verifikasi lewat `preview_eval` (baca computed style / teks DOM / cek network request) — sudah terbukti reliable. Build cek: `npm run build`.
+Screenshot preview kini sering berhasil (dulu selalu timeout); kalau gagal, verifikasi lewat `javascript_tool` / `get_page_text` / network request — terbukti reliable. Pane tersembunyi membekukan rAF, ResizeObserver & animasi CSS (bukan bug kode). Rincian & trik: memory [[local-verification-workflow]]. Build cek: `npm run build`.

@@ -2,7 +2,7 @@
 
 Panduan konteks untuk Claude Code. Baca file ini dulu sebelum mengerjakan apa pun.
 Status: **project aktif & sudah live dengan data real** (bukan lagi tahap dummy/mockup).
-Desain LIVE sejak 28 Sep 2026 = **redesain 2 "Ridgeline"** (kanvas charcoal netral, aksen Saffron hanya di sidebar). Versi sebelumnya (forest/lime) di-backup: folder `Desktop\dashboard-ads-backup-1` + git tag `backup-1-sebelum-ridgeline` (commit a0a1d9e). Rincian teknis redesain: `REDESIGN-RIDGELINE-PLAN.md`.
+Desain LIVE sejak 28 Sep 2026 = **redesain 2 "Ridgeline"** (kanvas charcoal netral, aksen Saffron hanya di sidebar). Versi sebelumnya (forest/lime) di-backup: folder `Desktop\babarafi-adhub-backup` (sampai 7 Okt 2026 bernama `dashboard-ads-backup-1`) + git tag `backup-1-sebelum-ridgeline` (commit a0a1d9e). Rincian teknis redesain: `REDESIGN-RIDGELINE-PLAN.md`.
 
 ---
 

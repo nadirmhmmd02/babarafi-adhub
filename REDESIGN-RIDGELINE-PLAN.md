@@ -1,6 +1,6 @@
 # REDESAIN 2 — GAYA "RIDGELINE" (Dashboard Ads Hub + Sidebar)
 
-Status: **✅ LIVE 28 Sep 2026** — branch `redesign/dashboard-ridgeline` di-merge ke `main` setelah scaffolding PREVIEW-ONLY (data dummy, panel preview, /preview-login) dibuang. Backup versi sebelumnya: folder `Desktop\dashboard-ads-backup-1` + tag `backup-1-sebelum-ridgeline`. Belum ikut: menu HP (`MobileNav`). Bagian 0 & 7 di bawah = arsip cara kerja preview (sudah tidak berlaku).
+Status: **✅ LIVE 28 Sep 2026** — branch `redesign/dashboard-ridgeline` di-merge ke `main` setelah scaffolding PREVIEW-ONLY (data dummy, panel preview, /preview-login) dibuang. Backup versi sebelumnya: folder `Desktop\babarafi-adhub-backup` (dulu `dashboard-ads-backup-1`) + tag `backup-1-sebelum-ridgeline`. Belum ikut: menu HP (`MobileNav`). Bagian 0 & 7 di bawah = arsip cara kerja preview (sudah tidak berlaku).
 Sumber: sesi Claude Code 27 Sep 2026 — critique UI (skill impeccable) → referensi baru dari Nadir → preview lokal ronde 1 (Dashboard) & ronde 2 (data dummy + Sidebar + eksplorasi warna). **Ronde 3 (28 Sep 2026)** — 5 permintaan Nadir dari screenshot, lihat Bagian 11. **Ronde 4 (28 Sep 2026)** — semua keputusan dijawab + seluruh halaman Ads Hub & laporan Export diredesain, lihat Bagian 12.
 
 ---

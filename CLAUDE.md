@@ -8,7 +8,7 @@ Desain LIVE sejak 28 Sep 2026 = **redesain 2 "Ridgeline"** (kanvas charcoal netr
 
 ## ▶ MULAI DI SINI (setiap sesi baru)
 
-Riwayat chat lama sudah **DIHAPUS Nadir (7 Okt 2026)**. Konteks hanya ada di file ini + memori Claude di `C:\Users\Nadir.Muhammad\.claude\projects\C--Users-Nadir-Muhammad-Desktop-dashboard-ads\memory\` (indeks `MEMORY.md` termuat otomatis). Sebelum mengerjakan apa pun:
+Riwayat chat lama sudah **DIHAPUS Nadir (7 Okt 2026)**. Konteks hanya ada di file ini + memori Claude di `C:\Users\Nadir.Muhammad\.claude\projects\C--Users-Nadir-Muhammad-Desktop-babarafi-adhub\memory\` (indeks `MEMORY.md` termuat otomatis). Sebelum mengerjakan apa pun:
 
 1. **Baca memori inti:** `status-terkini-adhub.md` (posisi terakhir, PR, yang ditunggu) → `cara-kerja-nadir.md` (alur sesi) → `nadir-profil.md`. Kalau Nadir tanya "dulu kita bahas X di mana/kapan" → `riwayat-chat-adhub.md`.
 2. **Cek posisi kode:** `git status` + `git log --oneline -10` — cocokkan dengan commit live di status-terkini.
@@ -16,7 +16,7 @@ Riwayat chat lama sudah **DIHAPUS Nadir (7 Okt 2026)**. Konteks hanya ada di fil
 4. **Pembuka khas Nadir:** "sampai mana kita / cek PR / next project apa" → jawab dari status-terkini + bagian BELUM/PENDING di bawah. "Baca dulu memory ku" → ringkas posisi terakhir singkat, lalu tunggu instruksi.
 5. **Selesai kerja / Nadir bilang "update memori":** perbarui file ini (struktur, fitur, pending), `status-terkini-adhub.md`, dan tambah 1 baris di `riwayat-chat-adhub.md`.
 
-Jangan ganti nama/pindah folder `Desktop\dashboard-ads` — memori Claude terikat ke path folder ini.
+Folder lokal project = `Desktop\babarafi-adhub` (diganti nama dari `dashboard-ads` pada 7 Okt 2026; repo GitHub & domain Vercel tetap `dashboard-ads`). Jangan ganti nama/pindah folder ini lagi tanpa memindah memori Claude — memori terikat ke path folder.
 
 ---
 
@@ -41,7 +41,7 @@ Jangan ganti nama/pindah folder `Desktop\dashboard-ads` — memori Claude terika
 - **Hosting:** Vercel — live `https://dashboard-ads-babarafi.vercel.app` (auto-deploy tiap push; domain diganti Nadir 17 Jul 2026, alamat lama dashboard-ads-six sudah mati).
 - **Database:** Supabase (ref `tduskxqmsqcgurvxnjzo`, region Tokyo) — dipakai halaman Calendar + Suggestions.
 - **Meta Ads API:** Graph v19.0, account `act_433644183932983`.
-- **Local:** `C:\Users\Nadir.Muhammad\Desktop\dashboard-ads`, VS Code.
+- **Local:** `C:\Users\Nadir.Muhammad\Desktop\babarafi-adhub` (sebelum 7 Okt 2026: `Desktop\dashboard-ads`), VS Code. `.env.local` folder ini juga dibaca script di `Desktop\job-review-Iklan-Baba-Rafi\scripts\` (token Meta).
 
 ### ENV (`.env.local` — TIDAK di-commit; juga di Vercel → Settings → Env Variables, Production+Preview. Setelah edit env di Vercel harus Redeploy)
 ```

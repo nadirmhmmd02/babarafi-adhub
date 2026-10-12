@@ -95,14 +95,14 @@ export default function Sidebar() {
   const asideRef  = useRef(null);
   const flyTimer  = useRef(null);
 
-  // Hub = section menu; Workspace (admin: Notes + To Do) jadi "hub" sendiri di rel
+  // Hub = section menu; Workspace (admin: Notes + To Do + Projects) jadi "hub" sendiri di rel
   const hubs = navSectionsFor(role).map(s => ({
     key: s.label, label: s.label, icon: HUB_ICON[s.label] || LayoutDashboard, items: s.items,
   }));
   if (role === 'admin') {
     hubs.push({
       key: 'Workspace', label: 'Workspace', icon: NotebookPen,
-      items: [{ href: '/notes', label: 'Notes' }, { href: '/todo', label: 'To Do' }],
+      items: [{ href: '/notes', label: 'Notes' }, { href: '/todo', label: 'To Do' }, { href: '/projects', label: 'Projects' }],
     });
   }
 

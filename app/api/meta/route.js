@@ -189,7 +189,7 @@ export async function GET(request) {
       const [adsRes, platformRes] = await Promise.all([
         // Ads di campaign ini + creative-nya (thumbnail besar, link post Instagram,
         // id media IG untuk ambil file asli gambar/video)
-        fetch(`https://graph.facebook.com/v19.0/${campaignId}/ads?fields=id,name,status,creative.thumbnail_width(1080).thumbnail_height(1080){id,thumbnail_url,image_url,instagram_permalink_url,effective_instagram_media_id,object_type},insights.${dateField}{spend,impressions,reach,clicks,actions}&access_token=${ACCESS_TOKEN}&limit=50`),
+        fetch(`https://graph.facebook.com/v19.0/${campaignId}/ads?fields=id,name,status,creative.thumbnail_width(1080).thumbnail_height(1080){id,thumbnail_url,image_url,instagram_permalink_url,effective_instagram_media_id,object_type,media_sourcing_spec},insights.${dateField}{spend,impressions,reach,clicks,actions}&access_token=${ACCESS_TOKEN}&limit=50`),
         // Delivery nyata per platform (facebook/instagram/audience_network/messenger)
         fetch(`https://graph.facebook.com/v19.0/${campaignId}/insights?fields=spend,impressions,reach&breakdowns=publisher_platform&${dateParam}&access_token=${ACCESS_TOKEN}`),
       ]);
@@ -222,6 +222,57 @@ export async function GET(request) {
       for (const ad of ads) {
         const mid = ad.creative?.effective_instagram_media_id;
         if (mid && mediaMap[mid]) ad.media = mediaMap[mid];
+      }
+
+      /* Satu ad berisi BEBERAPA media (fitur Meta "multiple media" — mis. ad
+         "[upload] 3 Motion Graphic": 3 video dalam 1 ad, Meta memilih mana yang
+         tayang per orang). Post IG / object_story_spec hanya memuat media utama;
+         daftar lengkapnya ada di creative.media_sourcing_spec. Kalau isinya >1,
+         semua media diambil (video: file asli via /{video_id}?fields=source;
+         gambar: url via adimages by hash) dan ad.media diganti berisi semuanya →
+         popup menampilkannya sebagai slide (panah + titik). Gambar sumber
+         'related_media' (thumbnail otomatis dari video) bukan materi iklan → diabaikan.
+         Gagal ambil = slide itu dilewati; sisa ≤1 = tetap pakai media lama. */
+      const multi = [];
+      for (const ad of ads) {
+        const spec = ad.creative?.media_sourcing_spec;
+        if (!spec) continue;
+        const seenV = new Set();
+        const vids = (spec.videos || []).filter(v => v.video_id && !seenV.has(v.video_id) && seenV.add(v.video_id));
+        const imgs = (spec.images || []).filter(i => i.hash && i.source !== 'related_media' && i.creation_source !== 'VIDEO_THUMBNAIL');
+        if (vids.length + imgs.length > 1) multi.push({ ad, vids, imgs });
+      }
+      if (multi.length) {
+        const videoIds = [...new Set(multi.flatMap(m => m.vids.map(v => v.video_id)))];
+        const hashes   = [...new Set(multi.flatMap(m => m.imgs.map(i => i.hash)))];
+        const videoMap = {}, imageMap = {};
+        await Promise.all([
+          ...videoIds.map(async (id) => {
+            try {
+              const r = await fetch(`https://graph.facebook.com/v19.0/${id}?fields=source,picture&access_token=${ACCESS_TOKEN}`);
+              const v = await r.json();
+              if (!v.error && v.source) videoMap[id] = v;
+            } catch { /* lewati slide ini */ }
+          }),
+          hashes.length ? (async () => {
+            try {
+              const r = await fetch(`https://graph.facebook.com/v19.0/${AD_ACCOUNT_ID}/adimages?hashes=${encodeURIComponent(JSON.stringify(hashes))}&fields=hash,url&access_token=${ACCESS_TOKEN}`);
+              const d = await r.json();
+              for (const im of d.data || []) if (im.hash && im.url) imageMap[im.hash] = im.url;
+            } catch { /* lewati slide gambar */ }
+          })() : null,
+        ]);
+        for (const { ad, vids, imgs } of multi) {
+          const items = [
+            ...vids.filter(v => videoMap[v.video_id]).map(v => ({
+              type: 'VIDEO', url: videoMap[v.video_id].source, thumb: v.thumbnail_url || videoMap[v.video_id].picture || null,
+            })),
+            ...imgs.filter(i => imageMap[i.hash]).map(i => ({ type: 'IMAGE', url: imageMap[i.hash], thumb: imageMap[i.hash] })),
+          ];
+          if (items.length < 2) continue;
+          const permalink = ad.media?.permalink || ad.creative?.instagram_permalink_url || null;
+          ad.media = { platform: permalink ? 'instagram' : 'facebook', type: 'MULTI_MEDIA', permalink, items };
+        }
       }
 
       return NextResponse.json({

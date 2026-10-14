@@ -265,6 +265,8 @@ export default function ProjectsPage() {
   const setStatus = useCallback((id, status) => { pjRef.current.updateProject(id, { status }); setPickId(null); }, []);
   const toggleStep = useCallback((id, sid) => pjRef.current.toggleStep(id, sid), []);
   const addStep = useCallback((id, title) => pjRef.current.addStep(id, title), []);
+  const editStep = useCallback((id, sid, title) => pjRef.current.updateStep(id, sid, { title }), []);
+  const removeStep = useCallback((id, sid) => pjRef.current.removeStep(id, sid), []);
   const openDetail = useCallback(id => setDetailId(id), []);
 
   function addProject() {
@@ -626,7 +628,8 @@ export default function ProjectsPage() {
                     open={!closedIds.has(pid)} picking={pickId === pid} editingTitle={editTitleId === pid}
                     placeholder={dragId === pid} isNew={newId === pid} isMobile={isMobile}
                     onHeadClick={headClick} onToggleOpen={toggleOpen} onTitleCommit={commitTitle}
-                    onStatus={setStatus} onToggleStep={toggleStep} onAddStep={addStep} onOpen={openDetail} />
+                    onStatus={setStatus} onToggleStep={toggleStep} onAddStep={addStep}
+                    onEditStep={editStep} onRemoveStep={removeStep} onOpen={openDetail} />
                 );
               })}
             </div>

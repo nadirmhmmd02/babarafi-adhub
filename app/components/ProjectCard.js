@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, memo } from 'react';
-import { ChevronDown, ArrowRight } from 'lucide-react';
+import { ChevronDown, ArrowRight, Pencil, Trash2 } from 'lucide-react';
 import { PJ_STATUSES, PJ_STATUS_LABEL } from './useProjects';
 import { dueLabel, isOverdue } from './useTodos';
 
@@ -59,10 +59,18 @@ export function ProgressRing({ total, done }) {
 
 function ProjectCard({
   p, open, picking, editingTitle, placeholder, isNew, isMobile,
-  onHeadClick, onToggleOpen, onTitleCommit, onStatus, onToggleStep, onAddStep, onOpen,
+  onHeadClick, onToggleOpen, onTitleCommit, onStatus, onToggleStep, onAddStep, onEditStep, onRemoveStep, onOpen,
 }) {
   const [hover, setHover] = useState(null);   // null | { step } | { person }
   const [draft, setDraft] = useState('');
+  const [editStepId, setEditStepId] = useState(null);   // langkah yang sedang diganti teksnya
+
+  // Simpan teks langkah: kosong / sama = batal (teks lama tetap)
+  function commitStep(s, value) {
+    setEditStepId(null);
+    const v = (value || '').trim();
+    if (v && v !== s.title) onEditStep(p.id, s.id, v);
+  }
 
   const steps = p.steps || [];
   const done = steps.filter(s => s.done).length;
@@ -169,7 +177,25 @@ function ProjectCard({
                         onClick={() => { onToggleStep(p.id, s.id); setHover({ step: { ...s, done: !s.done } }); }}>
                         <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M2.6 6.2l2.2 2.2 4.6-4.8" /></svg>
                       </button>
-                      <span className="rgp-step-t">{s.title}</span>
+                      {editStepId === s.id ? (
+                        <input className="rgp-step-input" defaultValue={s.title} autoFocus aria-label="Step"
+                          onFocus={e => e.target.select()}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); }
+                            else if (e.key === 'Escape') { e.currentTarget.dataset.cancel = '1'; e.currentTarget.blur(); }
+                          }}
+                          onBlur={e => commitStep(s, e.currentTarget.dataset.cancel ? null : e.currentTarget.value)} />
+                      ) : (
+                        <span className="rgp-step-t" title="Double-click to edit" onDoubleClick={() => setEditStepId(s.id)}>{s.title}</span>
+                      )}
+                      {editStepId !== s.id && (
+                        <span className="rgp-step-acts">
+                          <button type="button" className="rgp-step-act" title="Edit step" aria-label={`Edit step: ${s.title}`}
+                            onClick={() => setEditStepId(s.id)}><Pencil size={13} /></button>
+                          <button type="button" className="rgp-step-act is-del" title="Delete step" aria-label={`Delete step: ${s.title}`}
+                            onClick={() => { setHover(null); onRemoveStep(p.id, s.id); }}><Trash2 size={13} /></button>
+                        </span>
+                      )}
                       {s.pic && <span className={`rgp-av is-sm ${personCls(s.pic)}`} title={s.pic}>{initialOf(s.pic)}</span>}
                     </li>
                   ))}

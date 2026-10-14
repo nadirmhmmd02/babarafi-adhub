@@ -200,6 +200,21 @@ html.rgp-resizing, html.rgp-resizing * { cursor: col-resize !important; user-sel
 .rgp-steps li:hover { background: var(--rg-hover); }
 .rgp-step-t { flex: 1; min-width: 0; overflow-wrap: anywhere; transition: color .25s ease; }
 .rgp-steps li.is-done .rgp-step-t { color: var(--rg-t3); }
+/* Edit & hapus langkah langsung di kartu — muncul saat baris disentuh (selalu tampil di HP) */
+.rgp-step-acts { display: flex; gap: 1px; flex-shrink: 0; opacity: 0; transition: opacity .15s ease; }
+.rgp-steps li:hover .rgp-step-acts, .rgp-steps li:focus-within .rgp-step-acts, .rg.is-mobile .rgp-step-acts { opacity: 1; }
+.rgp-step-act {
+  width: 22px; height: 22px; padding: 0; border: 0; border-radius: 6px; cursor: pointer;
+  display: grid; place-items: center; background: transparent; color: var(--rg-t3);
+  transition: background-color .12s ease, color .12s ease;
+}
+.rgp-step-act:hover { background: var(--rg-hover); color: var(--rg-t1); }
+.rgp-step-act.is-del:hover { color: var(--rg-neg); background: color-mix(in srgb, var(--rg-neg) 12%, transparent); }
+.rgp-step-input {
+  flex: 1; min-width: 0; height: 24px; margin: -2px 0; padding: 0 6px; border-radius: 6px; outline: none;
+  border: 1px solid var(--rg-pill-line); background: var(--rg-well-2); color: var(--rg-t1);
+  font-family: inherit; font-size: 13px; box-shadow: 0 0 0 3px var(--rg-range);
+}
 .rgp-steps .rgp-av { opacity: 0; transition: opacity .15s ease; }
 .rgp-steps li:hover .rgp-av, .rgp-card.is-person .rgp-steps li.is-mine .rgp-av { opacity: 1; }
 

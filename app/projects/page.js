@@ -267,6 +267,7 @@ export default function ProjectsPage() {
   const addStep = useCallback((id, title) => pjRef.current.addStep(id, title), []);
   const editStep = useCallback((id, sid, title) => pjRef.current.updateStep(id, sid, { title }), []);
   const removeStep = useCallback((id, sid) => pjRef.current.removeStep(id, sid), []);
+  const reorderSteps = useCallback((id, ids) => pjRef.current.reorderSteps(id, ids), []);
   const openDetail = useCallback(id => setDetailId(id), []);
 
   function addProject() {
@@ -629,7 +630,7 @@ export default function ProjectsPage() {
                     placeholder={dragId === pid} isNew={newId === pid} isMobile={isMobile}
                     onHeadClick={headClick} onToggleOpen={toggleOpen} onTitleCommit={commitTitle}
                     onStatus={setStatus} onToggleStep={toggleStep} onAddStep={addStep}
-                    onEditStep={editStep} onRemoveStep={removeStep} onOpen={openDetail} />
+                    onEditStep={editStep} onRemoveStep={removeStep} onReorderSteps={reorderSteps} onOpen={openDetail} />
                 );
               })}
             </div>

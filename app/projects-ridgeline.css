@@ -215,6 +215,16 @@ html.rgp-resizing, html.rgp-resizing * { cursor: col-resize !important; user-sel
   border: 1px solid var(--rg-pill-line); background: var(--rg-well-2); color: var(--rg-t1);
   font-family: inherit; font-size: 13px; box-shadow: 0 0 0 3px var(--rg-range);
 }
+/* Geser urutan sub-tugas: tekan & tahan → baris terangkat (scale + bayangan), kursor menggenggam.
+   `scale` & `translate` sengaja properti terpisah — translate dipakai FLIP saat baris bertukar. */
+html.rgp-step-dragging, html.rgp-step-dragging * { cursor: grabbing !important; user-select: none !important; }
+.rgp-steps li.is-lifted {
+  position: relative; z-index: 2; scale: 1.02;
+  background: var(--rg-well-2); box-shadow: var(--rgp-card-shadow-hi);
+  transition: scale .16s var(--rgp-ease), box-shadow .16s ease, background-color .15s ease;
+}
+.rgp-steps.is-sorting li:not(.is-lifted):hover { background: transparent; }
+.rgp-steps.is-sorting .rgp-step-acts { opacity: 0; pointer-events: none; }
 .rgp-steps .rgp-av { opacity: 0; transition: opacity .15s ease; }
 .rgp-steps li:hover .rgp-av, .rgp-card.is-person .rgp-steps li.is-mine .rgp-av { opacity: 1; }
 

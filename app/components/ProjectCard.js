@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, memo } from 'react';
+import { useState, useRef, useLayoutEffect, useEffect, memo } from 'react';
 import { ChevronDown, ArrowRight, Pencil, Trash2 } from 'lucide-react';
 import { PJ_STATUSES, PJ_STATUS_LABEL } from './useProjects';
 import { dueLabel, isOverdue } from './useTodos';
@@ -16,6 +16,9 @@ import { dueLabel, isOverdue } from './useTodos';
    ───────────────────────────────────────────────────────────── */
 
 const RELATIVE = ['Today', 'Tomorrow', 'Yesterday'];
+const STEP_HOLD_MS = 300;   // tekan & tahan selama ini → sub-tugas "terangkat" dan bisa digeser
+const STEP_SLOP_PX = 5;     // kursor bergeser lebih dari ini sebelum terangkat = bukan geser urutan (mis. blok teks)
+const STEP_FLIP_MS = 220;
 export function dueText(d) {
   if (!d) return 'No due date';
   const l = dueLabel(d);
@@ -59,11 +62,112 @@ export function ProgressRing({ total, done }) {
 
 function ProjectCard({
   p, open, picking, editingTitle, placeholder, isNew, isMobile,
-  onHeadClick, onToggleOpen, onTitleCommit, onStatus, onToggleStep, onAddStep, onEditStep, onRemoveStep, onOpen,
+  onHeadClick, onToggleOpen, onTitleCommit, onStatus, onToggleStep, onAddStep, onEditStep, onRemoveStep, onReorderSteps, onOpen,
 }) {
   const [hover, setHover] = useState(null);   // null | { step } | { person }
   const [draft, setDraft] = useState('');
   const [editStepId, setEditStepId] = useState(null);   // langkah yang sedang diganti teksnya
+
+  /* ── Geser urutan sub-tugas (desktop): tekan & TAHAN baris ±0,3 detik → baris terangkat,
+     kursor jadi tangan menggenggam; geser naik/turun → baris lain bergeser memberi tempat
+     (FLIP); lepas → urutan disimpan. Bergeser sebelum terangkat = batal (blok teks tetap
+     bisa). Tidak berlaku di tombol centang/edit/hapus & kolom ketik. ── */
+  const [stepOrder, setStepOrder] = useState(null);   // urutan id sementara selama digeser
+  const [stepDrag, setStepDrag] = useState(null);     // id langkah yang sedang digeser
+  const listRef = useRef(null);
+  const pressRef = useRef(null);                      // { sid, x0, y0, timer, active, order }
+  const rowFlip = useRef(null);
+
+  function snapRows() {
+    const ul = listRef.current;
+    if (!ul) return;
+    const tops = {};
+    ul.querySelectorAll('li[data-sid]').forEach(li => { tops[li.dataset.sid] = li.getBoundingClientRect().top; });
+    rowFlip.current = tops;
+  }
+  useLayoutEffect(() => {
+    const tops = rowFlip.current, ul = listRef.current;
+    if (!tops || !ul) return;
+    rowFlip.current = null;
+    ul.querySelectorAll('li[data-sid]').forEach(li => {
+      const from = tops[li.dataset.sid];
+      if (from == null) return;
+      const dy = from - li.getBoundingClientRect().top;
+      if (Math.abs(dy) < 1) return;
+      li.style.transition = 'none';
+      li.style.translate = `0 ${dy}px`;
+      void li.offsetHeight;
+      li.style.transition = `translate ${STEP_FLIP_MS}ms cubic-bezier(.22,1,.36,1)`;
+      li.style.translate = '0 0';
+      clearTimeout(li._flipT);
+      li._flipT = setTimeout(() => { li.style.transition = ''; li.style.translate = ''; }, STEP_FLIP_MS + 40);
+    });
+  });
+
+  function endStepPress(commit) {
+    const pr = pressRef.current;
+    pressRef.current = null;
+    if (!pr) return;
+    clearTimeout(pr.timer);
+    window.removeEventListener('pointermove', pr.onMove);
+    window.removeEventListener('pointerup', pr.onUp);
+    window.removeEventListener('pointercancel', pr.onCancel);
+    window.removeEventListener('keydown', pr.onKey);
+    if (!pr.active) return;
+    document.documentElement.classList.remove('rgp-step-dragging');
+    const changed = pr.order.some((id, i) => id !== pr.start[i]);
+    if (commit && changed) onReorderSteps(p.id, pr.order);
+    else if (changed) snapRows();   // batal (Esc) → baris meluncur kembali ke tempat semula
+    setStepDrag(null);
+    setStepOrder(null);
+  }
+  useEffect(() => () => endStepPress(false), []);   // eslint-disable-line react-hooks/exhaustive-deps
+
+  function onStepPointerDown(e, sid) {
+    if (isMobile || e.button !== 0 || editStepId) return;
+    if (e.target.closest('button, input')) return;
+    endStepPress(false);
+    const start = steps.map(s => s.id);
+    const pr = { sid, x0: e.clientX, y0: e.clientY, active: false, start, order: start };
+    pr.timer = setTimeout(() => {
+      pr.active = true;
+      window.getSelection()?.removeAllRanges();
+      document.documentElement.classList.add('rgp-step-dragging');
+      setStepDrag(sid);
+      setStepOrder(start);
+    }, STEP_HOLD_MS);
+    pr.onMove = ev => {
+      if (!pr.active) {
+        if (Math.hypot(ev.clientX - pr.x0, ev.clientY - pr.y0) > STEP_SLOP_PX) endStepPress(false);
+        return;
+      }
+      ev.preventDefault();
+      // posisi sisip = sebelum baris pertama (selain yang digeser) yang titik tengahnya di bawah kursor
+      const ul = listRef.current;
+      if (!ul) return;
+      const rest = pr.order.filter(id => id !== sid);
+      let at = rest.length;
+      for (let i = 0; i < rest.length; i++) {
+        const li = ul.querySelector(`li[data-sid="${rest[i]}"]`);
+        if (!li) continue;
+        const r = li.getBoundingClientRect();
+        if (ev.clientY < r.top + r.height / 2) { at = i; break; }
+      }
+      const next = [...rest.slice(0, at), sid, ...rest.slice(at)];
+      if (next.every((id, i) => id === pr.order[i])) return;
+      pr.order = next;
+      snapRows();
+      setStepOrder(next);
+    };
+    pr.onUp = () => endStepPress(true);
+    pr.onCancel = () => endStepPress(false);
+    pr.onKey = ev => { if (ev.key === 'Escape') endStepPress(false); };
+    window.addEventListener('pointermove', pr.onMove);
+    window.addEventListener('pointerup', pr.onUp);
+    window.addEventListener('pointercancel', pr.onCancel);
+    window.addEventListener('keydown', pr.onKey);
+    pressRef.current = pr;
+  }
 
   // Simpan teks langkah: kosong / sama = batal (teks lama tetap)
   function commitStep(s, value) {
@@ -73,6 +177,9 @@ function ProjectCard({
   }
 
   const steps = p.steps || [];
+  const shownSteps = stepOrder
+    ? stepOrder.map(id => steps.find(s => s.id === id)).filter(Boolean)
+    : steps;
   const done = steps.filter(s => s.done).length;
   const people = [...new Set(steps.map(s => s.pic).filter(Boolean))];
   const late = p.status !== 'done' && isOverdue(p.due_date);
@@ -167,10 +274,12 @@ function ProjectCard({
           <div>
             <div className="rgp-body-in">
               {steps.length > 0 && (
-                <ul className="rgp-steps" onMouseLeave={() => setHover(h => (h?.step ? null : h))}>
-                  {steps.map((s, k) => (
-                    <li key={s.id} style={{ '--k': k }}
-                      className={`${s.done ? 'is-done' : ''}${person && s.pic === person ? ' is-mine' : ''}`}
+                <ul ref={listRef} className={`rgp-steps${stepDrag ? ' is-sorting' : ''}`}
+                  onMouseLeave={() => setHover(h => (h?.step ? null : h))}>
+                  {shownSteps.map((s, k) => (
+                    <li key={s.id} data-sid={s.id} style={{ '--k': k }}
+                      className={`${s.done ? 'is-done' : ''}${person && s.pic === person ? ' is-mine' : ''}${stepDrag === s.id ? ' is-lifted' : ''}`}
+                      onPointerDown={e => onStepPointerDown(e, s.id)}
                       onMouseEnter={() => { if (!person) setHover({ step: s }); }}>
                       <button type="button" className="rgp-chk" aria-pressed={s.done}
                         aria-label={`${s.done ? 'Mark not done' : 'Mark done'}: ${s.title}`}

@@ -198,6 +198,13 @@ export default function useProjects(enabled) {
   const toggleStep = (id, sid)   => patchSteps(id, st => st.map(s => (s.id === sid ? { ...s, done: !s.done } : s)));
   const updateStep = (id, sid, patch, opts) => patchSteps(id, st => st.map(s => (s.id === sid ? { ...s, ...patch } : s)), opts);
   const removeStep = (id, sid)   => patchSteps(id, st => st.filter(s => s.id !== sid));
+  // Urutan baru hasil seret (ids = urutan id langkah); langkah yang tak tercantum tetap di belakang
+  const reorderSteps = (id, ids) => patchSteps(id, st => {
+    const byId = new Map(st.map(s => [s.id, s]));
+    const out = ids.map(i => byId.get(i)).filter(Boolean);
+    st.forEach(s => { if (!ids.includes(s.id)) out.push(s); });
+    return out;
+  });
 
   /* ── Grup ── */
   function renameGroup(gid, name) {
@@ -266,7 +273,7 @@ export default function useProjects(enabled) {
   return {
     groups, projects, error, reload: load,
     createProject, updateProject, removeProject,
-    addStep, toggleStep, updateStep, removeStep,
+    addStep, toggleStep, updateStep, removeStep, reorderSteps,
     renameGroup, setGroupWidth, commitLayout,
   };
 }

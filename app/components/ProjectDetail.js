@@ -1,23 +1,27 @@
 'use client';
 
 import { useState } from 'react';
-import { FolderKanban, Trash2, X, Plus, UserRound } from 'lucide-react';
+import { FolderKanban, Trash2, X, Plus, UserRound, CalendarDays } from 'lucide-react';
 import { RgDialog } from './rgKit';
 import { PJ_STATUSES, PJ_PEOPLE } from './useProjects';
 import { StatusIcon, personCls, initialOf } from './ProjectCard';
+import { todayStr, addDays, dueLabel, isOverdue } from './useTodos';
 
 /* ─────────────────────────────────────────────────────────────
    PROJECT DETAIL — dialog "Open →" di kartu Projects. Semua isi project:
    nama, status, tenggat, langkah (ganti teks · PIC · hapus · tambah),
    dan catatan. Teks disimpan otomatis (debounce di useProjects).
    PIC dipilih lewat baris pilihan yang mekar di bawah langkahnya (bukan
-   menu melayang — menu absolut terpotong area scroll dialog).
+   menu melayang — menu absolut terpotong area scroll dialog). Tenggat langkah
+   (sejak To Do digabung, 19 Okt 2026) memakai pola baris mekar yang sama;
+   langkah bertenggat ikut tampil di Planned panel To Do.
    ───────────────────────────────────────────────────────────── */
 
 export default function ProjectDetail({ project: p, pj, onClose, onRequestDelete }) {
   const [title, setTitle] = useState(p.title);
   const [notes, setNotes] = useState(p.notes || '');
   const [picFor, setPicFor] = useState(null);     // id langkah yang pilihan PIC-nya terbuka
+  const [dueFor, setDueFor] = useState(null);     // id langkah yang pilihan tenggatnya terbuka
   const [draft, setDraft] = useState('');
   const steps = p.steps || [];
 
@@ -97,10 +101,17 @@ export default function ProjectDetail({ project: p, pj, onClose, onRequestDelete
                     onChange={e => { if (e.target.value.trim()) pj.updateStep(p.id, s.id, { title: e.target.value.trim() }, { debounce: true }); }} />
                   <button type="button" className={`rgp-d-pic${s.pic ? '' : ' is-none'}`} aria-expanded={picFor === s.id}
                     title={s.pic ? `PIC: ${s.pic}` : 'Assign a PIC'} aria-label={s.pic ? `PIC: ${s.pic}. Change` : 'Assign a PIC'}
-                    onClick={() => setPicFor(cur => (cur === s.id ? null : s.id))}>
+                    onClick={() => { setDueFor(null); setPicFor(cur => (cur === s.id ? null : s.id)); }}>
                     {s.pic
                       ? <span className={`rgp-av is-sm ${personCls(s.pic)}`}>{initialOf(s.pic)}</span>
                       : <UserRound size={14} />}
+                  </button>
+                  <button type="button" className={`rgp-d-pic rgp-d-duebtn${s.due_date ? ' is-set' : ''}${s.due_date && !s.done && isOverdue(s.due_date) ? ' is-late' : ''}`}
+                    aria-expanded={dueFor === s.id}
+                    title={s.due_date ? `Due ${dueLabel(s.due_date)}` : 'Set a due date'}
+                    aria-label={s.due_date ? `Due ${dueLabel(s.due_date)}. Change` : 'Set a due date'}
+                    onClick={() => { setPicFor(null); setDueFor(cur => (cur === s.id ? null : s.id)); }}>
+                    {s.due_date ? <span className="rg-mono">{dueLabel(s.due_date)}</span> : <CalendarDays size={14} />}
                   </button>
                   <button type="button" className="rgp-d-x" title="Delete step" aria-label={`Delete step ${s.title}`}
                     onClick={() => pj.removeStep(p.id, s.id)}><X size={14} /></button>
@@ -116,6 +127,23 @@ export default function ProjectDetail({ project: p, pj, onClose, onRequestDelete
                           {n || 'No one'}
                         </button>
                       ))}
+                    </div>
+                  </div>
+                </div>
+                <div className={`rgp-clp rgp-d-pics${dueFor === s.id ? ' is-open' : ''}`} inert={dueFor !== s.id}>
+                  <div>
+                    <div className="rgp-d-pics-row">
+                      {[['Today', todayStr()], ['Tomorrow', addDays(1)], ['Next week', addDays(7)]].map(([l, v], i) => (
+                        <button key={l} type="button" style={{ '--k': i }}
+                          className={`rgp-pchip is-text${s.due_date === v ? ' is-cur' : ''}`}
+                          onClick={() => { pj.updateStep(p.id, s.id, { due_date: v }); setDueFor(null); }}>{l}</button>
+                      ))}
+                      <input type="date" className="rg-input rg-mono rgp-d-step-date" value={s.due_date || ''} aria-label="Pick a due date"
+                        onChange={e => pj.updateStep(p.id, s.id, { due_date: e.target.value || null })} />
+                      {s.due_date && (
+                        <button type="button" className="rgp-pchip is-text" style={{ '--k': 4 }}
+                          onClick={() => { pj.updateStep(p.id, s.id, { due_date: null }); setDueFor(null); }}>No date</button>
+                      )}
                     </div>
                   </div>
                 </div>

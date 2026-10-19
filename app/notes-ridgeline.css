@@ -2,9 +2,10 @@
    NOTES + TO DO (Workspace) — redesain "Ridgeline" (LIVE 28 Sep 2026). Dasar (token,
    kartu cangkang+panel, pil, menu, dialog, form, state) di app/ridgeline.css. Prefix: .rgn-
    Halaman Notes: kartu Notes (cari + Pinned/All notes) di kolom kiri (lebar bisa
-   digeser), editor di kanan. Sejak 5 Okt 2026 To Do jadi halaman sendiri (/todo):
-   bagian "TO DO" & "DETAIL TUGAS" di file ini dipakai halaman itu (ikut meng-import
-   file ini); tata letak halamannya di todo-ridgeline.css (.rgt-).
+   digeser), editor di kanan. To Do pindah ke halaman sendiri (/todo, 5 Okt 2026),
+   lalu sejak 19 Okt 2026 jadi PANEL di kanan halaman Projects: bagian "TO DO" &
+   "DETAIL TUGAS" di file ini dipakai panel itu (app/projects/page.js ikut meng-import
+   file ini); tata letak panelnya di projects-ridgeline.css (.rgp-dock).
    Isi halaman netral — aksen Saffron hanya di sidebar.
    ══════════════════════════════════════════════════════════════════════ */
 
@@ -116,7 +117,21 @@
 .rgn-grip:hover { color: var(--rg-t1); }
 .rgn-skel { padding: 8px 12px; display: flex; flex-direction: column; gap: 7px; }
 
-/* ══ TO DO (halaman /todo — isi kartu tugas, components/TodoPanel.js) ══ */
+/* ══ TO DO (panel kanan halaman Projects — components/TodoPanel.js) ══ */
+/* Deretan ikon view di bawah kepala panel + tombol daftar baru */
+.rgn-tabs { display: flex; align-items: center; gap: 6px; padding: 0 6px 8px 4px; flex-shrink: 0; }
+.rgn-tabs .rg-segs { flex: 1; min-width: 0; }
+.rgn-tabs .rg-segs button { padding: 0 4px; }
+.rg .rgn-del-list:hover {
+  color: var(--rg-neg); background: color-mix(in srgb, var(--rg-neg) 12%, var(--rg-pill));
+  border-color: color-mix(in srgb, var(--rg-neg) 40%, var(--rg-pill-line));
+}
+/* Langkah project di panel: chip nama project + PIC */
+.rgn-pchip {
+  min-width: 0; max-width: 180px; height: 18px; padding: 0 7px 0 6px; border-radius: 999px;
+  background: var(--rg-tint-neu); color: var(--rg-t2); font-weight: 500;
+}
+.rgn-task .rgn-pic { margin-top: 1px; }
 .rgn-todo-head { gap: 6px; }
 /* Jumlah tidak boleh terpotong — nama view / pil view yang mengalah (dielipsis) */
 .rgn-todo-head .rgn-count { flex-shrink: 0; }

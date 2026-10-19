@@ -3,6 +3,8 @@
    Papan lajur ala Trello yang berjejer ke KANAN. Kartu = cangkang + panel dalam
    (pola Ridgeline) dengan kepala ringkas, daftar langkah & "laci" info yang
    memanjang saat dibuka (adaptasi video referensi Nadir).
+   Sejak 19 Okt 2026 To Do digabung ke sini: panel To Do di kanan papan (bagian
+   PANEL TO DO di bawah); isi panelnya memakai gaya .rgn- di notes-ridgeline.css.
    Dasar skin (token, pil, tombol, dialog) di app/ridgeline.css.
    ══════════════════════════════════════════════════════════════════════ */
 
@@ -21,6 +23,7 @@
   --rgp-hendra: var(--rg-aware);
   --rgp-dedik: var(--rg-conv);
   --rgp-ease: cubic-bezier(.22,1,.36,1);
+  --rgn-star: var(--rg-warn);   /* bintang & matahari My Day — sama dengan panel To Do lama */
 }
 html[data-theme="dark"] .rg.rgp {
   --rgp-lane-bg: rgba(255,255,255,0.025);
@@ -34,6 +37,12 @@ html.rgp-panning, html.rgp-panning * { cursor: grabbing !important; user-select:
 
 .rgp-alert { padding: 0 16px 12px; flex-shrink: 0; }
 .rgp-alert .rg-error-msg strong { color: var(--rg-t1); font-weight: 600; }
+
+/* ══ ISI HALAMAN: papan (kiri, melebar) · pembatas geser · panel To Do (kanan) ══ */
+.rgp-body { flex: 1; min-height: 0; display: flex; }
+.rgp-body > .rgp-board { min-width: 0; }
+.rg:not(.is-mobile) .rgp-body > .rgp-board { padding-right: 4px; }
+.rgp-board.is-hidden, .rgp-dock.is-hidden { display: none; }
 
 /* ══ PAPAN ══ */
 .rgp-board {
@@ -228,6 +237,11 @@ html.rgp-step-dragging, html.rgp-step-dragging * { cursor: grabbing !important; 
 .rgp-steps .rgp-av { opacity: 0; transition: opacity .15s ease; }
 .rgp-steps li:hover .rgp-av, .rgp-card.is-person .rgp-steps li.is-mine .rgp-av { opacity: 1; }
 
+/* Matahari My Day di baris langkah: ikut grup pensil/tong sampah (muncul saat disentuh);
+   langkah yang sudah di My Day → matahari kuning menetap di luar grup. */
+.rgp-step-sun.is-on, .rgp-step-sun.is-on:hover { color: var(--rgn-star); flex-shrink: 0; }
+.rgp-tray-txt .is-late { color: var(--rg-neg); }
+
 /* Centang langkah (kartu & dialog) */
 .rgp-chk {
   width: 17px; height: 17px; flex: none; padding: 0; border-radius: 50%; cursor: pointer;
@@ -280,6 +294,8 @@ html.rgp-step-dragging, html.rgp-step-dragging * { cursor: grabbing !important; 
     scale .22s var(--rgp-ease), box-shadow .22s ease;
 }
 .rgp-card.is-new { animation: rgpCardIn .42s var(--rgp-ease); }
+/* Disorot saat langkahnya diklik di panel To Do (HL_MS di page.js = 1,7 detik) */
+.rgp-card.is-hl { animation: rgpHl 1.7s var(--rgp-ease); }
 
 /* Memuat & kosong */
 .rgp-skel .rgp-well { display: flex; align-items: center; gap: 10px; padding: 12px 10px; }
@@ -310,6 +326,11 @@ html.rgp-step-dragging, html.rgp-step-dragging * { cursor: grabbing !important; 
   background: transparent; color: var(--rg-t1); font-family: inherit; font-size: 13px;
 }
 .rgp-d-step-input:focus { background: var(--rg-well-2); }
+/* Tombol tenggat langkah: ikon kalender; sudah diisi → pil kecil berisi tanggal */
+.rgp-d-duebtn.is-set { width: auto; padding: 0 9px; border-radius: 999px; font-size: 11.5px; color: var(--rg-t2); background: var(--rg-tint-neu); }
+.rgp-d-duebtn.is-late { color: var(--rg-neg); }
+.rgp-pchip.is-text { padding: 0 11px; }
+.rgp-d-step-date { width: auto; height: 28px; padding: 0 8px; font-size: 12px; border-radius: 999px; }
 .rgp-d-step.is-done .rgp-d-step-input { color: var(--rg-t3); }
 .rgp-d-pic, .rgp-d-x {
   width: 28px; height: 28px; flex: none; padding: 0; border: 0; border-radius: 50%; cursor: pointer;
@@ -341,12 +362,79 @@ html.rgp-step-dragging, html.rgp-step-dragging * { cursor: grabbing !important; 
 .rg .rgp-del { color: var(--rg-neg); }
 .rg .rgp-del:hover { color: var(--rg-neg); background: color-mix(in srgb, var(--rg-neg) 10%, transparent); }
 
+/* ══ PANEL TO DO (19 Okt 2026) — kartu di kanan papan ══
+   Lebar = --rgp-dock-w (inline dari page.js; hasil geser pembatas). Isinya dibungkus
+   .rgp-dock-in yang lebarnya TETAP, jadi saat panel dibuka dari keadaan ciut isinya
+   tersingkap seperti laci (tidak ikut tergencet selama transisi). */
+.rgp-dsplit { margin: 4px 0 16px; }
+.rgp-dock {
+  --rgp-dock-w: 340px;
+  position: relative; flex: none; width: var(--rgp-dock-w); margin: 4px 16px 16px 0;
+  overflow: hidden; transition: width .32s var(--rgp-ease), box-shadow .2s ease;
+}
+.rgp-dock.is-dragging { transition: none; }
+.rgp-dock.is-min { width: 58px; }
+.rgp-dock.is-pulse { animation: rgpDockPulse .8s var(--rgp-ease); }
+.rgp-dock-in { flex: 1; min-height: 0; display: flex; flex-direction: column; width: calc(var(--rgp-dock-w) - 10px); }
+.rgp-dock-view { flex: 1; min-height: 0; display: flex; flex-direction: column; animation: rgpDockIn .28s var(--rgp-ease); }
+.rgp-dock-view.is-detail { animation-name: rgpDockDetail; }
+.rgp-dock .rgn-todo-head .rg-head-ico { width: 16px; height: 16px; align-items: center; justify-content: center; }
+.rgp-dock .rgn-todo-head .rg-iconbtn { width: 28px; height: 28px; }
+
+/* Ciut: strip tipis — tombol buka, matahari, jumlah My Day */
+.rgp-dock-mini { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 12px; padding-top: 6px; animation: rgpDockIn .28s var(--rgp-ease); }
+.rgp-dock-mini-ico { display: inline-flex; margin-top: 4px; color: var(--rgn-star); }
+.rgp-dock-mini-n {
+  min-width: 26px; height: 22px; padding: 0 7px; border-radius: 999px; display: grid; place-items: center;
+  background: var(--rg-t1); color: var(--rg-well); font-size: 11px; font-weight: 500;
+}
+
+/* Seret langkah keluar kartu: bayangan kecil mengikuti kursor, panel menampilkan zona lepas */
+html.rgp-step-out, html.rgp-step-out * { cursor: grabbing !important; user-select: none !important; }
+.rgp-step-ghost {
+  position: fixed; z-index: 120; pointer-events: none;
+  display: inline-flex; align-items: center; gap: 7px; max-width: 260px; height: 32px; padding: 0 13px 0 10px;
+  border-radius: 999px; background: var(--rg-t1); color: var(--rg-well); box-shadow: var(--rg-pop);
+  font-size: 12.5px; font-weight: 500; animation: wdScaleIn .14s cubic-bezier(.22,1,.36,1);
+}
+.rgp-step-ghost span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rgp-dock-hint {
+  position: absolute; inset: 4px; z-index: 5; border-radius: 16px; padding: 16px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center;
+  background: var(--rg-well); border: 1.5px dashed color-mix(in srgb, var(--rg-t3) 55%, transparent);
+  color: var(--rg-t2); font-size: 13px; font-weight: 500;
+  opacity: 0; pointer-events: none; transition: opacity .18s ease, border-color .15s ease, color .15s ease;
+}
+.rgp-dock-hint > svg { color: var(--rgn-star); }
+html.rgp-step-out .rgp-dock-hint { opacity: .96; }
+.rgp-dock.is-over .rgp-dock-hint { border-style: solid; border-color: var(--rg-t1); color: var(--rg-t1); }
+.rgp-dock.is-min .rgp-dock-hint span { display: none; }
+
+/* HP: tombol Projects | To Do di bawah top bar */
+.rgp-mtabs { padding: 12px 16px 0; flex-shrink: 0; }
+.rgp-mtab-n {
+  min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; display: inline-grid; place-items: center;
+  background: var(--rg-t1); color: var(--rg-well); font-size: 10.5px; font-weight: 500;
+}
+
 /* ══ MOBILE (≤767px) — satu kolom ke bawah; tanpa geser kartu / geser papan ══ */
 .rg.is-mobile .rgp-board { flex-direction: column; align-items: stretch; padding: 16px; overflow-x: hidden; }
 .rg.is-mobile .rgp-lane, .rg.is-mobile .rgp-lane.is-stack { width: 100%; }
 .rg.is-mobile .rgp-d-due { width: 100%; }
+.rg.is-mobile .rgp-body { flex-direction: column; }
+.rg.is-mobile .rgp-dock { width: auto; flex: 1; margin: 16px; transition: none; }
+.rg.is-mobile .rgp-dock-in { width: auto; }
+.rg.is-mobile .rgn-todo-head .rg-menu { max-width: calc(100vw - 64px); }
 
 @keyframes rgpBump { 0% { transform: scale(.6); opacity: .2; } 60% { transform: scale(1.18); } 100% { transform: scale(1); opacity: 1; } }
 @keyframes rgpSwap { from { opacity: 0; filter: blur(3px); transform: translateY(4px); } to { opacity: 1; filter: none; transform: none; } }
 @keyframes rgpPop { 0% { transform: scale(.75); } 60% { transform: scale(1.12); } 100% { transform: scale(1); } }
 @keyframes rgpCardIn { from { opacity: 0; transform: translateX(18px) scale(.96); } to { opacity: 1; transform: none; } }
+@keyframes rgpHl { 0%, 45% { box-shadow: 0 0 0 2px var(--rg-t1), var(--rgp-card-shadow-hi); } 100% { box-shadow: 0 0 0 0 transparent, var(--rgp-card-shadow); } }
+@keyframes rgpDockIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes rgpDockDetail { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
+@keyframes rgpDockPulse {
+  0% { box-shadow: 0 0 0 0 transparent, var(--rg-shadow); }
+  30% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--rg-t1) 30%, transparent), var(--rg-shadow); }
+  100% { box-shadow: 0 0 0 0 transparent, var(--rg-shadow); }
+}

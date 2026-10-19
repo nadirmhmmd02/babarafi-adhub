@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useRef, useLayoutEffect, useEffect, memo } from 'react';
-import { ChevronDown, ArrowRight, Pencil, Trash2 } from 'lucide-react';
+import { ChevronDown, ArrowRight, Pencil, Trash2, Sun } from 'lucide-react';
 import { PJ_STATUSES, PJ_STATUS_LABEL } from './useProjects';
-import { dueLabel, isOverdue } from './useTodos';
+import { dueLabel, isOverdue, todayStr } from './useTodos';
 
 /* ─────────────────────────────────────────────────────────────
    PROJECT CARD — kartu di papan Projects (/projects). Adaptasi video
@@ -12,8 +12,17 @@ import { dueLabel, isOverdue } from './useTodos';
    memanjang + "laci" info di bawah kartu. Default TERBUKA (page.js).
    Klik di kepala diputuskan oleh halaman (pointerup tanpa geser) lewat
    onHeadClick(target) — tekan & geser kepala = memindah kartu (page.js).
+   Sejak To Do digabung (19 Okt 2026): tiap langkah punya ikon matahari = masuk/keluar
+   My Day di panel To Do kanan (muncul bersama pensil/tong sampah saat baris disentuh;
+   menetap & kuning kalau langkahnya sudah di My Day); tekan & tahan langkah lalu seret
+   KELUAR kartu ke panel itu (data-myday-drop) = masuk My Day. Tenggat langkah (diisi di
+   dialog Open) tampil di laci bawah saat baris disentuh — tidak memakan lebar baris.
+   highlight = kartu disorot saat langkahnya diklik di panel.
    Styling: app/projects-ridgeline.css (.rgp-).
    ───────────────────────────────────────────────────────────── */
+
+// Ikon matahari (lucide Sun) untuk bayangan langkah yang diseret ke panel — elemen DOM biasa
+const SUN_SVG = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>';
 
 const RELATIVE = ['Today', 'Tomorrow', 'Yesterday'];
 const STEP_HOLD_MS = 300;   // tekan & tahan selama ini → sub-tugas "terangkat" dan bisa digeser
@@ -61,8 +70,9 @@ export function ProgressRing({ total, done }) {
 }
 
 function ProjectCard({
-  p, open, picking, editingTitle, placeholder, isNew, isMobile,
+  p, open, picking, editingTitle, placeholder, isNew, isMobile, highlight = false,
   onHeadClick, onToggleOpen, onTitleCommit, onStatus, onToggleStep, onAddStep, onEditStep, onRemoveStep, onReorderSteps, onOpen,
+  onStepMyDay,
 }) {
   const [hover, setHover] = useState(null);   // null | { step } | { person }
   const [draft, setDraft] = useState('');
@@ -104,6 +114,37 @@ function ProjectCard({
     });
   });
 
+  /* Langkah yang sedang terangkat diseret KELUAR kartu → bayangan kecil mengikuti kursor;
+     di atas panel To Do (data-myday-drop) panel menyala, lepas = masuk My Day. */
+  function dragOut(pr, ev, hit) {
+    if (!pr.ghost) {
+      const g = document.createElement('div');
+      g.className = 'rgp-step-ghost';
+      g.innerHTML = `${SUN_SVG}<span></span>`;
+      g.lastChild.textContent = (p.steps || []).find(s => s.id === pr.sid)?.title || '';
+      (listRef.current?.closest('.rg') || document.body).appendChild(g);
+      pr.ghost = g;
+      document.documentElement.classList.add('rgp-step-out');
+    }
+    pr.out = true;
+    pr.ghost.style.left = `${ev.clientX + 14}px`;
+    pr.ghost.style.top = `${ev.clientY + 12}px`;
+    const zone = hit?.closest('[data-myday-drop]') || null;
+    if (zone !== pr.zone) {
+      pr.zone?.classList.remove('is-over');
+      zone?.classList.add('is-over');
+      pr.zone = zone;
+    }
+  }
+  function dragIn(pr) {
+    pr.out = false;
+    pr.ghost?.remove();
+    pr.ghost = null;
+    pr.zone?.classList.remove('is-over');
+    pr.zone = null;
+    document.documentElement.classList.remove('rgp-step-out');
+  }
+
   function endStepPress(commit) {
     const pr = pressRef.current;
     pressRef.current = null;
@@ -115,11 +156,15 @@ function ProjectCard({
     window.removeEventListener('keydown', pr.onKey);
     if (!pr.active) return;
     document.documentElement.classList.remove('rgp-step-dragging');
+    const dropMyDay = commit && pr.out && pr.zone;
+    const keepOrder = commit && !pr.out;   // dilepas di luar kartu = urutan tidak berubah
+    dragIn(pr);
     const changed = pr.order.some((id, i) => id !== pr.start[i]);
-    if (commit && changed) onReorderSteps(p.id, pr.order);
-    else if (changed) snapRows();   // batal (Esc) → baris meluncur kembali ke tempat semula
+    if (keepOrder && changed) onReorderSteps(p.id, pr.order);
+    else if (changed) snapRows();   // batal (Esc / dilepas di luar) → baris meluncur kembali
     setStepDrag(null);
     setStepOrder(null);
+    if (dropMyDay && onStepMyDay) onStepMyDay(p.id, pr.sid, true);
   }
   useEffect(() => () => endStepPress(false), []);   // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -142,9 +187,14 @@ function ProjectCard({
         return;
       }
       ev.preventDefault();
-      // posisi sisip = sebelum baris pertama (selain yang digeser) yang titik tengahnya di bawah kursor
       const ul = listRef.current;
       if (!ul) return;
+      // keluar kartu → mode "lempar ke panel To Do"; masuk lagi → kembali mengurutkan
+      const card = ul.closest('[data-pid]');
+      const hit = document.elementFromPoint(ev.clientX, ev.clientY);
+      if (onStepMyDay && card && !(hit && card.contains(hit))) { dragOut(pr, ev, hit); return; }
+      if (pr.out) dragIn(pr);
+      // posisi sisip = sebelum baris pertama (selain yang digeser) yang titik tengahnya di bawah kursor
       const rest = pr.order.filter(id => id !== sid);
       let at = rest.length;
       for (let i = 0; i < rest.length; i++) {
@@ -192,6 +242,7 @@ function ProjectCard({
   } else if (hover?.step) {
     const s = hover.step;
     tray = s.pic ? <>{s.done ? 'Done by' : 'Assigned to'} <b>{s.pic}</b></> : (s.done ? 'Done' : 'Not assigned');
+    if (s.due_date && !s.done) tray = <>{tray} · <span className={isOverdue(s.due_date) ? 'is-late' : undefined}>{dueText(s.due_date).toLowerCase()}</span></>;
   } else {
     tray = !steps.length ? 'No steps yet' : done === steps.length ? 'All done' : `${steps.length - done} left`;
   }
@@ -203,6 +254,14 @@ function ProjectCard({
   if (person) cls.push('is-person');
   if (placeholder) cls.push('is-placeholder');
   if (isNew) cls.push('is-new');
+  if (highlight) cls.push('is-hl');
+  const today = todayStr();
+  const sunBtn = (s, on) => (
+    <button type="button" className={`rgp-step-act rgp-step-sun${on ? ' is-on' : ''}`} aria-pressed={on}
+      title={on ? 'In My Day · click to remove' : 'Add to My Day'}
+      aria-label={`${on ? 'Remove from My Day' : 'Add to My Day'}: ${s.title}`}
+      onClick={() => onStepMyDay(p.id, s.id)}><Sun size={13} /></button>
+  );
 
   function addStep(e) {
     e.preventDefault();
@@ -297,8 +356,10 @@ function ProjectCard({
                       ) : (
                         <span className="rgp-step-t" title="Double-click to edit" onDoubleClick={() => setEditStepId(s.id)}>{s.title}</span>
                       )}
+                      {editStepId !== s.id && onStepMyDay && s.my_day_date === today && sunBtn(s, true)}
                       {editStepId !== s.id && (
                         <span className="rgp-step-acts">
+                          {onStepMyDay && s.my_day_date !== today && !s.done && sunBtn(s, false)}
                           <button type="button" className="rgp-step-act" title="Edit step" aria-label={`Edit step: ${s.title}`}
                             onClick={() => setEditStepId(s.id)}><Pencil size={13} /></button>
                           <button type="button" className="rgp-step-act is-del" title="Delete step" aria-label={`Delete step: ${s.title}`}

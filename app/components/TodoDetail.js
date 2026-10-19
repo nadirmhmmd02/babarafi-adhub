@@ -9,8 +9,9 @@ import { todayStr, addDays, dueLabel, isOverdue } from './useTodos';
 import { useSpringCheck, CheckCircle } from './springCheck';
 
 /* ─────────────────────────────────────────────────────────────
-   TODO DETAIL — isi kartu detail di halaman To Do (/todo) saat sebuah
-   tugas dipilih. Isi ala Microsoft To Do: judul + selesai + bintang,
+   TODO DETAIL — detail tugas To Do. Sejak 19 Okt 2026 tampil di DALAM panel
+   To Do di kanan halaman Projects (menggantikan daftar; tombol back = kembali).
+   Isi ala Microsoft To Do: judul + selesai + bintang,
    Steps (sub-tugas), Add to My Day, Due date, pindah List, catatan,
    footer created + hapus.
    Redesain "Ridgeline" (Sep 2026): kepala kartu (Task · daftar · tutup) +
@@ -77,7 +78,7 @@ export default function TodoDetail({ task: t, td, onRequestDelete, isMobile, onB
     <>
       {/* Kepala kartu: Task · daftar tempat tugas · tutup */}
       <div className="rg-head">
-        {isMobile && onBack && (
+        {onBack && (
           <button type="button" className="rg-iconbtn" onClick={onBack} title="Back" aria-label="Back"><ChevronLeft size={15} /></button>
         )}
         <span className="rg-head-ico"><ListTodo size={15} /></span>

@@ -189,13 +189,18 @@ export default function useProjects(enabled) {
     });
   }
 
-  /* ── Langkah (sub-tugas) — JSON di kolom steps: { id, title, done, pic } ── */
+  /* ── Langkah (sub-tugas) — JSON di kolom steps: { id, title, done, pic } ──
+     Sejak To Do digabung ke halaman ini (19 Okt 2026) langkah juga boleh membawa field
+     ala To Do: my_day_date (masuk My Day hari itu), starred, due_date, done_at.
+     Semuanya opsional di JSON — tidak butuh kolom/SQL baru. */
   function patchSteps(id, fn, opts) {
     const cur = (projectsRef.current || []).find(p => p.id === id);
     if (cur) updateProject(id, { steps: fn(cur.steps || []) }, opts);
   }
   const addStep    = (id, title) => patchSteps(id, st => [...st, { id: crypto.randomUUID(), title: title.trim(), done: false, pic: PJ_DEFAULT_PIC }]);
-  const toggleStep = (id, sid)   => patchSteps(id, st => st.map(s => (s.id === sid ? { ...s, done: !s.done } : s)));
+  const toggleStep = (id, sid)   => patchSteps(id, st => st.map(s => (s.id === sid
+    ? { ...s, done: !s.done, done_at: !s.done ? new Date().toISOString() : null }
+    : s)));
   const updateStep = (id, sid, patch, opts) => patchSteps(id, st => st.map(s => (s.id === sid ? { ...s, ...patch } : s)), opts);
   const removeStep = (id, sid)   => patchSteps(id, st => st.filter(s => s.id !== sid));
   // Urutan baru hasil seret (ids = urutan id langkah); langkah yang tak tercantum tetap di belakang

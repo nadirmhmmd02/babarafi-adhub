@@ -3,26 +3,31 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import {
   ListTodo, Sun, Star, CalendarDays, Inbox, Plus,
-  ChevronRight, Check, Pencil, Trash2, CircleAlert,
+  ChevronRight, Check, Pencil, Trash2, CircleAlert, FolderKanban,
 } from 'lucide-react';
 import { RgMenu } from './rgKit';
 import { todayStr, dueLabel, isOverdue } from './useTodos';
 import { useSpringCheck, CheckCircle, StrikeText } from './springCheck';
 import { playDoneSound } from './todoSound';
+import { personCls, initialOf } from './ProjectCard';
 
 // Jeda sebelum tugas yang dicentang pindah ke "Completed" — cukup untuk animasi
 // centang + garis coret terlihat utuh (seperti Microsoft To Do)
 const DONE_MOVE_MS = 550;
 
 /* ─────────────────────────────────────────────────────────────
-   TODO PANEL — isi kartu tugas di halaman To Do (/todo), ala Microsoft
-   To Do. Tampilan (view): My Day · Important · Planned · Tasks (bawaan) ·
-   daftar kustom. Desktop: view dipilih dari kartu "Lists" di kiri halaman,
-   kepala kartu ini menampilkan nama view + ganti nama/hapus daftar kustom.
-   HP (viewMenu): tidak ada kartu Lists → view dipilih dari menu pil di
-   kepala kartu. Klik tugas → detailnya tampil di kartu kanan (TodoDetail).
-   Dialog daftar baru/ganti nama & konfirmasi hapus ada di app/todo/page.js.
-   Styling di notes-ridgeline.css (.rgn-task* dst.) + todo-ridgeline.css.
+   TODO PANEL — isi panel To Do ala Microsoft To Do. Sejak 19 Okt 2026 panel
+   ini menempel di KANAN papan halaman Projects (/projects; opsi "B · Board +
+   My Day panel" yang dipilih Nadir) — halaman /todo sudah tidak ada.
+   Tampilan (view): My Day · Important · Planned · Tasks (bawaan) · daftar kustom.
+   - tabs: deretan ikon view di bawah kepala (desktop); viewMenu: menu pil (HP).
+   - stepItems: LANGKAH PROJECT yang ditarik ke My Day / diberi bintang / punya
+     tenggat ikut tampil di My Day, Important, dan Planned (chip nama project +
+     PIC). Centang di sini = centang di kartu (cincin progres ikut maju); klik
+     baris = kartunya disorot di papan (stepOps.open).
+   Klik tugas To Do → detailnya (TodoDetail) menggantikan isi panel.
+   Dialog daftar baru/ganti nama & konfirmasi hapus ada di app/projects/page.js.
+   Styling di notes-ridgeline.css (.rgn-task* dst.) + projects-ridgeline.css (.rgp-dock*).
    ───────────────────────────────────────────────────────────── */
 
 export const BUILTIN_VIEWS = [
@@ -56,17 +61,32 @@ export function tasksForView(todos, view) {
   });
 }
 
+/* Langkah project yang ikut tampil di view ini — hanya My Day, Important, Planned.
+   Tasks & daftar kustom tetap berisi tugas To Do saja. */
+export function stepsForView(steps, view) {
+  const today = todayStr();
+  return (steps || []).filter(s => {
+    if (view === 'myday')     return s.my_day_date === today;
+    if (view === 'important') return !!s.starred;
+    if (view === 'planned')   return !!s.due_date;
+    return false;
+  });
+}
+
+const byDue = (a, b) => (a.due < b.due ? -1 : a.due > b.due ? 1 : 0);
+
 /* Teks saat view belum punya tugas sama sekali: [judul, keterangan] */
 const EMPTY_COPY = {
-  myday:     ['Focus on your day', 'Add what you want to get done today. My Day starts fresh every morning.'],
-  important: ['No important tasks', 'Star a task to keep it within reach here.'],
-  planned:   ['Nothing planned', 'Tasks with a due date show up here, sorted by deadline.'],
+  myday:     ['Focus on your day', 'Add what you want to get done today, or tap the sun on a project step. My Day starts fresh every morning.'],
+  important: ['No important tasks', 'Star a task or a project step to keep it within reach here.'],
+  planned:   ['Nothing planned', 'Tasks and project steps with a due date show up here, sorted by deadline.'],
 };
 const EMPTY_DEFAULT = ['No tasks yet', 'Type in the box above and press Enter to add one.'];
 
 export default function TodoPanel({
   td, view, setView, selectedId, onSelect, isMobile,
   onNewList, onRenameList, onRequestDeleteList, viewMenu = false,
+  tabs = false, headExtra = null, stepItems = null, stepOps = null,
 }) {
   const { lists, todos, error } = td;
   const [draft, setDraft] = useState('');
@@ -75,7 +95,8 @@ export default function TodoPanel({
   /* ── Geser urutan tugas (tekan kiri di baris → kursor tangan → geser atas/bawah) ──
      Tanpa HTML5 drag: mousedown di baris mencatat titik awal; begitu bergerak >5px jadi
      mode geser (body cursor grabbing), baris lain yang dilewati kursor (onMouseEnter)
-     memicu td.moveTask; mouseup → commitOrder + klik berikutnya ditelan (bukan pilih). */
+     memicu td.moveTask; mouseup → commitOrder + klik berikutnya ditelan (bukan pilih).
+     Hanya tugas To Do — langkah project diurutkan di kartunya. */
   const dragRef = useRef({ id: null, startY: 0, active: false, moved: false });
   const suppressClick = useRef(false);
   const tdRef = useRef(td); tdRef.current = td;   // listener global pakai td terbaru tanpa re-subscribe
@@ -133,12 +154,21 @@ export default function TodoPanel({
   const meta = viewMeta(view, lists);
   const ViewIcon = meta.Icon;
   const inView = useMemo(() => tasksForView(todos, view), [todos, view]);
+  const stepsIn = useMemo(() => (stepOps ? stepsForView(stepItems, view) : []), [stepItems, stepOps, view]);
+
+  /* Baris terbuka: tugas To Do (urutan geser manual) lalu langkah project.
+     Planned: semuanya diurutkan menurut tenggat. */
   const open = useMemo(() => {
-    const o = inView.filter(t => !t.done);
-    if (view === 'planned') return [...o].sort((a, b) => (a.due_date < b.due_date ? -1 : a.due_date > b.due_date ? 1 : 0));
-    return o; // urutan array todos = sort_order (geser manual), tugas baru paling atas
-  }, [inView, view]);
-  const done = useMemo(() => [...inView.filter(t => t.done)].sort((a, b) => (b.done_at || '').localeCompare(a.done_at || '')), [inView]);
+    const rows = [
+      ...inView.filter(t => !t.done).map(t => ({ kind: 'todo', key: t.id, t, due: t.due_date })),
+      ...stepsIn.filter(s => !s.done).map(s => ({ kind: 'step', key: `${s.pid}:${s.id}`, s, due: s.due_date })),
+    ];
+    return view === 'planned' ? rows.sort(byDue) : rows;
+  }, [inView, stepsIn, view]);
+  const done = useMemo(() => [
+    ...inView.filter(t => t.done).map(t => ({ kind: 'todo', key: t.id, t, at: t.done_at || '' })),
+    ...stepsIn.filter(s => s.done).map(s => ({ kind: 'step', key: `${s.pid}:${s.id}`, s, at: s.done_at || '' })),
+  ].sort((a, b) => b.at.localeCompare(a.at)), [inView, stepsIn]);
 
   async function quickAdd() {
     const title = draft.trim();
@@ -166,10 +196,14 @@ export default function TodoPanel({
     onPress: t.done ? null : pressRow, onEnter: t.done ? null : enterRow,
     isDragging: dragId === t.id, canDrag: canDrag && !t.done,
   });
+  const renderRow = r => (r.kind === 'todo'
+    ? <TaskRow key={r.key} {...rowProps(r.t)} />
+    : <StepTaskRow key={r.key} s={r.s} ops={stepOps} view={view} />);
+  const dateFmt = tabs ? { weekday: 'short', day: 'numeric', month: 'short' } : { weekday: 'long', day: 'numeric', month: 'long' };
 
   return (
     <>
-      {/* Kepala kartu — desktop: nama view · jumlah · aksi daftar kustom; HP: menu pil view */}
+      {/* Kepala — desktop: nama view · jumlah · aksi daftar kustom; HP: menu pil view */}
       <div className="rg-head rgn-todo-head">
         {viewMenu ? (
           <RgMenu
@@ -208,15 +242,33 @@ export default function TodoPanel({
         {todos !== null && !error && <span className="rgn-count rg-mono">{openCount} open</span>}
         <span style={{ flex: 1 }} />
         {!viewMenu && view === 'myday' && (
-          <span className="rgn-count">{new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
+          <span className="rgn-count rgn-today">{new Date().toLocaleDateString('en-GB', dateFmt)}</span>
         )}
         {!viewMenu && meta.list && (<>
           <button type="button" className="rg-iconbtn" onClick={() => onRenameList(meta.list)}
             title="Rename list" aria-label="Rename list"><Pencil size={13} /></button>
-          <button type="button" className="rg-iconbtn rgt-del" onClick={() => onRequestDeleteList(meta.list)}
+          <button type="button" className="rg-iconbtn rgn-del-list" onClick={() => onRequestDeleteList(meta.list)}
             title="Delete list" aria-label="Delete list"><Trash2 size={13} /></button>
         </>)}
+        {headExtra}
       </div>
+
+      {/* Deretan ikon view (desktop) — sama dengan kartu Lists halaman To Do yang lama */}
+      {tabs && (
+        <div className="rgn-tabs">
+          <div className="rg-segs is-block" role="group" aria-label="To Do view">
+            {viewOptions.map(o => (
+              <button key={o.value} type="button" aria-pressed={view === o.value}
+                title={o.label} aria-label={o.label} onClick={() => setView(o.value)}>
+                {o.Icon ? <o.Icon size={15} /> : <span className="rg-menu-dot" style={{ background: o.dot }} />}
+              </button>
+            ))}
+          </div>
+          <button type="button" className="rg-iconbtn" onClick={onNewList} title="New list" aria-label="New list">
+            <Plus size={14} />
+          </button>
+        </div>
+      )}
 
       <div className="rg-well rgn-todo-well">
         {/* Tambah tugas cepat — konteks view ikut (My Day / Important / Planned / daftar) */}
@@ -258,14 +310,14 @@ export default function TodoPanel({
               <span>{emptyText}</span>
             </div>
           )}
-          {open.map(t => <TaskRow key={t.id} {...rowProps(t)} />)}
+          {open.map(renderRow)}
           {done.length > 0 && (
             <>
               <button type="button" className="rgn-done-toggle" aria-expanded={showDone} onClick={() => setShowDone(v => !v)}>
                 <ChevronRight size={13} />
                 Completed <span className="rgn-group-n rg-mono">{done.length}</span>
               </button>
-              {showDone && done.map(t => <TaskRow key={t.id} {...rowProps(t)} />)}
+              {showDone && done.map(renderRow)}
             </>
           )}
         </div>
@@ -341,6 +393,66 @@ function TaskRow({ t, td, view, isSel, onSelect, onPress, onEnter, isDragging = 
         onClick={e => { e.stopPropagation(); td.toggleStar(t); }}
         title={t.starred ? 'Remove importance' : 'Mark as important'} aria-label={t.starred ? 'Remove importance' : 'Mark as important'}>
         <Star size={14} fill={t.starred ? 'currentColor' : 'none'} />
+      </button>
+    </div>
+  );
+}
+
+/* Baris LANGKAH PROJECT di panel — chip nama project + PIC; klik baris = kartunya
+   disorot di papan. Centang memakai jeda & bunyi yang sama dengan tugas To Do. */
+function StepTaskRow({ s, ops, view }) {
+  const inMyDay = s.my_day_date === todayStr();
+  const overdue = !s.done && isOverdue(s.due_date);
+  const dueIsToday = s.due_date === todayStr();
+
+  const [pending, setPending] = useState(false);
+  const pendingTimer = useRef(0);
+  const commitRef = useRef(null);
+  commitRef.current = () => ops.toggleDone(s);
+  useEffect(() => () => {
+    if (pendingTimer.current) { clearTimeout(pendingTimer.current); commitRef.current(); }
+  }, []);
+  function onCheck(e) {
+    e.stopPropagation();
+    if (s.done) { ops.toggleDone(s); return; }
+    if (pendingTimer.current) {
+      clearTimeout(pendingTimer.current);
+      pendingTimer.current = 0;
+      setPending(false);
+      return;
+    }
+    playDoneSound();
+    setPending(true);
+    pendingTimer.current = setTimeout(() => { pendingTimer.current = 0; commitRef.current(); setPending(false); }, DONE_MOVE_MS);
+  }
+  const shownDone = s.done || pending;
+  const rowRef = useSpringCheck(shownDone);
+
+  return (
+    <div ref={rowRef} className={`rgn-task is-step${shownDone ? ' is-done' : ''}`}
+      onClick={() => ops.open(s)} title="Project step · click to show it on the board">
+      <button type="button" className={`rgn-circle${shownDone ? ' is-done' : ''}`} onClick={onCheck}
+        role="checkbox" aria-checked={shownDone}
+        title={shownDone ? 'Mark as not done' : 'Mark as done'} aria-label={shownDone ? 'Mark as not done' : 'Mark as done'}>
+        <CheckCircle size={17} />
+      </button>
+      <div className="rgn-task-main">
+        <span className="rgn-task-title"><StrikeText>{s.title || 'Untitled step'}</StrikeText></span>
+        <span className="rgn-task-meta">
+          <span className="rgn-pchip"><FolderKanban size={11} /><span className="rg-clip">{s.projectTitle}</span></span>
+          {inMyDay && view !== 'myday' && <span><Sun size={11} /> My Day</span>}
+          {s.due_date && (
+            <span className={`rgn-due${overdue ? ' is-late' : dueIsToday ? ' is-today' : ''}`}>
+              <CalendarDays size={11} /> {dueLabel(s.due_date)}
+            </span>
+          )}
+        </span>
+      </div>
+      {s.pic && <span className={`rgp-av is-sm rgn-pic ${personCls(s.pic)}`} title={`PIC: ${s.pic}`}>{initialOf(s.pic)}</span>}
+      <button type="button" className={`rgn-star${s.starred ? ' is-on' : ''}`}
+        onClick={e => { e.stopPropagation(); ops.toggleStar(s); }}
+        title={s.starred ? 'Remove importance' : 'Mark as important'} aria-label={s.starred ? 'Remove importance' : 'Mark as important'}>
+        <Star size={14} fill={s.starred ? 'currentColor' : 'none'} />
       </button>
     </div>
   );

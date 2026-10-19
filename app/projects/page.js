@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import '../notes-ridgeline.css';
 import '../projects-ridgeline.css';
-import { Plus, Trash2, FolderKanban, CircleAlert, RotateCw } from 'lucide-react';
+import { Plus, Pencil, Trash2, FolderKanban, CircleAlert, RotateCw, Sun, PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { useAuth, homeFor } from '../components/AuthContext';
 import useIsMobile from '../components/useIsMobile';
 import ThemeToggle from '../components/ThemeToggle';
@@ -12,7 +13,9 @@ import { RgDialog } from '../components/rgKit';
 import useProjects, { buildStacks, PJ_CARD_W, PJ_CARD_W_MIN, PJ_CARD_W_MAX } from '../components/useProjects';
 import ProjectCard from '../components/ProjectCard';
 import ProjectDetail from '../components/ProjectDetail';
-import { isOverdue } from '../components/useTodos';
+import useTodos, { TODO_LIST_COLORS, isOverdue, todayStr } from '../components/useTodos';
+import TodoPanel, { listViewId } from '../components/TodoPanel';
+import TodoDetail from '../components/TodoDetail';
 
 /* ─────────────────────────────────────────────────────────────
    PROJECTS — papan project pribadi admin (/projects; sub menu Workspace).
@@ -26,7 +29,18 @@ import { isOverdue } from '../components/useTodos';
      klik kepala = tutup/buka. Kartu yang ditutup tidak diingat (refresh = terbuka lagi).
    HP: satu kolom ke bawah, tanpa geser kartu / geser papan.
    Data: useProjects (project_groups + projects, RLS per pemilik).
-   Styling: app/projects-ridgeline.css (.rgp-).
+
+   TO DO DIGABUNG KE SINI (19 Okt 2026, opsi "B · Board + My Day panel" pilihan Nadir;
+   halaman /todo dialihkan ke /projects). Panel To Do menempel di KANAN papan:
+   - isi = TodoPanel (My Day · Important · Planned · Tasks · daftar kustom) + detail
+     tugas (TodoDetail) yang menggantikan daftar saat tugas diklik.
+   - langkah project ikut tampil di My Day / Important / Planned (field my_day_date,
+     starred, due_date di JSON steps — tanpa SQL baru). Ikon matahari di langkah atau
+     seret langkah keluar kartu ke panel = masuk My Day. Klik langkah di panel = kartunya
+     disorot. Centang di panel = centang di kartu.
+   - pembatas papan ↔ panel bisa digeser (lebar diingat), panel bisa diciutkan jadi
+     strip tipis (diingat). HP: tombol Projects | To Do di atas.
+   Styling: app/projects-ridgeline.css (.rgp-, bagian PANEL TO DO) + notes-ridgeline.css (.rgn-).
    ───────────────────────────────────────────────────────────── */
 
 const DRAG_START_PX = 5;    // kursor harus bergeser sejauh ini sebelum kartu terangkat
@@ -34,6 +48,12 @@ const PAN_START_PX = 3;
 const EDGE_PX = 56;         // dekat tepi papan saat menyeret kartu → papan ikut bergeser
 const FLIP_MS = 360;
 const DROP_MS = 230;        // = transisi .rgp-clone.is-drop di CSS
+
+// Panel To Do di kanan papan
+const DOCK_MIN = 280, DOCK_MAX = 560, DOCK_DEFAULT = 340, DOCK_CAP = 0.5;
+const DOCK_W_KEY = 'wd-projects-dock-w';
+const DOCK_MIN_KEY = 'wd-projects-dock-min';
+const HL_MS = 1700;          // = animasi .rgp-card.is-hl di CSS
 
 const reduceMotion = () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -166,10 +186,167 @@ export default function ProjectsPage() {
   const pjRef = useRef(pj);
   pjRef.current = pj;
 
+  /* ── Panel To Do ── */
+  const td = useTodos(role === 'admin');
+  const [todoView, setTodoView] = useState('myday');
+  const [taskId, setTaskId] = useState(null);
+  const [listEdit, setListEdit] = useState(null);         // null | { mode:'new'|'rename', id, name, color }
+  const [confirmTodo, setConfirmTodo] = useState(null);   // null | { kind:'task'|'list', item }
+  const [deleting, setDeleting] = useState(false);
+  const [dockW, setDockW] = useState(DOCK_DEFAULT);
+  const [dockMin, setDockMin] = useState(false);
+  const [dockDrag, setDockDrag] = useState(false);
+  const [mobileTab, setMobileTab] = useState('board');    // HP: 'board' | 'todo'
+  const [hlId, setHlId] = useState(null);                 // kartu yang sedang disorot
+  const dockRef = useRef(null);
+  const bodyRef = useRef(null);
+  const splitRef = useRef(null);
+  const isMobileRef = useRef(isMobile);
+  isMobileRef.current = isMobile;
+
   // Papan pribadi — hanya admin
   useEffect(() => {
     if (ready && role && role !== 'admin') router.replace(homeFor(role));
   }, [ready, role, router]);
+
+  // Lebar & status ciut panel To Do diingat per perangkat
+  useEffect(() => {
+    const w = parseInt(localStorage.getItem(DOCK_W_KEY) || '', 10);
+    if (w > 0) setDockW(Math.min(DOCK_MAX, Math.max(DOCK_MIN, w)));
+    setDockMin(localStorage.getItem(DOCK_MIN_KEY) === '1');
+  }, []);
+  function toggleDockMin() {
+    setDockMin(v => {
+      localStorage.setItem(DOCK_MIN_KEY, v ? '0' : '1');
+      return !v;
+    });
+  }
+
+  /* Pembatas papan ↔ panel (pola .rgn-vsplit Notes/To Do): panel melebar ke KIRI.
+     Lebar awal diukur dari panelnya supaya geseran tidak loncat. */
+  useEffect(() => {
+    function onMove(e) {
+      const d = splitRef.current;
+      if (!d) return;
+      const w = Math.round(Math.min(d.max, Math.max(DOCK_MIN, d.startW - (e.clientX - d.startX))));
+      d.last = w;
+      setDockW(w);
+    }
+    function onUp() {
+      const d = splitRef.current;
+      if (!d) return;
+      splitRef.current = null;
+      setDockDrag(false);
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+      if (d.last != null) localStorage.setItem(DOCK_W_KEY, String(d.last));
+    }
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, []);
+  function startDockSplit(e) {
+    const dock = dockRef.current, body = bodyRef.current;
+    if (!dock || !body) return;
+    splitRef.current = {
+      startX: e.clientX, startW: dock.getBoundingClientRect().width, last: null,
+      max: Math.max(DOCK_MIN, Math.min(DOCK_MAX, body.getBoundingClientRect().width * DOCK_CAP)),
+    };
+    setDockDrag(true);
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'col-resize';
+    e.preventDefault();
+  }
+
+  // Panel menyala sebentar saat ada langkah yang masuk My Day
+  const pulseDock = useCallback(() => {
+    const el = dockRef.current;
+    if (!el) return;
+    el.classList.remove('is-pulse');
+    void el.offsetWidth;
+    el.classList.add('is-pulse');
+  }, []);
+
+  /* Langkah project → My Day. force = dari seret ke panel (selalu masuk). */
+  const stepMyDay = useCallback((pid, sid, force) => {
+    const s = pjRef.current.projects?.find(x => x.id === pid)?.steps?.find(x => x.id === sid);
+    if (!s) return;
+    const today = todayStr();
+    const inDay = s.my_day_date === today;
+    if (force && inDay) { pulseDock(); return; }
+    pjRef.current.updateStep(pid, sid, { my_day_date: inDay ? null : today });
+    if (!inDay) { setTodoView('myday'); setTaskId(null); pulseDock(); }
+  }, [pulseDock]);
+
+  /* Klik langkah di panel → kartunya dibuka, papan bergeser ke sana, kartu disorot */
+  const focusProject = useCallback(pid => {
+    setClosedIds(prev => { if (!prev.has(pid)) return prev; const n = new Set(prev); n.delete(pid); return n; });
+    if (isMobileRef.current) setMobileTab('board');
+    setHlId(null);
+    setTimeout(() => setHlId(pid), 30);   // null dulu → sorot ulang walau kartunya sama
+  }, []);
+  useEffect(() => {
+    if (!hlId) return undefined;
+    const t1 = setTimeout(() => {
+      const b = boardRef.current, el = b?.querySelector(`[data-pid="${hlId}"]`);
+      if (!b || !el) return;
+      const br = b.getBoundingClientRect(), er = el.getBoundingClientRect();
+      const to = { behavior: reduceMotion() ? 'auto' : 'smooth' };
+      if (er.left < br.left || er.right > br.right) to.left = Math.max(0, b.scrollLeft + er.left - br.left - (br.width - er.width) / 2);
+      if (er.top < br.top || er.bottom > br.bottom) to.top = Math.max(0, b.scrollTop + er.top - br.top - 12);
+      if (to.left != null || to.top != null) b.scrollTo(to);
+    }, 40);
+    const t2 = setTimeout(() => setHlId(null), HL_MS);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+  }, [hlId]);
+
+  // Langkah semua project, diratakan untuk panel To Do (My Day / Important / Planned)
+  const stepItems = useMemo(() => (pj.projects || []).flatMap(p => (p.steps || []).map(s => ({
+    ...s, pid: p.id, projectTitle: p.title || 'Untitled project',
+  }))), [pj.projects]);
+  const stepOps = useMemo(() => ({
+    toggleDone: s => pjRef.current.toggleStep(s.pid, s.id),
+    toggleStar: s => pjRef.current.updateStep(s.pid, s.id, { starred: !s.starred }),
+    open: s => focusProject(s.pid),
+  }), [focusProject]);
+
+  const selectedTask = useMemo(() => (td.todos || []).find(t => t.id === taskId) || null, [td.todos, taskId]);
+  function changeTodoView(v) { setTodoView(v); setTaskId(null); }
+  function openNewList() { setListEdit({ mode: 'new', id: null, name: '', color: TODO_LIST_COLORS[1] }); }
+  function openRenameList(l) { setListEdit({ mode: 'rename', id: l.id, name: l.name, color: l.color }); }
+  async function commitListEdit() {
+    if (!listEdit) return;
+    const name = listEdit.name.trim();
+    if (!name) { setListEdit(null); return; }
+    if (listEdit.mode === 'new') {
+      const l = await td.createList(name, listEdit.color);
+      if (l) changeTodoView(listViewId(l.id));
+    } else {
+      await td.updateList(listEdit.id, { name, color: listEdit.color });
+    }
+    setListEdit(null);
+  }
+  async function confirmTodoNow() {
+    const c = confirmTodo;
+    if (!c || deleting) return;
+    setDeleting(true);   // tombol dialog terkunci selama proses (anti klik dobel)
+    try {
+      if (c.kind === 'task') {
+        await td.removeTask(c.item.id);
+        if (taskId === c.item.id) setTaskId(null);
+      } else {
+        await td.removeList(c.item.id);
+        if (todoView === listViewId(c.item.id)) setTodoView('tasks');
+        if (selectedTask && selectedTask.list_id === c.item.id) setTaskId(null);
+      }
+      setConfirmTodo(null);
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   const baseStacks = useMemo(() => buildStacks(pj.groups, pj.projects), [pj.groups, pj.projects]);
   const stacks = dragStacks || baseStacks;
@@ -505,6 +682,12 @@ export default function ProjectsPage() {
   const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
   const missing = !!pj.error?.missing;
   const detailProject = detailId ? byId[detailId] : null;
+  const today = todayStr();
+  const myDayN = (td.todos || []).filter(t => !t.done && t.my_day_date === today).length
+    + stepItems.filter(s => !s.done && s.my_day_date === today).length;
+  const showBoard = !isMobile || mobileTab === 'board';
+  const showDock = !isMobile || mobileTab === 'todo';
+  const dockShut = dockMin && !isMobile;
 
   const ctxLine = pj.projects === null && !pj.error
     ? <span>Loading projects…</span>
@@ -517,6 +700,7 @@ export default function ProjectsPage() {
         <span>{plural(all.length, 'project')}</span>
         {nProg > 0 && (<><span className="rg-ctx-sep" aria-hidden="true" /><span>{nProg} in progress</span></>)}
         {nLate > 0 && (<><span className="rg-ctx-sep" aria-hidden="true" /><span>{nLate} overdue</span></>)}
+        {td.todos !== null && (<><span className="rg-ctx-sep" aria-hidden="true" /><span>{myDayN} in My Day</span></>)}
         {!isMobile && (<><span className="rg-ctx-sep" aria-hidden="true" /><span>Synced across your devices</span></>)}
       </>);
 
@@ -532,14 +716,30 @@ export default function ProjectsPage() {
         {/* Satu-satunya tombol tambah project (keputusan Nadir 12 Okt 2026 — tanpa kartu
             "+ New project" di ujung papan). Di HP tombol ini tetap tampil; tema ada di menu HP. */}
         <div className="rg-tools">
-          <button type="button" className="rg-pill is-primary" onClick={addProject} disabled={!stacks || missing}>
-            <Plus size={15} />New project
-          </button>
+          {showBoard && (
+            <button type="button" className="rg-pill is-primary" onClick={addProject} disabled={!stacks || missing}>
+              <Plus size={15} />New project
+            </button>
+          )}
           {!isMobile && <ThemeToggle className="rg-pill rg-round" />}
         </div>
       </header>
 
-      {pj.error && (
+      {/* HP: papan dan To Do bergantian lewat dua tombol */}
+      {isMobile && (
+        <div className="rgp-mtabs">
+          <div className="rg-segs is-block" role="group" aria-label="Show">
+            <button type="button" aria-pressed={mobileTab === 'board'} onClick={() => setMobileTab('board')}>
+              <FolderKanban size={14} />Projects
+            </button>
+            <button type="button" aria-pressed={mobileTab === 'todo'} onClick={() => setMobileTab('todo')}>
+              <Sun size={14} />To Do{myDayN > 0 && <span className="rgp-mtab-n rg-mono">{myDayN}</span>}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {pj.error && showBoard && (
         <div className="rgp-alert">
           {missing ? (
             <div className="rg-error is-warn">
@@ -562,8 +762,9 @@ export default function ProjectsPage() {
         </div>
       )}
 
+      <div ref={bodyRef} className="rgp-body">
       {/* ══ PAPAN ══ */}
-      <div ref={boardRef} className={`rgp-board rg-rise${canPan ? ' can-pan' : ''}`} onPointerDown={onBoardPointerDown}>
+      <div ref={boardRef} className={`rgp-board rg-rise${canPan ? ' can-pan' : ''}${showBoard ? '' : ' is-hidden'}`} onPointerDown={onBoardPointerDown}>
         {stacks === null && !pj.error && [0, 1, 2].map(i => (
           <div key={i} className="rgp-lane" aria-hidden="true">
             <div className="rgp-card rgp-skel"><div className="rgp-well">
@@ -627,16 +828,65 @@ export default function ProjectsPage() {
                 return (
                   <ProjectCard key={pid} p={p}
                     open={!closedIds.has(pid)} picking={pickId === pid} editingTitle={editTitleId === pid}
-                    placeholder={dragId === pid} isNew={newId === pid} isMobile={isMobile}
+                    placeholder={dragId === pid} isNew={newId === pid} isMobile={isMobile} highlight={hlId === pid}
                     onHeadClick={headClick} onToggleOpen={toggleOpen} onTitleCommit={commitTitle}
                     onStatus={setStatus} onToggleStep={toggleStep} onAddStep={addStep}
-                    onEditStep={editStep} onRemoveStep={removeStep} onReorderSteps={reorderSteps} onOpen={openDetail} />
+                    onEditStep={editStep} onRemoveStep={removeStep} onReorderSteps={reorderSteps} onOpen={openDetail}
+                    onStepMyDay={stepMyDay} />
                 );
               })}
             </div>
           );
         })}
 
+      </div>
+
+      {/* ══ PANEL TO DO — pembatas geser (desktop) + kartu panel di kanan papan ══ */}
+      {!isMobile && !dockShut && (
+        <div className={`rgn-vsplit rgp-dsplit${dockDrag ? ' is-drag' : ''}`} onMouseDown={startDockSplit}
+          title="Drag to resize" aria-hidden="true" />
+      )}
+      <aside ref={dockRef}
+        className={`rg-card rgp-dock rg-rise${dockShut ? ' is-min' : ''}${dockDrag ? ' is-dragging' : ''}${showDock ? '' : ' is-hidden'}`}
+        style={isMobile ? undefined : { '--rgp-dock-w': `${dockW}px`, animationDelay: '60ms' }}
+        data-myday-drop={isMobile ? undefined : ''} aria-label="To Do">
+        {dockShut ? (
+          <div className="rgp-dock-mini">
+            <button type="button" className="rg-iconbtn" onClick={toggleDockMin} title="Show To Do" aria-label="Show To Do panel">
+              <PanelRightOpen size={15} />
+            </button>
+            <span className="rgp-dock-mini-ico"><Sun size={16} /></span>
+            <span className="rgp-dock-mini-n rg-mono" title={`${myDayN} in My Day`}>{myDayN}</span>
+          </div>
+        ) : (
+          <div className="rgp-dock-in">
+            {selectedTask ? (
+              <div key="detail" className="rgp-dock-view is-detail">
+                <TodoDetail key={selectedTask.id} task={selectedTask} td={td} isMobile={isMobile}
+                  onBack={() => setTaskId(null)}
+                  onRequestDelete={t => setConfirmTodo({ kind: 'task', item: t })} />
+              </div>
+            ) : (
+              <div key="list" className="rgp-dock-view">
+                <TodoPanel td={td} view={todoView} setView={changeTodoView}
+                  selectedId={taskId} onSelect={setTaskId} isMobile={isMobile}
+                  onNewList={openNewList} onRenameList={openRenameList}
+                  onRequestDeleteList={l => setConfirmTodo({ kind: 'list', item: l })}
+                  viewMenu={isMobile} tabs={!isMobile}
+                  stepItems={stepItems} stepOps={stepOps}
+                  headExtra={!isMobile && (
+                    <button type="button" className="rg-iconbtn" onClick={toggleDockMin} title="Hide To Do" aria-label="Hide To Do panel">
+                      <PanelRightClose size={14} />
+                    </button>
+                  )} />
+              </div>
+            )}
+          </div>
+        )}
+        {!isMobile && (
+          <div className="rgp-dock-hint" aria-hidden="true"><Sun size={20} /><span>Drop to add to My Day</span></div>
+        )}
+      </aside>
       </div>
 
       {/* ══ DETAIL PROJECT (Open →) ══ */}
@@ -661,6 +911,69 @@ export default function ProjectsPage() {
           </>}
         >
           Its steps and notes will be removed from every device. This can’t be undone.
+        </RgDialog>
+      )}
+
+      {/* ══ TO DO: DAFTAR BARU / GANTI NAMA ══ */}
+      {listEdit && (
+        <RgDialog
+          icon={listEdit.mode === 'new' ? Plus : Pencil}
+          title={listEdit.mode === 'new' ? 'New list' : 'Rename list'}
+          sub="To Do"
+          onClose={() => setListEdit(null)}
+          width={380}
+          foot={<>
+            <button type="button" className="rg-btn rg-btn-ghost" onClick={() => setListEdit(null)}>Cancel</button>
+            <button type="button" className="rg-btn rg-btn-primary" disabled={!listEdit.name.trim()} onClick={commitListEdit}>
+              {listEdit.mode === 'new' ? 'Create list' : 'Save'}
+            </button>
+          </>}
+        >
+          <div className="rgn-dlg">
+            <div className="rg-field">
+              <label className="rg-label" htmlFor="rgn-list-name">Name</label>
+              <input id="rgn-list-name" className="rg-input" autoFocus value={listEdit.name}
+                onChange={e => setListEdit(le => ({ ...le, name: e.target.value }))}
+                onKeyDown={e => { if (e.key === 'Enter') commitListEdit(); }}
+                placeholder={listEdit.mode === 'new' ? 'e.g. Campaign ops' : 'List name'} />
+            </div>
+            <div className="rg-field">
+              <span className="rg-label">Color</span>
+              <div className="rgn-swatches">
+                {TODO_LIST_COLORS.map(c => {
+                  const on = listEdit.color === c;
+                  return (
+                    <button key={c} type="button" className={`rgn-swatch${on ? ' is-on' : ''}`} style={{ '--c': c }}
+                      aria-pressed={on} aria-label={`Color ${c}`} title={c}
+                      onClick={() => setListEdit(le => ({ ...le, color: on ? null : c }))} />
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </RgDialog>
+      )}
+
+      {/* ══ TO DO: KONFIRMASI HAPUS (tugas / daftar) ══ */}
+      {confirmTodo && (
+        <RgDialog
+          icon={Trash2}
+          tone="neg"
+          title={confirmTodo.kind === 'list' ? 'Delete this list?' : 'Delete this task?'}
+          sub={confirmTodo.kind === 'list' ? confirmTodo.item.name : (confirmTodo.item.title || 'Untitled task')}
+          onClose={() => setConfirmTodo(null)}
+          busy={deleting}
+          width={400}
+          foot={<>
+            <button type="button" className="rg-btn rg-btn-ghost" onClick={() => setConfirmTodo(null)} disabled={deleting}>Cancel</button>
+            <button type="button" className={`rg-btn rg-btn-danger${deleting ? ' is-busy' : ''}`} onClick={confirmTodoNow} disabled={deleting}>
+              {deleting ? 'Deleting…' : 'Delete'}
+            </button>
+          </>}
+        >
+          {confirmTodo.kind === 'list'
+            ? <>The list and <strong>all tasks inside it</strong> will be removed from every device. This can’t be undone.</>
+            : <>It will be removed from every device. This can’t be undone.</>}
         </RgDialog>
       )}
     </div>

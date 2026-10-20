@@ -721,7 +721,7 @@ export default function ProjectsPage() {
               <Plus size={15} />New project
             </button>
           )}
-          {!isMobile && <ThemeToggle className="rg-pill rg-round" />}
+          {!isMobile && <ThemeToggle className="rg-pill rg-round rgp-theme" />}
         </div>
       </header>
 

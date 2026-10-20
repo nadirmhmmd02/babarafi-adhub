@@ -24,6 +24,7 @@
   --rgp-dedik: var(--rg-conv);
   --rgp-ease: cubic-bezier(.22,1,.36,1);
   --rgn-star: var(--rg-warn);   /* bintang & matahari My Day — sama dengan panel To Do lama */
+  --rgp-dock-mini-w: 58px;      /* lebar panel To Do saat diciutkan = lebar tombol tema di top bar */
 }
 html[data-theme="dark"] .rg.rgp {
   --rgp-lane-bg: rgba(255,255,255,0.025);
@@ -373,7 +374,10 @@ html.rgp-step-dragging, html.rgp-step-dragging * { cursor: grabbing !important; 
   overflow: hidden; transition: width .32s var(--rgp-ease), box-shadow .2s ease;
 }
 .rgp-dock.is-dragging { transition: none; }
-.rgp-dock.is-min { width: 58px; }
+.rgp-dock.is-min { width: var(--rgp-dock-mini-w); }
+/* Tombol tema di top bar selebar strip panel yang diciutkan (permintaan Nadir 20 Okt 2026),
+   supaya keduanya segaris rapi di pojok kanan; tinggi tetap 40px */
+.rg.rgp .rgp-theme { width: var(--rgp-dock-mini-w); }
 .rgp-dock.is-pulse { animation: rgpDockPulse .8s var(--rgp-ease); }
 .rgp-dock-in { flex: 1; min-height: 0; display: flex; flex-direction: column; width: calc(var(--rgp-dock-w) - 10px); }
 .rgp-dock-view { flex: 1; min-height: 0; display: flex; flex-direction: column; animation: rgpDockIn .28s var(--rgp-ease); }

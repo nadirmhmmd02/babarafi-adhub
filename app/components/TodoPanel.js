@@ -3,10 +3,10 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import {
   ListTodo, Sun, Star, CalendarDays, Inbox, Plus,
-  ChevronRight, Check, Pencil, Trash2, CircleAlert, FolderKanban,
+  ChevronRight, Check, Pencil, Trash2, CircleAlert, FolderKanban, History, X,
 } from 'lucide-react';
 import { RgMenu } from './rgKit';
-import { todayStr, dueLabel, isOverdue } from './useTodos';
+import { todayStr, dueLabel, isOverdue, inMyDay, myDayAge, myDayAgeLabel, MY_DAY_STALE_DAYS } from './useTodos';
 import { useSpringCheck, CheckCircle, StrikeText } from './springCheck';
 import { playDoneSound } from './todoSound';
 import { personCls, initialOf } from './ProjectCard';
@@ -47,12 +47,12 @@ export function viewMeta(view, lists) {
   return { ...BUILTIN_VIEWS[3], list: null };
 }
 
-/* Tugas mana yang masuk view ini (belum termasuk pemisahan selesai/belum) */
+/* Tugas mana yang masuk view ini (belum termasuk pemisahan selesai/belum).
+   My Day = inMyDay(): termasuk tugas belum selesai yang terbawa dari hari sebelumnya. */
 export function tasksForView(todos, view) {
-  const today = todayStr();
   const lid = listIdOfView(view);
   return (todos || []).filter(t => {
-    if (view === 'myday')     return t.my_day_date === today;
+    if (view === 'myday')     return inMyDay(t);
     if (view === 'important') return !!t.starred;
     if (view === 'planned')   return !!t.due_date;
     if (view === 'tasks')     return !t.list_id;
@@ -64,9 +64,8 @@ export function tasksForView(todos, view) {
 /* Langkah project yang ikut tampil di view ini — hanya My Day, Important, Planned.
    Tasks & daftar kustom tetap berisi tugas To Do saja. */
 export function stepsForView(steps, view) {
-  const today = todayStr();
   return (steps || []).filter(s => {
-    if (view === 'myday')     return s.my_day_date === today;
+    if (view === 'myday')     return inMyDay(s);
     if (view === 'important') return !!s.starred;
     if (view === 'planned')   return !!s.due_date;
     return false;
@@ -77,7 +76,7 @@ const byDue = (a, b) => (a.due < b.due ? -1 : a.due > b.due ? 1 : 0);
 
 /* Teks saat view belum punya tugas sama sekali: [judul, keterangan] */
 const EMPTY_COPY = {
-  myday:     ['Focus on your day', 'Add what you want to get done today, or tap the sun on a project step. My Day starts fresh every morning.'],
+  myday:     ['Focus on your day', "Add what you want to get done today, or tap the sun on a project step. Anything you don't finish carries over to the next day."],
   important: ['No important tasks', 'Star a task or a project step to keep it within reach here.'],
   planned:   ['Nothing planned', 'Tasks and project steps with a due date show up here, sorted by deadline.'],
 };
@@ -326,14 +325,33 @@ export default function TodoPanel({
   );
 }
 
+/* My Day carry-over: label umur tugas yang terbawa dari hari sebelumnya ("Since Mon 12 Oct ·
+   1 week"; ≥ MY_DAY_STALE_DAYS kuning tua) + tombol X kecil untuk mengeluarkannya dari My Day
+   (tugasnya tetap ada di Tasks / kartunya). */
+function CarryChip({ item }) {
+  const stale = myDayAge(item) >= MY_DAY_STALE_DAYS;
+  return (
+    <span className={`rgn-carry${stale ? ' is-stale' : ''}`} title="Not done yet · carried over in My Day">
+      <History size={11} /> {myDayAgeLabel(item)}
+    </span>
+  );
+}
+function UnDayBtn({ onClick }) {
+  return (
+    <button type="button" className="rgn-unday" onClick={e => { e.stopPropagation(); onClick(); }}
+      title="Remove from My Day" aria-label="Remove from My Day"><X size={13} /></button>
+  );
+}
+
 /* Baris tugas — di level modul supaya tidak di-remount tiap render panel */
 function TaskRow({ t, td, view, isSel, onSelect, onPress, onEnter, isDragging = false, canDrag = false }) {
   const steps = t.steps || [];
   const stepsDone = steps.filter(s => s.done).length;
-  const inMyDay = t.my_day_date === todayStr();
+  const inDay = inMyDay(t);
+  const carried = view === 'myday' && !t.done && myDayAge(t) > 0;
   const overdue = !t.done && isOverdue(t.due_date);
   const dueIsToday = t.due_date === todayStr();
-  const hasMeta = (inMyDay && view !== 'myday') || t.due_date || steps.length > 0;
+  const hasMeta = carried || (inDay && view !== 'myday') || t.due_date || steps.length > 0;
 
   /* Centang ala Microsoft To Do: klik → bunyi + animasi pegas langsung, tugas baru
      disimpan & pindah ke "Completed" setelah DONE_MOVE_MS. Klik lagi selama jeda =
@@ -379,7 +397,8 @@ function TaskRow({ t, td, view, isSel, onSelect, onPress, onEnter, isDragging = 
         <span className="rgn-task-title"><StrikeText>{t.title || 'Untitled task'}</StrikeText></span>
         {hasMeta && (
           <span className="rgn-task-meta">
-            {inMyDay && view !== 'myday' && <span><Sun size={11} /> My Day</span>}
+            {carried && <CarryChip item={t} />}
+            {inDay && view !== 'myday' && <span><Sun size={11} /> My Day</span>}
             {t.due_date && (
               <span className={`rgn-due${overdue ? ' is-late' : dueIsToday ? ' is-today' : ''}`}>
                 <CalendarDays size={11} /> {dueLabel(t.due_date)}
@@ -389,6 +408,7 @@ function TaskRow({ t, td, view, isSel, onSelect, onPress, onEnter, isDragging = 
           </span>
         )}
       </div>
+      {carried && <UnDayBtn onClick={() => td.toggleMyDay(t)} />}
       <button type="button" className={`rgn-star${t.starred ? ' is-on' : ''}`}
         onClick={e => { e.stopPropagation(); td.toggleStar(t); }}
         title={t.starred ? 'Remove importance' : 'Mark as important'} aria-label={t.starred ? 'Remove importance' : 'Mark as important'}>
@@ -401,7 +421,8 @@ function TaskRow({ t, td, view, isSel, onSelect, onPress, onEnter, isDragging = 
 /* Baris LANGKAH PROJECT di panel — chip nama project + PIC; klik baris = kartunya
    disorot di papan. Centang memakai jeda & bunyi yang sama dengan tugas To Do. */
 function StepTaskRow({ s, ops, view }) {
-  const inMyDay = s.my_day_date === todayStr();
+  const inDay = inMyDay(s);
+  const carried = view === 'myday' && !s.done && myDayAge(s) > 0;
   const overdue = !s.done && isOverdue(s.due_date);
   const dueIsToday = s.due_date === todayStr();
 
@@ -439,8 +460,9 @@ function StepTaskRow({ s, ops, view }) {
       <div className="rgn-task-main">
         <span className="rgn-task-title"><StrikeText>{s.title || 'Untitled step'}</StrikeText></span>
         <span className="rgn-task-meta">
+          {carried && <CarryChip item={s} />}
           <span className="rgn-pchip"><FolderKanban size={11} /><span className="rg-clip">{s.projectTitle}</span></span>
-          {inMyDay && view !== 'myday' && <span><Sun size={11} /> My Day</span>}
+          {inDay && view !== 'myday' && <span><Sun size={11} /> My Day</span>}
           {s.due_date && (
             <span className={`rgn-due${overdue ? ' is-late' : dueIsToday ? ' is-today' : ''}`}>
               <CalendarDays size={11} /> {dueLabel(s.due_date)}
@@ -448,6 +470,7 @@ function StepTaskRow({ s, ops, view }) {
           )}
         </span>
       </div>
+      {carried && ops.removeMyDay && <UnDayBtn onClick={() => ops.removeMyDay(s)} />}
       {s.pic && <span className={`rgp-av is-sm rgn-pic ${personCls(s.pic)}`} title={`PIC: ${s.pic}`}>{initialOf(s.pic)}</span>}
       <button type="button" className={`rgn-star${s.starred ? ' is-on' : ''}`}
         onClick={e => { e.stopPropagation(); ops.toggleStar(s); }}

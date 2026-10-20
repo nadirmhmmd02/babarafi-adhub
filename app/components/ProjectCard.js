@@ -3,7 +3,7 @@
 import { useState, useRef, useLayoutEffect, useEffect, memo } from 'react';
 import { ChevronDown, ArrowRight, Pencil, Trash2, Sun } from 'lucide-react';
 import { PJ_STATUSES, PJ_STATUS_LABEL } from './useProjects';
-import { dueLabel, isOverdue, todayStr } from './useTodos';
+import { dueLabel, isOverdue, inMyDay, myDayAgeLabel } from './useTodos';
 
 /* ─────────────────────────────────────────────────────────────
    PROJECT CARD — kartu di papan Projects (/projects). Adaptasi video
@@ -255,10 +255,11 @@ function ProjectCard({
   if (placeholder) cls.push('is-placeholder');
   if (isNew) cls.push('is-new');
   if (highlight) cls.push('is-hl');
-  const today = todayStr();
   const sunBtn = (s, on) => (
     <button type="button" className={`rgp-step-act rgp-step-sun${on ? ' is-on' : ''}`} aria-pressed={on}
-      title={on ? 'In My Day · click to remove' : 'Add to My Day'}
+      title={on
+        ? `In My Day${!s.done && myDayAgeLabel(s) ? ` · ${myDayAgeLabel(s).replace(/^Since/, 'since')}` : ''} · click to remove`
+        : 'Add to My Day'}
       aria-label={`${on ? 'Remove from My Day' : 'Add to My Day'}: ${s.title}`}
       onClick={() => onStepMyDay(p.id, s.id)}><Sun size={13} /></button>
   );
@@ -356,10 +357,10 @@ function ProjectCard({
                       ) : (
                         <span className="rgp-step-t" title="Double-click to edit" onDoubleClick={() => setEditStepId(s.id)}>{s.title}</span>
                       )}
-                      {editStepId !== s.id && onStepMyDay && s.my_day_date === today && sunBtn(s, true)}
+                      {editStepId !== s.id && onStepMyDay && inMyDay(s) && sunBtn(s, true)}
                       {editStepId !== s.id && (
                         <span className="rgp-step-acts">
-                          {onStepMyDay && s.my_day_date !== today && !s.done && sunBtn(s, false)}
+                          {onStepMyDay && !inMyDay(s) && !s.done && sunBtn(s, false)}
                           <button type="button" className="rgp-step-act" title="Edit step" aria-label={`Edit step: ${s.title}`}
                             onClick={() => setEditStepId(s.id)}><Pencil size={13} /></button>
                           <button type="button" className="rgp-step-act is-del" title="Delete step" aria-label={`Delete step: ${s.title}`}

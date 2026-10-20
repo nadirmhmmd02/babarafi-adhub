@@ -37,6 +37,44 @@ export function dueLabel(s) {
 }
 export function isOverdue(s) { return !!s && s < todayStr(); }
 
+/* ── My Day "carry-over" (20 Okt 2026, opsi B pilihan Nadir) ──
+   Tugas / langkah project yang masuk My Day dan BELUM selesai ikut terus ke hari-hari
+   berikutnya sampai dicentang atau dikeluarkan. my_day_date TIDAK diubah (tetap tanggal
+   pertama kali masuk My Day), jadi umurnya bisa ditampilkan. Yang diselesaikan HARI INI
+   tetap tampil di Completed My Day hari ini. Tanpa SQL / tulis DB tambahan.
+   MY_DAY_CARRY_FROM: isi My Day sebelum tanggal ini tidak dibawa — riwayat lama tidak
+   tiba-tiba membanjiri My Day saat fitur ini rilis. */
+export const MY_DAY_CARRY_FROM = '2026-10-19';
+export const MY_DAY_STALE_DAYS = 7;   // terbawa ≥ seminggu → label kuning tua
+const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+
+export function inMyDay(item) {
+  const d = item?.my_day_date;
+  if (!d) return false;
+  const today = todayStr();
+  if (d === today) return true;
+  if (d > today || d < MY_DAY_CARRY_FROM) return false;
+  return !item.done || (!!item.done_at && toDateStr(new Date(item.done_at)) === today);
+}
+/* Sudah berapa hari menunggu di My Day (0 = masuk hari ini) */
+export function myDayAge(item) {
+  const d = parseDateStr(item?.my_day_date);
+  if (!d) return 0;
+  return Math.max(0, Math.round((parseDateStr(todayStr()) - d) / 86400000));
+}
+/* Label lengkap: "Since yesterday" · "Since Fri 16 Oct · 4 days" · "Since Mon 12 Oct · 1 week"
+   · "… · 2 weeks" · "… · 1 month" */
+export function myDayAgeLabel(item) {
+  const n = myDayAge(item);
+  if (n < 1) return '';
+  if (n === 1) return 'Since yesterday';
+  const d = parseDateStr(item.my_day_date);
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  const date = d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', ...(sameYear ? {} : { year: 'numeric' }) });
+  const age = n < 7 ? `${n} days` : n < 30 ? plural(Math.floor(n / 7), 'week') : plural(Math.floor(n / 30), 'month');
+  return `Since ${date} · ${age}`;
+}
+
 function missingTable(err) {
   return err && (err.code === 'PGRST205' || err.code === '42P01'
     || /could not find the table|does not exist/i.test(err.message || ''));
@@ -104,7 +142,7 @@ export default function useTodos(enabled) {
     updateTask(t.id, { done: !t.done, done_at: !t.done ? new Date().toISOString() : null });
   };
   const toggleStar  = (t) => updateTask(t.id, { starred: !t.starred });
-  const toggleMyDay = (t) => updateTask(t.id, { my_day_date: t.my_day_date === todayStr() ? null : todayStr() });
+  const toggleMyDay = (t) => updateTask(t.id, { my_day_date: inMyDay(t) ? null : todayStr() });
   const setDue      = (t, date) => updateTask(t.id, { due_date: date || null });
   const moveToList  = (t, listId) => updateTask(t.id, { list_id: listId || null });
 

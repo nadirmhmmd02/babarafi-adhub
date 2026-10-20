@@ -13,7 +13,7 @@ import { RgDialog } from '../components/rgKit';
 import useProjects, { buildStacks, PJ_CARD_W, PJ_CARD_W_MIN, PJ_CARD_W_MAX } from '../components/useProjects';
 import ProjectCard from '../components/ProjectCard';
 import ProjectDetail from '../components/ProjectDetail';
-import useTodos, { TODO_LIST_COLORS, isOverdue, todayStr } from '../components/useTodos';
+import useTodos, { TODO_LIST_COLORS, isOverdue, todayStr, inMyDay } from '../components/useTodos';
 import TodoPanel, { listViewId } from '../components/TodoPanel';
 import TodoDetail from '../components/TodoDetail';
 
@@ -274,10 +274,9 @@ export default function ProjectsPage() {
   const stepMyDay = useCallback((pid, sid, force) => {
     const s = pjRef.current.projects?.find(x => x.id === pid)?.steps?.find(x => x.id === sid);
     if (!s) return;
-    const today = todayStr();
-    const inDay = s.my_day_date === today;
+    const inDay = inMyDay(s);
     if (force && inDay) { pulseDock(); return; }
-    pjRef.current.updateStep(pid, sid, { my_day_date: inDay ? null : today });
+    pjRef.current.updateStep(pid, sid, { my_day_date: inDay ? null : todayStr() });
     if (!inDay) { setTodoView('myday'); setTaskId(null); pulseDock(); }
   }, [pulseDock]);
 
@@ -310,6 +309,7 @@ export default function ProjectsPage() {
   const stepOps = useMemo(() => ({
     toggleDone: s => pjRef.current.toggleStep(s.pid, s.id),
     toggleStar: s => pjRef.current.updateStep(s.pid, s.id, { starred: !s.starred }),
+    removeMyDay: s => pjRef.current.updateStep(s.pid, s.id, { my_day_date: null }),
     open: s => focusProject(s.pid),
   }), [focusProject]);
 
@@ -682,9 +682,9 @@ export default function ProjectsPage() {
   const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
   const missing = !!pj.error?.missing;
   const detailProject = detailId ? byId[detailId] : null;
-  const today = todayStr();
-  const myDayN = (td.todos || []).filter(t => !t.done && t.my_day_date === today).length
-    + stepItems.filter(s => !s.done && s.my_day_date === today).length;
+  // termasuk yang terbawa dari hari sebelumnya (My Day carry-over)
+  const myDayN = (td.todos || []).filter(t => !t.done && inMyDay(t)).length
+    + stepItems.filter(s => !s.done && inMyDay(s)).length;
   const showBoard = !isMobile || mobileTab === 'board';
   const showDock = !isMobile || mobileTab === 'todo';
   const dockShut = dockMin && !isMobile;

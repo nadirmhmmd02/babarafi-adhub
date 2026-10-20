@@ -5,7 +5,7 @@ import {
   Star, Sun, CalendarDays, Inbox, Plus, X, Trash2, ChevronLeft, ListTodo,
 } from 'lucide-react';
 import { RgMenu } from './rgKit';
-import { todayStr, addDays, dueLabel, isOverdue } from './useTodos';
+import { todayStr, addDays, dueLabel, isOverdue, inMyDay, myDayAge, myDayAgeLabel, MY_DAY_STALE_DAYS } from './useTodos';
 import { useSpringCheck, CheckCircle } from './springCheck';
 
 /* ─────────────────────────────────────────────────────────────
@@ -45,7 +45,10 @@ export default function TodoDetail({ task: t, td, onRequestDelete, isMobile, onB
   const titleRef = useSpringCheck(!!t.done);
 
   const steps = t.steps || [];
-  const inMyDay = t.my_day_date === todayStr();
+  const inDay = inMyDay(t);
+  // terbawa dari hari sebelumnya → baris kedua "Since Mon 12 Oct · 1 week" (≥ 7 hari kuning tua)
+  const carriedLabel = inDay && !t.done ? myDayAgeLabel(t) : '';
+  const carriedStale = myDayAge(t) >= MY_DAY_STALE_DAYS;
   const overdue = !t.done && isOverdue(t.due_date);
   const list = t.list_id ? td.lists.find(l => l.id === t.list_id) : null;
 
@@ -136,11 +139,19 @@ export default function TodoDetail({ task: t, td, onRequestDelete, isMobile, onB
           {/* Aksi: My Day · Due date · List */}
           <div className="rgn-actions">
             <div className="rgn-act-row">
-              <button type="button" className={`rgn-act${inMyDay ? ' is-on is-sun' : ''}`} onClick={() => td.toggleMyDay(t)}>
+              <button type="button" className={`rgn-act${inDay ? ' is-on is-sun' : ''}${carriedLabel ? ' is-carry' : ''}`}
+                onClick={() => td.toggleMyDay(t)} title={carriedLabel ? `In My Day · ${carriedLabel}` : undefined}>
                 <Sun size={16} />
-                <span className="rg-clip">{inMyDay ? 'Added to My Day' : 'Add to My Day'}</span>
+                {carriedLabel ? (
+                  <span className="rgn-act-txt">
+                    <span className="rg-clip">In My Day</span>
+                    <span className={`rgn-act-sub rgn-carry rg-clip${carriedStale ? ' is-stale' : ''}`}>{carriedLabel}</span>
+                  </span>
+                ) : (
+                  <span className="rg-clip">{inDay ? 'Added to My Day' : 'Add to My Day'}</span>
+                )}
               </button>
-              {inMyDay && xBtn(() => td.toggleMyDay(t), 'Remove from My Day')}
+              {inDay && xBtn(() => td.toggleMyDay(t), 'Remove from My Day')}
             </div>
             <div className="rgn-act-row">
               <RgMenu

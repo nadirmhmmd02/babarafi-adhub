@@ -25,8 +25,10 @@ import TodoDetail from '../components/TodoDetail';
      pindah urutan; ke atas/bawah kartu lain = ditumpuk jadi satu kolom.
      Lajur berisi 2+ kartu dapat judul grup yang bisa diganti nama.
    - Tekan & geser AREA KOSONG papan = geser papan kanan-kiri (+ luncuran).
-   - Semua kartu mulai TERBUKA (daftar langkah tampil; keputusan Nadir 12 Okt 2026),
-     klik kepala = tutup/buka. Kartu yang ditutup tidak diingat (refresh = terbuka lagi).
+   - Kartu baru selalu TERBUKA (daftar langkah tampil), klik kepala = tutup/buka.
+     Sejak 21 Okt 2026 (permintaan Nadir) kartu yang DITUTUP DIINGAT per perangkat
+     (localStorage CLOSED_KEY) — halaman dibuka lagi = susunan buka/tutup terakhir.
+     Dulu (12 Okt) tidak diingat: refresh = semua terbuka lagi.
    HP: satu kolom ke bawah, tanpa geser kartu / geser papan.
    Data: useProjects (project_groups + projects, RLS per pemilik).
 
@@ -54,6 +56,16 @@ const DOCK_MIN = 280, DOCK_MAX = 560, DOCK_DEFAULT = 340, DOCK_CAP = 0.5;
 const DOCK_W_KEY = 'wd-projects-dock-w';
 const DOCK_MIN_KEY = 'wd-projects-dock-min';
 const HL_MS = 1700;          // = animasi .rgp-card.is-hl di CSS
+// Kartu project yang sedang ditutup (array id) — diingat supaya halaman dibuka lagi
+// dengan susunan buka/tutup terakhir. Kartu yang tidak tercantum = terbuka.
+const CLOSED_KEY = 'wd-projects-closed';
+function readClosed() {
+  if (typeof window === 'undefined') return new Set();
+  try {
+    const ids = JSON.parse(localStorage.getItem(CLOSED_KEY) || '[]');
+    return new Set(Array.isArray(ids) ? ids : []);
+  } catch { return new Set(); }
+}
 
 const reduceMotion = () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -163,7 +175,10 @@ export default function ProjectsPage() {
   const isMobile = useIsMobile();
   const pj = useProjects(role === 'admin');
 
-  const [closedIds, setClosedIds] = useState(() => new Set()); // default: semua terbuka
+  // Dibaca langsung saat mount (bukan di efek) supaya kartu yang terakhir ditutup tidak
+  // sempat tampil terbuka lalu menutup. Aman dari beda render server: halaman ini baru
+  // menggambar kartu setelah role admin terbaca di klien.
+  const [closedIds, setClosedIds] = useState(readClosed);
   const [pickId, setPickId] = useState(null);                // kartu yang pilihan statusnya mekar
   const [editTitleId, setEditTitleId] = useState(null);
   const [editGroupId, setEditGroupId] = useState(null);
@@ -349,6 +364,15 @@ export default function ProjectsPage() {
   }
 
   const baseStacks = useMemo(() => buildStacks(pj.groups, pj.projects), [pj.groups, pj.projects]);
+
+  /* Simpan susunan buka/tutup kartu. Id project yang sudah dihapus ikut dibuang supaya
+     daftarnya tidak menumpuk — hanya setelah data project termuat tanpa error (kalau
+     gagal memuat, daftar lama jangan sampai terhapus). */
+  useEffect(() => {
+    if (!pj.projects || pj.error) return;
+    const exist = new Set(pj.projects.map(p => p.id));
+    try { localStorage.setItem(CLOSED_KEY, JSON.stringify([...closedIds].filter(id => exist.has(id)))); } catch {}
+  }, [closedIds, pj.projects, pj.error]);
   const stacks = dragStacks || baseStacks;
   stacksRef.current = stacks;
   const byId = useMemo(() => Object.fromEntries((pj.projects || []).map(p => [p.id, p])), [pj.projects]);

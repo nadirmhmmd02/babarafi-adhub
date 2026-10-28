@@ -49,6 +49,10 @@ export const MAPS_SECTION = {
     { href: '/maps', label: 'Outlet Maps', icon: MapPinned },
   ],
 };
+// Maps Hub DISEMBUNYIKAN dari web live (28 Okt 2026, permintaan Nadir) — menu hilang untuk
+// semua role & /maps dialihkan ke Dashboard lewat redirects() di next.config.mjs. Data &
+// kode tetap utuh. Munculkan lagi: set false DAN hapus redirect '/maps' di next.config.mjs.
+export const MAPS_HIDDEN = true;
 
 // Menu per role: marketing hanya Leads Hub; user (viewer) — per 9 Sep 2026 — HANYA Ads Hub
 // dan cuma Dashboard + Campaigns (whitelist USER_ALLOWED; Calendar, Analytics & Insights,
@@ -60,7 +64,7 @@ export function navSectionsFor(role) {
   if (role === 'user') return NAV_SECTIONS
     .map(s => ({ ...s, items: s.items.filter(i => USER_ALLOWED.includes(i.href)) }))
     .filter(s => s.items.length > 0);
-  if (role === 'admin') return [...NAV_SECTIONS, MAPS_SECTION];
+  if (role === 'admin') return MAPS_HIDDEN ? NAV_SECTIONS : [...NAV_SECTIONS, MAPS_SECTION];
   return NAV_SECTIONS;
 }
 

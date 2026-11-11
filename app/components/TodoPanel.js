@@ -25,6 +25,9 @@ const DONE_MOVE_MS = 550;
      tenggat ikut tampil di My Day, Important, dan Planned (chip nama project +
      PIC). Centang di sini = centang di kartu (cincin progres ikut maju); klik
      baris = kartunya disorot di papan (stepOps.open).
+   - onTaskDragOut (11 Nov 2026, desktop): tugas yang sedang diseret keluar kartu panel
+     dilaporkan ke halaman ('move' / 'leave' / 'drop') — halaman menggambar bayangannya,
+     menyalakan kartu project di bawah kursor, dan menjadikan tugas langkah project itu.
    Klik tugas To Do → detailnya (TodoDetail) menggantikan isi panel.
    Dialog daftar baru/ganti nama & konfirmasi hapus ada di app/projects/page.js.
    Styling di notes-ridgeline.css (.rgn-task* dst.) + projects-ridgeline.css (.rgp-dock*).
@@ -85,7 +88,7 @@ const EMPTY_DEFAULT = ['No tasks yet', 'Type in the box above and press Enter to
 export default function TodoPanel({
   td, view, setView, selectedId, onSelect, isMobile,
   onNewList, onRenameList, onRequestDeleteList, viewMenu = false,
-  tabs = false, headExtra = null, stepItems = null, stepOps = null,
+  tabs = false, headExtra = null, stepItems = null, stepOps = null, onTaskDragOut = null,
 }) {
   const { lists, todos, error } = td;
   const [draft, setDraft] = useState('');
@@ -95,53 +98,76 @@ export default function TodoPanel({
      Tanpa HTML5 drag: mousedown di baris mencatat titik awal; begitu bergerak >5px jadi
      mode geser (body cursor grabbing), baris lain yang dilewati kursor (onMouseEnter)
      memicu td.moveTask; mouseup → commitOrder + klik berikutnya ditelan (bukan pilih).
-     Hanya tugas To Do — langkah project diurutkan di kartunya. */
-  const dragRef = useRef({ id: null, startY: 0, active: false, moved: false });
+     Hanya tugas To Do — langkah project diurutkan di kartunya.
+     Keluar dari kartu panel (onTaskDragOut ada) = mode "lempar ke kartu project": posisi
+     kursor dilaporkan ke halaman; lepas di luar panel = 'drop', Esc / kembali ke panel =
+     'leave'. Berlaku juga di Planned (yang tidak bisa diurutkan). */
+  const dragRef = useRef({ id: null, startX: 0, startY: 0, active: false, moved: false, out: false, box: null });
   const suppressClick = useRef(false);
   const tdRef = useRef(td); tdRef.current = td;   // listener global pakai td terbaru tanpa re-subscribe
+  const outRef = useRef(onTaskDragOut); outRef.current = onTaskDragOut;
   const [dragId, setDragId] = useState(null);
-  const canDrag = !isMobile && view !== 'planned';   // Planned urut tenggat, tidak bisa digeser
+  const canReorder = !isMobile && view !== 'planned';   // Planned urut tenggat, tidak bisa digeser
+  const canDragOut = !isMobile && !!onTaskDragOut;
+  const canDrag = canReorder || canDragOut;
+  const dragTitle = canReorder && canDragOut ? 'Click to open · drag to reorder, or onto a project to make it a step'
+    : canReorder ? 'Click to open · press & drag to reorder'
+    : canDragOut ? 'Click to open · drag onto a project to make it a step' : undefined;
 
   useEffect(() => {
     function onMove(e) {
       const d = dragRef.current;
       if (!d.id) return;
-      if (!d.active && Math.abs(e.clientY - d.startY) > 5) {
+      if (!d.active) {
+        if (Math.hypot(e.clientX - d.startX, e.clientY - d.startY) <= 5) return;
         d.active = true;
         setDragId(d.id);
         document.body.style.userSelect = 'none';
       }
+      const out = outRef.current;
+      if (!out || !d.box) return;
+      const hit = document.elementFromPoint(e.clientX, e.clientY);
+      if (!(hit && d.box.contains(hit))) { d.out = true; out('move', d.id, e); }
+      else if (d.out) { d.out = false; out('leave', d.id, e); }
     }
-    function onUp() {
+    function finish(drop) {
       const d = dragRef.current;
       if (!d.id) return;
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
       if (d.active) {
         if (d.moved) tdRef.current.commitOrder();
+        if (d.out) outRef.current?.(drop ? 'drop' : 'leave', d.id);
         suppressClick.current = true;                       // klik yang menyusul mouseup ditelan
         setTimeout(() => { suppressClick.current = false; }, 0);
       }
-      d.id = null; d.active = false; d.moved = false;
+      dragRef.current = { id: null, startX: 0, startY: 0, active: false, moved: false, out: false, box: null };
       setDragId(null);
     }
+    const onUp = () => finish(true);
+    const onKey = e => { if (e.key === 'Escape' && dragRef.current.active) finish(false); };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
+    window.addEventListener('keydown', onKey);
     return () => {
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('keydown', onKey);
     };
   }, []);
 
   function pressRow(id, e) {
     if (!canDrag || e.button !== 0) return;
     if (e.target.closest('button,input,a')) return;   // tombol selesai/⭐ bukan pegangan
-    dragRef.current = { id, startY: e.clientY, active: false, moved: false };
+    dragRef.current = {
+      id, startX: e.clientX, startY: e.clientY, active: false, moved: false, out: false,
+      box: e.currentTarget.closest('.rg-card'),         // kartu panel To Do = batas "masih di dalam"
+    };
     document.body.style.cursor = 'grabbing';           // "tangan" begitu ditekan
   }
   function enterRow(id) {
     const d = dragRef.current;
-    if (!d.active || d.id === id) return;
+    if (!canReorder || !d.active || d.id === id) return;
     td.moveTask(d.id, id);
     d.moved = true;
   }
@@ -193,7 +219,7 @@ export default function TodoPanel({
   const rowProps = (t) => ({
     t, td, view, isSel: t.id === selectedId, onSelect: clickRow,
     onPress: t.done ? null : pressRow, onEnter: t.done ? null : enterRow,
-    isDragging: dragId === t.id, canDrag: canDrag && !t.done,
+    isDragging: dragId === t.id, dragTitle: t.done ? undefined : dragTitle,
   });
   const renderRow = r => (r.kind === 'todo'
     ? <TaskRow key={r.key} {...rowProps(r.t)} />
@@ -344,7 +370,7 @@ function UnDayBtn({ onClick }) {
 }
 
 /* Baris tugas — di level modul supaya tidak di-remount tiap render panel */
-function TaskRow({ t, td, view, isSel, onSelect, onPress, onEnter, isDragging = false, canDrag = false }) {
+function TaskRow({ t, td, view, isSel, onSelect, onPress, onEnter, isDragging = false, dragTitle }) {
   const steps = t.steps || [];
   const stepsDone = steps.filter(s => s.done).length;
   const inDay = inMyDay(t);
@@ -386,7 +412,7 @@ function TaskRow({ t, td, view, isSel, onSelect, onPress, onEnter, isDragging = 
       onClick={() => onSelect(t.id)}
       onMouseDown={onPress ? (e) => onPress(t.id, e) : undefined}
       onMouseEnter={onEnter ? () => onEnter(t.id) : undefined}
-      title={canDrag ? 'Click to open · press & drag to reorder' : undefined}
+      title={dragTitle}
     >
       <button type="button" className={`rgn-circle${shownDone ? ' is-done' : ''}`} onClick={onCheck}
         role="checkbox" aria-checked={shownDone}

@@ -414,6 +414,21 @@ html.rgp-step-out .rgp-dock-hint { opacity: .96; }
 .rgp-dock.is-over .rgp-dock-hint { border-style: solid; border-color: var(--rg-t1); color: var(--rg-t1); }
 .rgp-dock.is-min .rgp-dock-hint span { display: none; }
 
+/* Seret TUGAS To Do keluar panel ke papan (11 Nov 2026): bayangan pil ikon map mengikuti
+   kursor (meredup kalau belum di atas kartu); kartu project di bawah kursor (is-taskdrop,
+   dari page.js) diberi cincin + tirai "Drop to add as a step" — lepas = tugas jadi langkahnya */
+html.rgp-task-out, html.rgp-task-out * { cursor: grabbing !important; user-select: none !important; }
+.rgp-step-ghost.is-task { transition: opacity .15s ease; }
+.rgp-step-ghost.is-task:not(.is-over) { opacity: .72; }
+.rgp-card.is-taskdrop { box-shadow: 0 0 0 2px var(--rg-t1), var(--rgp-card-shadow-hi); }
+.rgp-card.is-taskdrop::after {
+  content: 'Drop to add as a step'; position: absolute; inset: 3px; z-index: 4; border-radius: 14px;
+  display: flex; align-items: center; justify-content: center; padding: 12px; text-align: center;
+  background: color-mix(in srgb, var(--rg-well) 95%, transparent); border: 1.5px solid var(--rg-t1);
+  color: var(--rg-t1); font-size: 13px; font-weight: 500; pointer-events: none;
+  animation: wdFadeUp .16s cubic-bezier(.22,1,.36,1);
+}
+
 /* HP: tombol Projects | To Do di bawah top bar */
 .rgp-mtabs { padding: 12px 16px 0; flex-shrink: 0; }
 .rgp-mtab-n {

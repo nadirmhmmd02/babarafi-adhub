@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import {
-  Star, Sun, CalendarDays, Inbox, Plus, X, Trash2, ChevronLeft, ListTodo,
+  Star, Sun, CalendarDays, Inbox, Plus, X, Trash2, ChevronLeft, ListTodo, FolderKanban,
 } from 'lucide-react';
 import { RgMenu } from './rgKit';
 import { todayStr, addDays, dueLabel, isOverdue, inMyDay, myDayAge, myDayAgeLabel, MY_DAY_STALE_DAYS } from './useTodos';
@@ -14,6 +14,9 @@ import { useSpringCheck, CheckCircle } from './springCheck';
    Isi ala Microsoft To Do: judul + selesai + bintang,
    Steps (sub-tugas), Add to My Day, Due date, pindah List, catatan,
    footer created + hapus.
+   Move to project (11 Nov 2026): pilih project → tugas jadi langkah project itu dan keluar
+   dari To Do (projectOptions + onMoveToProject dari app/projects/page.js). Ini jalur di HP;
+   di desktop tugas juga bisa diseret dari panel ke kartu project.
    Redesain "Ridgeline" (Sep 2026): kepala kartu (Task · daftar · tutup) +
    panel dalam + kaki kartu. Styling di notes-ridgeline.css.
    ───────────────────────────────────────────────────────────── */
@@ -39,7 +42,9 @@ function StepRow({ t, s, td, xBtn }) {
   );
 }
 
-export default function TodoDetail({ task: t, td, onRequestDelete, isMobile, onBack, onClose }) {
+export default function TodoDetail({
+  task: t, td, onRequestDelete, isMobile, onBack, onClose, projectOptions = null, onMoveToProject = null,
+}) {
   const [stepDraft, setStepDraft] = useState('');
   const [pickDate, setPickDate] = useState(false);
   const titleRef = useSpringCheck(!!t.done);
@@ -200,6 +205,22 @@ export default function TodoDetail({ task: t, td, onRequestDelete, isMobile, onB
                 title="Move to list"
               />
             </div>
+            {projectOptions && onMoveToProject && (
+              <div className="rgn-act-row">
+                <RgMenu
+                  block
+                  caret={false}
+                  className="rgn-act"
+                  icon={FolderKanban}
+                  label="Move to project"
+                  options={projectOptions}
+                  onSelect={(pid) => onMoveToProject(t, pid)}
+                  disabled={!projectOptions.length}
+                  minWidth={240}
+                  title={projectOptions.length ? 'Turn this task into a step of a project' : 'No projects yet'}
+                />
+              </div>
+            )}
           </div>
 
           {/* Catatan tugas */}

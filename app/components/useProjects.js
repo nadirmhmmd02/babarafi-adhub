@@ -110,13 +110,15 @@ export default function useProjects(enabled) {
 
   useEffect(() => { if (enabled) load(); }, [enabled, load]);
 
-  /* Kirim patch ke DB. Menunggu insert baris selesai kalau project baru saja dibuat. */
+  /* Kirim patch ke DB. Menunggu insert baris selesai kalau project baru saja dibuat.
+     Hasil = true kalau tersimpan (dipakai saat tugas To Do dipindah ke project). */
   const send = useCallback(async (id, patch) => {
     inflight.current++;
     try {
       if (created.current[id]) await created.current[id];
       const { error: err } = await supabase.from('projects').update(patch).eq('id', id);
       fail(err);
+      return !err;
     } finally {
       inflight.current--;
     }
@@ -139,8 +141,7 @@ export default function useProjects(enabled) {
         Object.keys(patch).forEach(k => delete pend[k]);
         if (!Object.keys(pend).length) { clearTimeout(timers.current[id]); delete pendingPatch.current[id]; }
       }
-      send(id, patch);
-      return;
+      return send(id, patch);
     }
     pendingPatch.current[id] = { ...(pendingPatch.current[id] || {}), ...patch };
     clearTimeout(timers.current[id]);
@@ -211,6 +212,34 @@ export default function useProjects(enabled) {
     return out;
   });
 
+  /* Tugas To Do dipindah ke project ini (11 Nov 2026, permintaan Nadir — seret tugas dari
+     panel ke kartu, atau "Move to project" di detail tugas). Tugas jadi langkah baru paling
+     bawah: bintang, tenggat, My Day, dan status selesai ikut terbawa; sub-langkah tugas ikut
+     jadi langkah tepat di bawahnya; catatan tugas disambung ke catatan project. Jadi tidak
+     ada isi tugas yang hilang. Hasil = promise true kalau sudah tersimpan di DB (tugas To Do
+     baru dihapus sesudah itu — lihat useTodos.removeTaskAfter). */
+  function addTaskAsSteps(id, t) {
+    const cur = (projectsRef.current || []).find(p => p.id === id);
+    if (!cur || !t) return Promise.resolve(false);
+    const title = (t.title || '').trim() || 'Untitled task';
+    const main = { id: crypto.randomUUID(), title, done: !!t.done, pic: PJ_DEFAULT_PIC };
+    if (t.done && t.done_at) main.done_at = t.done_at;
+    if (t.starred) main.starred = true;
+    if (t.due_date) main.due_date = t.due_date;
+    if (t.my_day_date) main.my_day_date = t.my_day_date;
+    const subs = (t.steps || []).filter(s => (s.title || '').trim()).map(s => ({
+      id: crypto.randomUUID(), title: s.title.trim(), done: !!s.done, pic: PJ_DEFAULT_PIC,
+    }));
+    const patch = { steps: [...(cur.steps || []), main, ...subs] };
+    const note = (t.notes || '').trim();
+    if (note) {
+      const block = `${title}:\n${note}`;
+      const prev = (cur.notes || '').replace(/\s+$/, '');
+      patch.notes = prev ? `${prev}\n\n${block}` : block;
+    }
+    return updateProject(id, patch);
+  }
+
   /* ── Grup ── */
   function renameGroup(gid, name) {
     setGroups(prev => (prev || []).map(g => (g.id === gid ? { ...g, name } : g)));
@@ -278,7 +307,7 @@ export default function useProjects(enabled) {
   return {
     groups, projects, error, reload: load,
     createProject, updateProject, removeProject,
-    addStep, toggleStep, updateStep, removeStep, reorderSteps,
+    addStep, toggleStep, updateStep, removeStep, reorderSteps, addTaskAsSteps,
     renameGroup, setGroupWidth, commitLayout,
   };
 }

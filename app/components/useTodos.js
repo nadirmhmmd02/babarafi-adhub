@@ -176,6 +176,28 @@ export default function useTodos(enabled) {
     fail(err);
   }
 
+  /* Tugas dipindah ke tempat lain (jadi langkah project, 11 Nov 2026): hilang dari layar
+     saat itu juga, tapi baris DB baru dihapus SETELAH tempat barunya tersimpan
+     (saved = promise true/false). Gagal tersimpan → tugas kembali ke posisinya semula. */
+  async function removeTaskAfter(id, saved) {
+    const list = todos || [];
+    const at = list.findIndex(t => t.id === id);
+    if (at < 0) return;
+    const backup = list[at];
+    setTodos(prev => (prev || []).filter(t => t.id !== id));
+    if (!(await saved)) {
+      setTodos(prev => {
+        const l = [...(prev || [])];
+        if (l.some(t => t.id === id)) return prev;
+        l.splice(Math.min(at, l.length), 0, backup);
+        return l;
+      });
+      return;
+    }
+    const { error: err } = await supabase.from('todos').delete().eq('id', id);
+    fail(err);
+  }
+
   /* ── Steps (sub-tugas) — disimpan sebagai JSON di kolom steps ── */
   const setSteps = (t, steps) => updateTask(t.id, { steps });
   const addStep    = (t, title) => setSteps(t, [...(t.steps || []), { id: crypto.randomUUID(), title: title.trim(), done: false }]);
@@ -211,7 +233,7 @@ export default function useTodos(enabled) {
 
   return {
     lists, todos, error, reload: load,
-    createTask, updateTask, toggleDone, toggleStar, toggleMyDay, setDue, moveToList, removeTask,
+    createTask, updateTask, toggleDone, toggleStar, toggleMyDay, setDue, moveToList, removeTask, removeTaskAfter,
     moveTask, commitOrder,
     addStep, toggleStep, renameStep, removeStep,
     createList, updateList, removeList,

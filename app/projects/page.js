@@ -42,6 +42,10 @@ import TodoDetail from '../components/TodoDetail';
      disorot. Centang di panel = centang di kartu.
    - pembatas papan ↔ panel bisa digeser (lebar diingat), panel bisa diciutkan jadi
      strip tipis (diingat). HP: tombol Projects | To Do di atas.
+   - TUGAS → LANGKAH PROJECT (11 Nov 2026, permintaan Nadir): seret satu tugas dari panel
+     keluar ke kartu project di papan (kartu di bawah kursor menyala), lepas = tugas jadi
+     langkah project itu dan keluar dari To Do (moveTaskToProject). Di HP / tanpa seret:
+     "Move to project" di detail tugas. Isi tugas yang ikut: lihat useProjects.addTaskAsSteps.
    Styling: app/projects-ridgeline.css (.rgp-, bagian PANEL TO DO) + notes-ridgeline.css (.rgn-).
    ───────────────────────────────────────────────────────────── */
 
@@ -68,6 +72,9 @@ function readClosed() {
 }
 
 const reduceMotion = () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// Ikon map (lucide FolderKanban) untuk bayangan tugas yang diseret ke papan — elemen DOM biasa
+const FOLDER_SVG = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/><path d="M8 10v4"/><path d="M12 10v2"/><path d="M16 10v6"/></svg>';
 
 function sameLayout(a, b) {
   if (a.length !== b.length) return false;
@@ -203,6 +210,9 @@ export default function ProjectsPage() {
 
   /* ── Panel To Do ── */
   const td = useTodos(role === 'admin');
+  const tdRef = useRef(td);
+  tdRef.current = td;
+  const taskOutRef = useRef(null);   // { ghost, card } — tugas To Do sedang diseret di atas papan
   const [todoView, setTodoView] = useState('myday');
   const [taskId, setTaskId] = useState(null);
   const [listEdit, setListEdit] = useState(null);         // null | { mode:'new'|'rename', id, name, color }
@@ -317,6 +327,69 @@ export default function ProjectsPage() {
     return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [hlId]);
 
+  /* Tugas To Do → langkah project (seret dari panel ke kartu, atau Move to project di detail
+     tugas). Tugas langsung hilang dari daftar; baris To Do-nya baru dihapus setelah langkah
+     barunya tersimpan (gagal = tugas kembali). Kartu tujuan dibuka & disorot. */
+  const moveTaskToProject = useCallback((tid, pid) => {
+    const t = tdRef.current.todos?.find(x => x.id === tid);
+    if (!t || !pjRef.current.projects?.some(p => p.id === pid)) return;
+    const saved = pjRef.current.addTaskAsSteps(pid, t);
+    tdRef.current.removeTaskAfter(tid, saved);
+    setTaskId(cur => (cur === tid ? null : cur));
+    focusProject(pid);
+  }, [focusProject]);
+
+  /* Laporan dari TodoPanel selama tugas diseret KELUAR panel (desktop):
+     'move' = bayangan pil mengikuti kursor + kartu project di bawah kursor menyala
+     (kelas is-taskdrop, tanpa render ulang) + papan ikut bergeser di dekat tepinya;
+     'drop' = dilepas → kalau di atas kartu, tugas jadi langkahnya; 'leave' = batal. */
+  const taskDragOut = useCallback((phase, tid, ev) => {
+    let o = taskOutRef.current;
+    if (phase === 'move') {
+      if (!o) {
+        const t = tdRef.current.todos?.find(x => x.id === tid);
+        const g = document.createElement('div');
+        g.className = 'rgp-step-ghost is-task';
+        g.innerHTML = `${FOLDER_SVG}<span></span>`;
+        g.lastChild.textContent = t?.title || 'Untitled task';
+        (rootRef.current || document.body).appendChild(g);
+        o = taskOutRef.current = { ghost: g, card: null };
+        document.documentElement.classList.add('rgp-task-out');
+      }
+      o.ghost.style.left = `${ev.clientX + 14}px`;
+      o.ghost.style.top = `${ev.clientY + 12}px`;
+      const hit = document.elementFromPoint(ev.clientX, ev.clientY);
+      const card = hit?.closest('.rgp-board [data-pid]') || null;
+      if (card !== o.card) {
+        o.card?.classList.remove('is-taskdrop');
+        card?.classList.add('is-taskdrop');
+        o.ghost.classList.toggle('is-over', !!card);
+        o.card = card;
+      }
+      const b = boardRef.current;
+      if (b) {
+        const br = b.getBoundingClientRect();
+        if (ev.clientY >= br.top && ev.clientY <= br.bottom) {
+          if (ev.clientX >= br.right - EDGE_PX && ev.clientX <= br.right + 16) b.scrollLeft += 14;
+          else if (ev.clientX >= br.left && ev.clientX <= br.left + EDGE_PX) b.scrollLeft -= 14;
+        }
+      }
+      return;
+    }
+    if (!o) return;
+    taskOutRef.current = null;
+    o.ghost.remove();
+    o.card?.classList.remove('is-taskdrop');
+    document.documentElement.classList.remove('rgp-task-out');
+    if (phase === 'drop' && o.card?.dataset.pid) moveTaskToProject(tid, o.card.dataset.pid);
+  }, [moveTaskToProject]);
+  // Halaman ditinggal di tengah seretan → bayangan jangan tertinggal
+  useEffect(() => () => {
+    taskOutRef.current?.ghost.remove();
+    taskOutRef.current = null;
+    document.documentElement.classList.remove('rgp-task-out');
+  }, []);
+
   // Langkah semua project, diratakan untuk panel To Do (My Day / Important / Planned)
   const stepItems = useMemo(() => (pj.projects || []).flatMap(p => (p.steps || []).map(s => ({
     ...s, pid: p.id, projectTitle: p.title || 'Untitled project',
@@ -376,6 +449,11 @@ export default function ProjectsPage() {
   const stacks = dragStacks || baseStacks;
   stacksRef.current = stacks;
   const byId = useMemo(() => Object.fromEntries((pj.projects || []).map(p => [p.id, p])), [pj.projects]);
+  // Pilihan "Move to project" di detail tugas — urut seperti papan (lajur kiri→kanan, atas→bawah);
+  // nama grup tampil di kanan kalau kartunya ada di lajur bertumpuk yang diberi nama
+  const projectOptions = useMemo(() => (baseStacks || []).flatMap(st => st.cards.map(pid => byId[pid]).filter(Boolean)
+    .map(p => ({ value: p.id, label: p.title || 'Untitled project', ...(st.cards.length > 1 && st.name ? { hint: st.name } : {}) }))),
+  [baseStacks, byId]);
 
   /* ── FLIP: posisi kartu sebelum perubahan → sesudah render, kartu meluncur dari
      posisi lama (properti `translate`, terpisah dari `transform`) ── */
@@ -888,6 +966,8 @@ export default function ProjectsPage() {
               <div key="detail" className="rgp-dock-view is-detail">
                 <TodoDetail key={selectedTask.id} task={selectedTask} td={td} isMobile={isMobile}
                   onBack={() => setTaskId(null)}
+                  projectOptions={missing || pj.projects === null ? null : projectOptions}
+                  onMoveToProject={(t, pid) => moveTaskToProject(t.id, pid)}
                   onRequestDelete={t => setConfirmTodo({ kind: 'task', item: t })} />
               </div>
             ) : (
@@ -898,6 +978,7 @@ export default function ProjectsPage() {
                   onRequestDeleteList={l => setConfirmTodo({ kind: 'list', item: l })}
                   viewMenu={isMobile} tabs={!isMobile}
                   stepItems={stepItems} stepOps={stepOps}
+                  onTaskDragOut={isMobile || missing ? null : taskDragOut}
                   headExtra={!isMobile && (
                     <button type="button" className="rg-iconbtn" onClick={toggleDockMin} title="Hide To Do" aria-label="Hide To Do panel">
                       <PanelRightClose size={14} />

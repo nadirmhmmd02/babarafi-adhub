@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useLayoutEffect, useEffect, memo } from 'react';
-import { ChevronDown, ArrowRight, Pencil, Trash2, Sun } from 'lucide-react';
+import { ChevronDown, ChevronRight, ArrowRight, Pencil, Trash2, Sun } from 'lucide-react';
 import { PJ_STATUSES, PJ_STATUS_LABEL } from './useProjects';
 import { dueLabel, isOverdue, inMyDay, myDayAgeLabel } from './useTodos';
 
@@ -18,6 +18,12 @@ import { dueLabel, isOverdue, inMyDay, myDayAgeLabel } from './useTodos';
    KELUAR kartu ke panel itu (data-myday-drop) = masuk My Day. Tenggat langkah (diisi di
    dialog Open) tampil di laci bawah saat baris disentuh — tidak memakan lebar baris.
    highlight = kartu disorot saat langkahnya diklik di panel.
+   LIPATAN "COMPLETED" (12 Nov 2026, permintaan Nadir): kalau langkah selesai sudah
+   DONE_FOLD_MIN (3) atau lebih, semuanya pindah ke lipatan "Completed (n)" di bawah kolom
+   "Add a step" (di bawah 3 tetap tampil biasa, dicoret). Langkah yang baru dicentang ditahan
+   DONE_SETTLE_MS di daftar supaya animasi centangnya terlihat, baru meluncur masuk. Buka/tutup
+   lipatan diingat per kartu (prop doneOpen dari page.js). Hanya di kartu — dialog Open tetap
+   menampilkan semua langkah. Baris di lipatan tidak bisa digeser urutannya.
    Styling: app/projects-ridgeline.css (.rgp-).
    ───────────────────────────────────────────────────────────── */
 
@@ -28,6 +34,8 @@ const RELATIVE = ['Today', 'Tomorrow', 'Yesterday'];
 const STEP_HOLD_MS = 300;   // tekan & tahan selama ini → sub-tugas "terangkat" dan bisa digeser
 const STEP_SLOP_PX = 5;     // kursor bergeser lebih dari ini sebelum terangkat = bukan geser urutan (mis. blok teks)
 const STEP_FLIP_MS = 220;
+export const DONE_FOLD_MIN = 3;   // langkah selesai sebanyak ini atau lebih → dilipat ke "Completed"
+const DONE_SETTLE_MS = 600;       // jeda sebelum langkah yang baru dicentang masuk lipatan
 export function dueText(d) {
   if (!d) return 'No due date';
   const l = dueLabel(d);
@@ -72,9 +80,13 @@ export function ProgressRing({ total, done }) {
 function ProjectCard({
   p, open, picking, editingTitle, placeholder, isNew, isMobile, highlight = false,
   onHeadClick, onToggleOpen, onTitleCommit, onStatus, onToggleStep, onAddStep, onEditStep, onRemoveStep, onReorderSteps, onOpen,
-  onStepMyDay,
+  onStepMyDay, doneOpen = false, onToggleDoneFold,
 }) {
   const [hover, setHover] = useState(null);   // null | { step } | { person }
+  // Langkah yang baru dicentang di kartu — masih ditahan di daftar sebelum masuk lipatan
+  const [settling, setSettling] = useState(() => new Set());
+  const settleT = useRef({});
+  useEffect(() => () => Object.values(settleT.current).forEach(clearTimeout), []);
   const [draft, setDraft] = useState('');
   const [editStepId, setEditStepId] = useState(null);   // langkah yang sedang diganti teksnya
 
@@ -226,11 +238,35 @@ function ProjectCard({
     if (v && v !== s.title) onEditStep(p.id, s.id, v);
   }
 
+  /* Centang di kartu. Baru ditandai selesai → ditahan sebentar di daftar, lalu baris lain
+     meluncur menutup celahnya (FLIP) saat ia masuk lipatan. Dibatalkan selama jeda → batal. */
+  function checkStep(s) {
+    onToggleStep(p.id, s.id);
+    setHover({ step: { ...s, done: !s.done } });
+    clearTimeout(settleT.current[s.id]);
+    delete settleT.current[s.id];
+    if (s.done) {
+      if (settling.has(s.id)) setSettling(prev => { const n = new Set(prev); n.delete(s.id); return n; });
+      return;
+    }
+    setSettling(prev => new Set(prev).add(s.id));
+    settleT.current[s.id] = setTimeout(() => {
+      delete settleT.current[s.id];
+      snapRows();
+      setSettling(prev => { const n = new Set(prev); n.delete(s.id); return n; });
+    }, DONE_SETTLE_MS);
+  }
+
   const steps = p.steps || [];
   const shownSteps = stepOrder
     ? stepOrder.map(id => steps.find(s => s.id === id)).filter(Boolean)
     : steps;
   const done = steps.filter(s => s.done).length;
+  // Lipatan aktif kalau langkah selesai (yang sudah tidak ditahan) mencapai DONE_FOLD_MIN —
+  // jadi saat angka 3 tercapai, ketiganya masuk lipatan bersamaan setelah jeda.
+  const folding = steps.filter(s => s.done && !settling.has(s.id)).length >= DONE_FOLD_MIN;
+  const mainSteps = folding ? shownSteps.filter(s => !s.done || settling.has(s.id)) : shownSteps;
+  const foldSteps = folding ? shownSteps.filter(s => s.done && !settling.has(s.id)) : [];
   const people = [...new Set(steps.map(s => s.pic).filter(Boolean))];
   const late = p.status !== 'done' && isOverdue(p.due_date);
   const person = hover?.person || null;
@@ -263,6 +299,44 @@ function ProjectCard({
       aria-label={`${on ? 'Remove from My Day' : 'Add to My Day'}: ${s.title}`}
       onClick={() => onStepMyDay(p.id, s.id)}><Sun size={13} /></button>
   );
+
+  // Satu baris langkah — FUNGSI biasa (bukan komponen di dalam komponen, supaya tidak remount).
+  // inFold = baris di lipatan Completed: tidak bisa digeser urutannya.
+  const stepRow = (s, k, inFold) => (
+    <li key={s.id} data-sid={s.id} style={{ '--k': k }}
+      className={`${s.done ? 'is-done' : ''}${person && s.pic === person ? ' is-mine' : ''}${stepDrag === s.id ? ' is-lifted' : ''}`}
+      onPointerDown={inFold ? undefined : e => onStepPointerDown(e, s.id)}
+      onMouseEnter={() => { if (!person) setHover({ step: s }); }}>
+      <button type="button" className="rgp-chk" aria-pressed={s.done}
+        aria-label={`${s.done ? 'Mark not done' : 'Mark done'}: ${s.title}`}
+        onClick={() => checkStep(s)}>
+        <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M2.6 6.2l2.2 2.2 4.6-4.8" /></svg>
+      </button>
+      {editStepId === s.id ? (
+        <input className="rgp-step-input" defaultValue={s.title} autoFocus aria-label="Step"
+          onFocus={e => e.target.select()}
+          onKeyDown={e => {
+            if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); }
+            else if (e.key === 'Escape') { e.currentTarget.dataset.cancel = '1'; e.currentTarget.blur(); }
+          }}
+          onBlur={e => commitStep(s, e.currentTarget.dataset.cancel ? null : e.currentTarget.value)} />
+      ) : (
+        <span className="rgp-step-t" title="Double-click to edit" onDoubleClick={() => setEditStepId(s.id)}>{s.title}</span>
+      )}
+      {editStepId !== s.id && onStepMyDay && inMyDay(s) && sunBtn(s, true)}
+      {editStepId !== s.id && (
+        <span className="rgp-step-acts">
+          {onStepMyDay && !inMyDay(s) && !s.done && sunBtn(s, false)}
+          <button type="button" className="rgp-step-act" title="Edit step" aria-label={`Edit step: ${s.title}`}
+            onClick={() => setEditStepId(s.id)}><Pencil size={13} /></button>
+          <button type="button" className="rgp-step-act is-del" title="Delete step" aria-label={`Delete step: ${s.title}`}
+            onClick={() => { setHover(null); onRemoveStep(p.id, s.id); }}><Trash2 size={13} /></button>
+        </span>
+      )}
+      {s.pic && <span className={`rgp-av is-sm ${personCls(s.pic)}`} title={s.pic}>{initialOf(s.pic)}</span>}
+    </li>
+  );
+  const leaveSteps = () => setHover(h => (h?.step ? null : h));
 
   function addStep(e) {
     e.preventDefault();
@@ -333,49 +407,29 @@ function ProjectCard({
         <div className="rgp-clp rgp-body" inert={!open}>
           <div>
             <div className="rgp-body-in">
-              {steps.length > 0 && (
-                <ul ref={listRef} className={`rgp-steps${stepDrag ? ' is-sorting' : ''}`}
-                  onMouseLeave={() => setHover(h => (h?.step ? null : h))}>
-                  {shownSteps.map((s, k) => (
-                    <li key={s.id} data-sid={s.id} style={{ '--k': k }}
-                      className={`${s.done ? 'is-done' : ''}${person && s.pic === person ? ' is-mine' : ''}${stepDrag === s.id ? ' is-lifted' : ''}`}
-                      onPointerDown={e => onStepPointerDown(e, s.id)}
-                      onMouseEnter={() => { if (!person) setHover({ step: s }); }}>
-                      <button type="button" className="rgp-chk" aria-pressed={s.done}
-                        aria-label={`${s.done ? 'Mark not done' : 'Mark done'}: ${s.title}`}
-                        onClick={() => { onToggleStep(p.id, s.id); setHover({ step: { ...s, done: !s.done } }); }}>
-                        <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M2.6 6.2l2.2 2.2 4.6-4.8" /></svg>
-                      </button>
-                      {editStepId === s.id ? (
-                        <input className="rgp-step-input" defaultValue={s.title} autoFocus aria-label="Step"
-                          onFocus={e => e.target.select()}
-                          onKeyDown={e => {
-                            if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); }
-                            else if (e.key === 'Escape') { e.currentTarget.dataset.cancel = '1'; e.currentTarget.blur(); }
-                          }}
-                          onBlur={e => commitStep(s, e.currentTarget.dataset.cancel ? null : e.currentTarget.value)} />
-                      ) : (
-                        <span className="rgp-step-t" title="Double-click to edit" onDoubleClick={() => setEditStepId(s.id)}>{s.title}</span>
-                      )}
-                      {editStepId !== s.id && onStepMyDay && inMyDay(s) && sunBtn(s, true)}
-                      {editStepId !== s.id && (
-                        <span className="rgp-step-acts">
-                          {onStepMyDay && !inMyDay(s) && !s.done && sunBtn(s, false)}
-                          <button type="button" className="rgp-step-act" title="Edit step" aria-label={`Edit step: ${s.title}`}
-                            onClick={() => setEditStepId(s.id)}><Pencil size={13} /></button>
-                          <button type="button" className="rgp-step-act is-del" title="Delete step" aria-label={`Delete step: ${s.title}`}
-                            onClick={() => { setHover(null); onRemoveStep(p.id, s.id); }}><Trash2 size={13} /></button>
-                        </span>
-                      )}
-                      {s.pic && <span className={`rgp-av is-sm ${personCls(s.pic)}`} title={s.pic}>{initialOf(s.pic)}</span>}
-                    </li>
-                  ))}
+              {mainSteps.length > 0 && (
+                <ul ref={listRef} className={`rgp-steps${stepDrag ? ' is-sorting' : ''}`} onMouseLeave={leaveSteps}>
+                  {mainSteps.map((s, k) => stepRow(s, k, false))}
                 </ul>
               )}
               <form className="rgp-add" onSubmit={addStep}>
                 <input value={draft} onChange={e => setDraft(e.target.value)} placeholder="Add a step"
                   aria-label={`Add a step to ${p.title}`} autoComplete="off" />
               </form>
+              {foldSteps.length > 0 && (<>
+                <button type="button" className="rgp-done-toggle" aria-expanded={doneOpen}
+                  onClick={() => onToggleDoneFold?.(p.id)}>
+                  <ChevronRight size={13} />
+                  Completed <span key={foldSteps.length} className="rgp-done-n rg-mono rgp-swap">{foldSteps.length}</span>
+                </button>
+                <div className={`rgp-clp rgp-done${doneOpen ? ' is-on' : ''}`} inert={!doneOpen}>
+                  <div>
+                    <ul className="rgp-steps" onMouseLeave={leaveSteps}>
+                      {foldSteps.map((s, k) => stepRow(s, k, true))}
+                    </ul>
+                  </div>
+                </div>
+              </>)}
             </div>
           </div>
         </div>

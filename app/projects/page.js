@@ -29,6 +29,8 @@ import TodoDetail from '../components/TodoDetail';
      Sejak 21 Okt 2026 (permintaan Nadir) kartu yang DITUTUP DIINGAT per perangkat
      (localStorage CLOSED_KEY) — halaman dibuka lagi = susunan buka/tutup terakhir.
      Dulu (12 Okt) tidak diingat: refresh = semua terbuka lagi.
+   - Langkah selesai ≥ 3 dilipat ke "Completed (n)" di dalam kartu (12 Nov 2026, lihat
+     ProjectCard); lipatan yang dibuka juga diingat per perangkat (DONE_OPEN_KEY).
    HP: satu kolom ke bawah, tanpa geser kartu / geser papan.
    Data: useProjects (project_groups + projects, RLS per pemilik).
 
@@ -63,13 +65,17 @@ const HL_MS = 1700;          // = animasi .rgp-card.is-hl di CSS
 // Kartu project yang sedang ditutup (array id) — diingat supaya halaman dibuka lagi
 // dengan susunan buka/tutup terakhir. Kartu yang tidak tercantum = terbuka.
 const CLOSED_KEY = 'wd-projects-closed';
-function readClosed() {
+// Kartu yang lipatan "Completed"-nya sedang DIBUKA (12 Nov 2026) — bawaannya tertutup
+const DONE_OPEN_KEY = 'wd-projects-done-open';
+function readIdSet(key) {
   if (typeof window === 'undefined') return new Set();
   try {
-    const ids = JSON.parse(localStorage.getItem(CLOSED_KEY) || '[]');
+    const ids = JSON.parse(localStorage.getItem(key) || '[]');
     return new Set(Array.isArray(ids) ? ids : []);
   } catch { return new Set(); }
 }
+const readClosed = () => readIdSet(CLOSED_KEY);
+const readDoneOpen = () => readIdSet(DONE_OPEN_KEY);
 
 const reduceMotion = () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -186,7 +192,8 @@ export default function ProjectsPage() {
   // sempat tampil terbuka lalu menutup. Aman dari beda render server: halaman ini baru
   // menggambar kartu setelah role admin terbaca di klien.
   const [closedIds, setClosedIds] = useState(readClosed);
-  const [pickId, setPickId] = useState(null);                // kartu yang pilihan statusnya mekar
+  const [doneOpenIds, setDoneOpenIds] = useState(readDoneOpen);
+  const [pickId, setPickId] = useState(null);               // kartu yang pilihan statusnya mekar
   const [editTitleId, setEditTitleId] = useState(null);
   const [editGroupId, setEditGroupId] = useState(null);
   const [detailId, setDetailId] = useState(null);
@@ -446,6 +453,11 @@ export default function ProjectsPage() {
     const exist = new Set(pj.projects.map(p => p.id));
     try { localStorage.setItem(CLOSED_KEY, JSON.stringify([...closedIds].filter(id => exist.has(id)))); } catch {}
   }, [closedIds, pj.projects, pj.error]);
+  useEffect(() => {
+    if (!pj.projects || pj.error) return;
+    const exist = new Set(pj.projects.map(p => p.id));
+    try { localStorage.setItem(DONE_OPEN_KEY, JSON.stringify([...doneOpenIds].filter(id => exist.has(id)))); } catch {}
+  }, [doneOpenIds, pj.projects, pj.error]);
   const stacks = dragStacks || baseStacks;
   stacksRef.current = stacks;
   const byId = useMemo(() => Object.fromEntries((pj.projects || []).map(p => [p.id, p])), [pj.projects]);
@@ -524,6 +536,11 @@ export default function ProjectsPage() {
 
   /* ── Aksi kartu (stabil, supaya ProjectCard yang di-memo tidak render ulang semua) ── */
   const toggleOpen = useCallback(id => setClosedIds(prev => {
+    const n = new Set(prev);
+    if (n.has(id)) n.delete(id); else n.add(id);
+    return n;
+  }), []);
+  const toggleDoneFold = useCallback(id => setDoneOpenIds(prev => {
     const n = new Set(prev);
     if (n.has(id)) n.delete(id); else n.add(id);
     return n;
@@ -934,7 +951,8 @@ export default function ProjectsPage() {
                     onHeadClick={headClick} onToggleOpen={toggleOpen} onTitleCommit={commitTitle}
                     onStatus={setStatus} onToggleStep={toggleStep} onAddStep={addStep}
                     onEditStep={editStep} onRemoveStep={removeStep} onReorderSteps={reorderSteps} onOpen={openDetail}
-                    onStepMyDay={stepMyDay} />
+                    onStepMyDay={stepMyDay}
+                    doneOpen={doneOpenIds.has(pid)} onToggleDoneFold={toggleDoneFold} />
                 );
               })}
             </div>

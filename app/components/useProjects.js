@@ -40,6 +40,24 @@ function missingTable(err) {
 }
 const byOrder = (a, b) => (a.sort_order - b.sort_order) || String(a.created_at).localeCompare(String(b.created_at));
 
+/* ── Status otomatis (23 Nov 2026, permintaan Nadir) ──
+   Semua langkah selesai → project otomatis Done. Project berstatus Done lalu muncul
+   pekerjaan baru (langkah baru ditambah / centang dibatalkan) → otomatis In progress.
+   Dipicu hanya oleh PERUBAHAN langkah, jadi status pilihan manual tetap dihormati:
+   ganti status lewat pil tidak pernah ditimpa, dan edit teks/PIC/urutan/My Day/bintang
+   tidak mengubah status. */
+const allStepsDone = st => !!st && st.length > 0 && st.every(s => s.done);
+const openSteps = st => (st || []).filter(s => !s.done).length;
+export function autoStatus(status, before, after) {
+  if (status !== 'done' && !allStepsDone(before) && allStepsDone(after)) return 'done';
+  if (status === 'done' && openSteps(after) > openSteps(before)) return 'progress';
+  return status;
+}
+// Kartu yang SEBELUM fitur ini sudah semua langkahnya selesai tapi statusnya belum Done
+// dirapikan sekali saat dimuat. Hanya baris yang terakhir diubah sebelum waktu ini —
+// kalau sesudahnya Nadir sengaja mengembalikan statusnya, tidak ditimpa lagi.
+const AUTO_STATUS_FROM = Date.parse('2026-11-23T04:50:00Z');
+
 /* Grup + project → deretan lajur untuk papan: [{ id, name, width, cards: [projectId] }].
    width = lebar kartu di lajur itu (null = bawaan). Grup tanpa kartu tidak ditampilkan.
    null = masih memuat. */
@@ -105,6 +123,16 @@ export default function useProjects(enabled) {
     if (empty.length) {
       setGroups(prev => prev.filter(x => !empty.includes(x.id)));
       enqueue(async () => { await supabase.from('project_groups').delete().in('id', empty); });
+    }
+    // Rapikan sekali: semua langkah sudah selesai tapi status belum Done (lihat AUTO_STATUS_FROM)
+    const finished = (p || []).filter(x => x.status !== 'done' && allStepsDone(x.steps)
+      && Date.parse(x.updated_at) < AUTO_STATUS_FROM).map(x => x.id);
+    if (finished.length) {
+      setProjects(prev => prev.map(x => (finished.includes(x.id) ? { ...x, status: 'done' } : x)));
+      enqueue(async () => {
+        const { error: err } = await supabase.from('projects').update({ status: 'done' }).in('id', finished);
+        if (err) throw err;
+      });
     }
   }, [setGroups, setProjects]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -193,10 +221,14 @@ export default function useProjects(enabled) {
   /* ── Langkah (sub-tugas) — JSON di kolom steps: { id, title, done, pic } ──
      Sejak To Do digabung ke halaman ini (19 Okt 2026) langkah juga boleh membawa field
      ala To Do: my_day_date (masuk My Day hari itu), starred, due_date, done_at.
-     Semuanya opsional di JSON — tidak butuh kolom/SQL baru. */
+     Semuanya opsional di JSON — tidak butuh kolom/SQL baru.
+     Status project ikut menyesuaikan lewat autoStatus (semua selesai → Done, dst.). */
   function patchSteps(id, fn, opts) {
     const cur = (projectsRef.current || []).find(p => p.id === id);
-    if (cur) updateProject(id, { steps: fn(cur.steps || []) }, opts);
+    if (!cur) return;
+    const before = cur.steps || [], steps = fn(before);
+    const status = autoStatus(cur.status, before, steps);
+    updateProject(id, status === cur.status ? { steps } : { steps, status }, opts);
   }
   const addStep    = (id, title) => patchSteps(id, st => [...st, { id: crypto.randomUUID(), title: title.trim(), done: false, pic: PJ_DEFAULT_PIC }]);
   const toggleStep = (id, sid)   => patchSteps(id, st => st.map(s => (s.id === sid
@@ -231,6 +263,8 @@ export default function useProjects(enabled) {
       id: crypto.randomUUID(), title: s.title.trim(), done: !!s.done, pic: PJ_DEFAULT_PIC,
     }));
     const patch = { steps: [...(cur.steps || []), main, ...subs] };
+    const status = autoStatus(cur.status, cur.steps || [], patch.steps);
+    if (status !== cur.status) patch.status = status;
     const note = (t.notes || '').trim();
     if (note) {
       const block = `${title}:\n${note}`;
